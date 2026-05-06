@@ -1,0 +1,58 @@
+# ========================
+# SECRETS — NEVER COMMIT
+# ========================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p8
+*.p12
+
+# ========================
+# Next.js
+# ========================
+.next/
+out/
+build/
+
+# ========================
+# Dependencies
+# ========================
+node_modules/
+.pnp
+.pnp.js
+
+# ========================
+# Database / Docker volumes
+# ========================
+postgres-data/
+*.sql.bak
+
+# ========================
+# OS / Editor
+# ========================
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ========================
+# Logs
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# Testing
+# ========================
+coverage/
+.nyc_output/
+
+# ========================
+# Build artifacts
+# ========================
+*.tsbuildinfo
+next-env.d.ts

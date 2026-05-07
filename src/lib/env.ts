@@ -31,3 +31,15 @@ export const env = {
   sessionSecret: process.env.SESSION_SECRET!,
   authPassphraseHash: process.env.AUTH_PASSPHRASE_HASH!,
 } as const;
+
+/**
+ * Returns the Anthropic API key, validated at call time.
+ * Kept separate from env so CLI scripts (seed, migrations) don't fail
+ * when ANTHROPIC_API_KEY is absent — they never need it.
+ * Server-side only. Never log, expose in errors, or send to the browser.
+ */
+export function getAnthropicApiKey(): string {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("ANTHROPIC_API_KEY is not set in .env.local");
+  return key;
+}

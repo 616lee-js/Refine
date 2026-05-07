@@ -45,13 +45,23 @@ export const memorySourceEnum = pgEnum("memory_source", [
 // ── Tables ───────────────────────────────────────────────────────────────────
 
 /**
- * v1 has exactly one user (the product owner).
- * user_id FK exists in all tables so v2 multi-user is additive (no schema change).
+ * Multi-user-ready from Phase 3 onward.
+ * email_encrypted: AES-256-GCM ciphertext (format: iv:tag:ciphertext, base64).
+ * email_hmac: HMAC-SHA256 of lowercased+trimmed email, hex-encoded. Used for
+ *   login lookups. Key is EMAIL_HMAC_KEY in env. Never change this key once
+ *   users exist — existing HMACs cannot be recomputed without the original emails.
+ * display_name: stored plaintext in v1 (not PII-grade sensitive; v2 may encrypt).
  */
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
+  emailEncrypted: text("email_encrypted").notNull(),
+  emailHmac: text("email_hmac").notNull().unique(),
   displayName: text("display_name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  passwordHash: text("password_hash").notNull(),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   preferences: jsonb("preferences").notNull().default({}),
 });
 
@@ -66,15 +76,19 @@ export const sessions = pgTable("sessions", {
     .references(() => users.id, { onDelete: "cascade" }),
   type: sessionTypeEnum("type").notNull(),
   modality: sessionModalityEnum("modality").notNull(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
 });
 
 /**
- * Structured check-in at session start.
- * mood: JSON object (shape defined per session type in Phase 3).
- * tier_at_start: initial safety tier assessed at session open.
+ * Structured check-in at session start. Shape varies by session type:
+ *   as_needed  — mood: {}, present_text: optional ("what's bringing you here?"),
+ *                intention_text: null, tier_at_start: null (inferred from body)
+ *   scheduled  — mood: { rating: 1–5 }, present_text: optional, intention_text: optional
+ *   guided     — TBD (Phase 3 pause point; content worked through with product owner)
  */
 export const checkIns = pgTable("check_ins", {
   id: text("id").primaryKey(),
@@ -83,6 +97,7 @@ export const checkIns = pgTable("check_ins", {
     .references(() => sessions.id, { onDelete: "cascade" }),
   mood: jsonb("mood").notNull().default({}),
   presentText: text("present_text"),
+  intentionText: text("intention_text"),
   tierAtStart: integer("tier_at_start"),
 });
 
@@ -101,7 +116,9 @@ export const entries = pgTable("entries", {
   source: entrySourceEnum("source").notNull(),
   encryptedContent: text("encrypted_content").notNull(),
   rawAudioRef: text("raw_audio_ref"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   tierClassification: integer("tier_classification"),
 });
 
@@ -119,7 +136,9 @@ export const sessionSummaries = pgTable("session_summaries", {
     .references(() => sessions.id, { onDelete: "cascade" }),
   encryptedSummary: text("encrypted_summary").notNull(),
   notableQuotes: text("notable_quotes").notNull(),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  generatedAt: timestamp("generated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   generationVersion: text("generation_version").notNull(),
 });
 
@@ -141,8 +160,12 @@ export const userMemory = pgTable("user_memory", {
     onDelete: "set null",
   }),
   isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
 });
 
@@ -163,6 +186,28 @@ export const safetyLog = pgTable("safety_log", {
   tier: integer("tier").notNull(),
   classifierVersion: text("classifier_version").notNull(),
   rawSignals: jsonb("raw_signals").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   reviewed: boolean("reviewed").notNull().default(false),
   reviewerNotes: text("reviewer_notes"),
+});
+
+/**
+ * Audit log for deliberate content decryption events.
+ * Written whenever a user views decrypted session entries (session detail page).
+ * context: human-readable label for the access point.
+ */
+export const contentAccessLog = pgTable("content_access_log", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => sessions.id, { onDelete: "cascade" }),
+  accessedAt: timestamp("accessed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  context: text("context").notNull(),
 });

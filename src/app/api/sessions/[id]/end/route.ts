@@ -4,50 +4,41 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sessions, entries } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
-import { runOrchestrator } from "@/lib/orchestrator";
+import { runSessionClosing } from "@/lib/orchestrator";
 
-export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session.userId) {
+export async function POST(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: sessionId } = await params;
+  const authSession = await getSession();
+  if (!authSession.userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response("Bad request", { status: 400 });
-  }
-
-  const parsed = body as { message?: unknown; sessionId?: unknown };
-
-  const message =
-    parsed.message && typeof parsed.message === "string"
-      ? parsed.message.trim()
-      : "";
-
-  const sessionId =
-    parsed.sessionId && typeof parsed.sessionId === "string"
-      ? parsed.sessionId.trim()
-      : "";
-
-  if (!message || !sessionId) {
-    return new Response("Bad request", { status: 400 });
-  }
-
-  // Verify the session belongs to this user
   const [dbSession] = await db
-    .select({ id: sessions.id, userId: sessions.userId })
+    .select({ id: sessions.id, userId: sessions.userId, endedAt: sessions.endedAt })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
-  if (!dbSession || dbSession.userId !== session.userId) {
+  if (!dbSession || dbSession.userId !== authSession.userId) {
     return new Response("Not found", { status: 404 });
   }
 
-  const { stream, tier } = await runOrchestrator({ sessionId, message });
+  if (dbSession.endedAt) {
+    return new Response("Session already ended", { status: 409 });
+  }
 
+  let closingResult: Awaited<ReturnType<typeof runSessionClosing>>;
+  try {
+    closingResult = await runSessionClosing(sessionId);
+  } catch (err) {
+    console.error("runSessionClosing failed:", err);
+    return new Response("Internal server error", { status: 500 });
+  }
+
+  const { stream } = closingResult;
   const encoder = new TextEncoder();
   let assistantText = "";
 
@@ -60,6 +51,7 @@ export async function POST(req: Request) {
 
       stream.on("finalMessage", () => {
         controller.close();
+        // Save closing response + mark session ended — fire and forget
         db
           .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
           .from(entries)
@@ -74,7 +66,13 @@ export async function POST(req: Request) {
               tierClassification: null,
             })
           )
-          .catch((err) => console.error("Failed to save assistant entry:", err));
+          .then(() =>
+            db
+              .update(sessions)
+              .set({ endedAt: new Date() })
+              .where(eq(sessions.id, sessionId))
+          )
+          .catch((err) => console.error("Failed to close session:", err));
       });
 
       stream.on("error", (err) => {
@@ -84,9 +82,6 @@ export async function POST(req: Request) {
   });
 
   return new Response(readable, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Tier": String(tier),
-    },
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
 }

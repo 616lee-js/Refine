@@ -1,6 +1,6 @@
 {
-  "id": "ba1c86a1-80fe-4e2a-8419-950fd29127f8",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "6fa6c050-d1c3-4e18-a2e4-6e2d543c8577",
+  "prevId": "ba1c86a1-80fe-4e2a-8419-950fd29127f8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -51,6 +51,77 @@
         "check_ins_session_id_sessions_id_fk": {
           "name": "check_ins_session_id_sessions_id_fk",
           "tableFrom": "check_ins",
+          "tableTo": "sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.content_access_log": {
+      "name": "content_access_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accessed_at": {
+          "name": "accessed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "context": {
+          "name": "context",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "content_access_log_user_id_users_id_fk": {
+          "name": "content_access_log_user_id_users_id_fk",
+          "tableFrom": "content_access_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "content_access_log_session_id_sessions_id_fk": {
+          "name": "content_access_log_session_id_sessions_id_fk",
+          "tableFrom": "content_access_log",
           "tableTo": "sessions",
           "columnsFrom": [
             "session_id"

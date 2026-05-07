@@ -8,6 +8,7 @@ CREATE TABLE "check_ins" (
 	"session_id" text NOT NULL,
 	"mood" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"present_text" text,
+	"intention_text" text,
 	"tier_at_start" integer
 );
 --> statement-breakpoint
@@ -29,6 +30,7 @@ CREATE TABLE "safety_log" (
 	"tier" integer NOT NULL,
 	"classifier_version" text NOT NULL,
 	"raw_signals" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"reviewed" boolean DEFAULT false NOT NULL,
 	"reviewer_notes" text
 );
@@ -67,9 +69,14 @@ CREATE TABLE "user_memory" (
 --> statement-breakpoint
 CREATE TABLE "users" (
 	"id" text PRIMARY KEY NOT NULL,
+	"email_encrypted" text NOT NULL,
+	"email_hmac" text NOT NULL,
 	"display_name" text NOT NULL,
+	"password_hash" text NOT NULL,
+	"email_verified_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"preferences" jsonb DEFAULT '{}'::jsonb NOT NULL
+	"preferences" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "users_email_hmac_unique" UNIQUE("email_hmac")
 );
 --> statement-breakpoint
 ALTER TABLE "check_ins" ADD CONSTRAINT "check_ins_session_id_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

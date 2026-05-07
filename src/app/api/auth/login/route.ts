@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPassphrase, getSession } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { loginUser, getSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
-  const passphrase = formData.get("passphrase");
+  const email = formData.get("email");
+  const password = formData.get("password");
 
-  if (typeof passphrase !== "string" || passphrase.length === 0) {
+  if (
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    !email ||
+    !password
+  ) {
     return NextResponse.redirect(new URL("/login?error=1", req.url));
   }
 
-  const valid = await verifyPassphrase(passphrase);
-  if (!valid) {
-    return NextResponse.redirect(new URL("/login?error=1", req.url));
-  }
-
-  // Fetch the single user row (v1 has exactly one user)
-  const [user] = await db.select({ id: users.id }).from(users).limit(1);
+  const user = await loginUser(email, password);
   if (!user) {
     return NextResponse.redirect(new URL("/login?error=1", req.url));
   }

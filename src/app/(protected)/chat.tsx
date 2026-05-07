@@ -63,10 +63,11 @@ function CrisisLine() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function Chat() {
+export default function Chat({ sessionId }: { sessionId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [ended, setEnded] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,7 +83,7 @@ export default function Chat() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const text = input.trim();
     if (!text || streaming) return;
@@ -101,7 +102,7 @@ export default function Chat() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, sessionId }),
       });
 
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -136,6 +137,47 @@ export default function Chat() {
     }
   }
 
+  async function handleEndSession() {
+    if (streaming || ended) return;
+    setStreaming(true);
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/end`, {
+        method: "POST",
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            role: "assistant",
+            content: next[next.length - 1].content + chunk,
+          };
+          return next;
+        });
+      }
+      setEnded(true);
+    } catch {
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = {
+          role: "assistant",
+          content: "Something went wrong ending the session.",
+        };
+        return next;
+      });
+    } finally {
+      setStreaming(false);
+    }
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -147,10 +189,18 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-screen bg-white text-stone-800">
       {/* ── Header ── */}
-      <header className="shrink-0 px-6 py-4 border-b border-stone-100">
+      <header className="shrink-0 px-6 py-4 border-b border-stone-100 flex items-center justify-between">
         <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
           Refine
         </h1>
+        <form action="/api/auth/logout" method="POST">
+          <button
+            type="submit"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            Sign out
+          </button>
+        </form>
       </header>
 
       {/* ── Message list ── */}
@@ -188,36 +238,52 @@ export default function Chat() {
       {/* ── Input area ── */}
       <footer className="shrink-0 border-t border-stone-100 bg-white">
         <div className="max-w-2xl mx-auto px-6 py-5">
-          <form onSubmit={handleSubmit} noValidate>
-            <label htmlFor="message-input" className="sr-only">
-              Your message
-            </label>
-            <div className="flex gap-3 items-end">
-              <textarea
-                ref={textareaRef}
-                id="message-input"
-                name="message"
-                value={input}
-                rows={2}
-                placeholder="Write here…"
-                disabled={streaming}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  autoResize();
-                }}
-                onKeyDown={onKeyDown}
-                className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || streaming}
-                aria-label="Send message"
-                className="shrink-0 h-[46px] px-5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2 transition-colors"
-              >
-                Send
-              </button>
-            </div>
-          </form>
+          {ended ? (
+            <p className="text-xs text-stone-400 text-center py-2">
+              Session ended.
+            </p>
+          ) : (
+            <form onSubmit={handleSubmit} noValidate>
+              <label htmlFor="message-input" className="sr-only">
+                Your message
+              </label>
+              <div className="flex gap-3 items-end">
+                <textarea
+                  ref={textareaRef}
+                  id="message-input"
+                  name="message"
+                  value={input}
+                  rows={2}
+                  placeholder="Write here…"
+                  disabled={streaming}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={onKeyDown}
+                  className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || streaming}
+                  aria-label="Send message"
+                  className="shrink-0 h-[46px] px-5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2 transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  onClick={handleEndSession}
+                  disabled={streaming}
+                  className="text-xs text-stone-400 hover:text-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  End session
+                </button>
+              </div>
+            </form>
+          )}
 
           <CrisisLine />
         </div>

@@ -1,8 +1,8 @@
 const required = [
   "DATABASE_URL",
   "ENCRYPTION_KEY",
+  "EMAIL_HMAC_KEY",
   "SESSION_SECRET",
-  "AUTH_PASSPHRASE_HASH",
 ] as const;
 
 function validateEnv() {
@@ -14,11 +14,19 @@ function validateEnv() {
     );
   }
 
-  const key = process.env.ENCRYPTION_KEY!;
-  if (!/^[0-9a-f]{64}$/i.test(key)) {
+  const hexKey = /^[0-9a-f]{64}$/i;
+
+  if (!hexKey.test(process.env.ENCRYPTION_KEY!)) {
     throw new Error(
       "ENCRYPTION_KEY must be a 64-character hex string (32 bytes). " +
-        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
+  }
+
+  if (!hexKey.test(process.env.EMAIL_HMAC_KEY!)) {
+    throw new Error(
+      "EMAIL_HMAC_KEY must be a 64-character hex string (32 bytes). " +
+        'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
     );
   }
 }
@@ -28,8 +36,8 @@ validateEnv();
 export const env = {
   databaseUrl: process.env.DATABASE_URL!,
   encryptionKey: process.env.ENCRYPTION_KEY!,
+  emailHmacKey: process.env.EMAIL_HMAC_KEY!,
   sessionSecret: process.env.SESSION_SECRET!,
-  authPassphraseHash: process.env.AUTH_PASSPHRASE_HASH!,
 } as const;
 
 /**

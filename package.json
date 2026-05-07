@@ -10,7 +10,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "setup:passphrase": "npx tsx scripts/hash-passphrase.ts",
+    "db:reset": "node --env-file=.env --import tsx scripts/reset-db.ts",
     "setup:seed": "node --env-file=.env --import tsx scripts/seed.ts"
   },
   "dependencies": {

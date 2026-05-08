@@ -30,6 +30,16 @@ postgres-data/
 *.sql.bak
 
 # ========================
+# Audio recordings (unencrypted in v1)
+# ========================
+audio/
+
+# ========================
+# Planning source docs (duplicated as .md in docs/)
+# ========================
+Additional Context/
+
+# ========================
 # OS / Editor
 # ========================
 .DS_Store

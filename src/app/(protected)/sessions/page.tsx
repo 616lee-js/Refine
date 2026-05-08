@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions } from "@/lib/db/schema";
+import { sessions, entries } from "@/lib/db/schema";
 
 const TYPE_LABELS: Record<string, string> = {
   as_needed: "As-needed",
@@ -13,13 +13,17 @@ const TYPE_LABELS: Record<string, string> = {
 export default async function SessionsPage() {
   const authSession = await getSession();
   const rows = await db
-    .select({
+    .selectDistinct({
       id: sessions.id,
       type: sessions.type,
       startedAt: sessions.startedAt,
       endedAt: sessions.endedAt,
     })
     .from(sessions)
+    .innerJoin(
+      entries,
+      and(eq(entries.sessionId, sessions.id), ne(entries.source, "claude"))
+    )
     .where(eq(sessions.userId, authSession.userId!))
     .orderBy(desc(sessions.startedAt));
 

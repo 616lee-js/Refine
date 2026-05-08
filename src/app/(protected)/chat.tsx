@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useVoiceSession,
+  type VoiceTriggerPayload,
+} from "./use-voice-session";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Message = { role: "user" | "assistant"; content: string };
+type Mode = "text" | "voice";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -38,13 +44,23 @@ function MessageItem({
   );
 }
 
-function EmptyState() {
+function EmptyState({ mode }: { mode: Mode }) {
   return (
     <div className="pt-24 text-center">
       <p className="text-sm text-stone-400 leading-loose">
-        This is your space to reflect.
-        <br />
-        Write whatever is on your mind.
+        {mode === "voice" ? (
+          <>
+            This is your space to reflect.
+            <br />
+            Speak whenever you are ready.
+          </>
+        ) : (
+          <>
+            This is your space to reflect.
+            <br />
+            Write whatever is on your mind.
+          </>
+        )}
       </p>
     </div>
   );
@@ -61,13 +77,59 @@ function CrisisLine() {
   );
 }
 
+// ── Voice UI ──────────────────────────────────────────────────────────────────
+
+const CADENCE_OPTIONS: { label: string; value: 0 | 10 | 20 | 30 }[] = [
+  { label: "Off", value: 0 },
+  { label: "10s", value: 10 },
+  { label: "20s", value: 20 },
+  { label: "30s", value: 30 },
+];
+
+function VoiceIndicator({
+  status,
+}: {
+  status: "listening" | "restarting" | "triggering";
+}) {
+  const label =
+    status === "restarting"
+      ? "Restarting microphone…"
+      : status === "triggering"
+      ? "Sending…"
+      : "Listening";
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`inline-block w-2 h-2 rounded-full ${
+          status === "restarting" || status === "triggering"
+            ? "bg-stone-300"
+            : "bg-red-400 animate-pulse"
+        }`}
+        aria-hidden="true"
+      />
+      <span className="text-xs text-stone-400">{label}</span>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function Chat({ sessionId }: { sessionId: string }) {
+export default function Chat({
+  sessionId,
+  initialCadence,
+}: {
+  sessionId: string;
+  initialCadence: 0 | 10 | 20 | 30;
+}) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [mode, setMode] = useState<Mode>("text");
+  const [cadence, setCadence] = useState<0 | 10 | 20 | 30>(initialCadence);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -75,6 +137,112 @@ export default function Chat({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ── Shared send logic ─────────────────────────────────────────────────────
+
+  const sendMessage = useCallback(
+    async (
+      text: string,
+      opts?: {
+        source?: "user_voice";
+        precomputedTier?: 0 | 1 | 2 | 3;
+        audioRef?: string;
+        voiceSummary?: VoiceTriggerPayload["voiceSummary"];
+      }
+    ) => {
+      if (!text || streaming) return;
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: text },
+        { role: "assistant", content: "" },
+      ]);
+      setStreaming(true);
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            sessionId,
+            ...(opts?.source && { source: opts.source }),
+            ...(opts?.precomputedTier !== undefined && {
+              precomputedTier: opts.precomputedTier,
+            }),
+            ...(opts?.audioRef && { audioRef: opts.audioRef }),
+            ...(opts?.voiceSummary && { voiceSummary: opts.voiceSummary }),
+          }),
+        });
+
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = {
+              role: "assistant",
+              content: next[next.length - 1].content + chunk,
+            };
+            return next;
+          });
+        }
+      } catch {
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            role: "assistant",
+            content: "Something went wrong. Please try again.",
+          };
+          return next;
+        });
+      } finally {
+        setStreaming(false);
+      }
+    },
+    [sessionId, streaming]
+  );
+
+  // ── Voice session hook ────────────────────────────────────────────────────
+
+  const handleVoiceTrigger = useCallback(
+    (payload: VoiceTriggerPayload) => {
+      setVoiceError(null);
+      sendMessage(payload.message, {
+        source: "user_voice",
+        precomputedTier: payload.precomputedTier,
+        audioRef: payload.audioRef,
+        voiceSummary: payload.voiceSummary,
+      });
+    },
+    [sendMessage]
+  );
+
+  const voice = useVoiceSession({
+    sessionId,
+    cadence,
+    onTrigger: handleVoiceTrigger,
+    onError: (err) => setVoiceError(err.message),
+  });
+
+  // ── Mode switching ────────────────────────────────────────────────────────
+
+  function switchMode(next: Mode) {
+    if (next === mode) return;
+    if (mode === "voice" && voice.status !== "idle") {
+      voice.cancel();
+    }
+    setVoiceError(null);
+    setMode(next);
+  }
+
+  // ── Text input handlers ───────────────────────────────────────────────────
 
   function autoResize() {
     const el = textareaRef.current;
@@ -87,58 +255,24 @@ export default function Chat({ sessionId }: { sessionId: string }) {
     e.preventDefault();
     const text = input.trim();
     if (!text || streaming) return;
-
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+    sendMessage(text);
+  }
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: text },
-      { role: "assistant", content: "" },
-    ]);
-    setStreaming(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, sessionId }),
-      });
-
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const next = [...prev];
-          next[next.length - 1] = {
-            role: "assistant",
-            content: next[next.length - 1].content + chunk,
-          };
-          return next;
-        });
-      }
-    } catch {
-      setMessages((prev) => {
-        const next = [...prev];
-        next[next.length - 1] = {
-          role: "assistant",
-          content: "Something went wrong. Please try again.",
-        };
-        return next;
-      });
-    } finally {
-      setStreaming(false);
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
     }
   }
 
+  // ── End session ───────────────────────────────────────────────────────────
+
   async function handleEndSession() {
     if (streaming || ended) return;
+    if (mode === "voice" && voice.status !== "idle") voice.cancel();
+
     setStreaming(true);
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
@@ -146,6 +280,10 @@ export default function Chat({ sessionId }: { sessionId: string }) {
       const res = await fetch(`/api/sessions/${sessionId}/end`, {
         method: "POST",
       });
+      if (res.status === 204) {
+        router.push("/");
+        return;
+      }
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
       const reader = res.body.getReader();
@@ -178,13 +316,24 @@ export default function Chat({ sessionId }: { sessionId: string }) {
     }
   }
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      // Delegate to the form's submit handler to keep logic in one place
-      e.currentTarget.form?.requestSubmit();
-    }
+  // ── Cadence change ────────────────────────────────────────────────────────
+
+  function handleCadenceChange(value: 0 | 10 | 20 | 30) {
+    setCadence(value);
+    fetch("/api/user/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voiceCadence: value }),
+    }).catch(() => {});
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const isVoiceActive =
+    mode === "voice" &&
+    (voice.status === "listening" ||
+      voice.status === "restarting" ||
+      voice.status === "triggering");
 
   return (
     <div className="flex flex-col h-screen bg-white text-stone-800">
@@ -212,7 +361,7 @@ export default function Chat({ sessionId }: { sessionId: string }) {
       >
         <div className="max-w-2xl mx-auto px-6 py-10">
           {messages.length === 0 ? (
-            <EmptyState />
+            <EmptyState mode={mode} />
           ) : (
             <ol className="space-y-8">
               {messages.map((msg, i) => {
@@ -222,10 +371,7 @@ export default function Chat({ sessionId }: { sessionId: string }) {
                   msg.role === "assistant";
                 return (
                   <li key={i}>
-                    <MessageItem
-                      message={msg}
-                      showCursor={isLastAssistant}
-                    />
+                    <MessageItem message={msg} showCursor={isLastAssistant} />
                   </li>
                 );
               })}
@@ -243,35 +389,154 @@ export default function Chat({ sessionId }: { sessionId: string }) {
               Session ended.
             </p>
           ) : (
-            <form onSubmit={handleSubmit} noValidate>
-              <label htmlFor="message-input" className="sr-only">
-                Your message
-              </label>
-              <div className="flex gap-3 items-end">
-                <textarea
-                  ref={textareaRef}
-                  id="message-input"
-                  name="message"
-                  value={input}
-                  rows={2}
-                  placeholder="Write here…"
-                  disabled={streaming}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    autoResize();
-                  }}
-                  onKeyDown={onKeyDown}
-                  className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || streaming}
-                  aria-label="Send message"
-                  className="shrink-0 h-[46px] px-5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2 transition-colors"
-                >
-                  Send
-                </button>
+            <>
+              {/* Mode toggle */}
+              <div className="flex gap-1 mb-4">
+                {(["text", "voice"] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => switchMode(m)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      mode === m
+                        ? "bg-stone-800 text-white"
+                        : "text-stone-400 hover:text-stone-600"
+                    }`}
+                  >
+                    {m === "text" ? "Text" : "Voice"}
+                  </button>
+                ))}
               </div>
+
+              {/* Text mode */}
+              {mode === "text" && (
+                <form onSubmit={handleSubmit} noValidate>
+                  <label htmlFor="message-input" className="sr-only">
+                    Your message
+                  </label>
+                  <div className="flex gap-3 items-end">
+                    <textarea
+                      ref={textareaRef}
+                      id="message-input"
+                      name="message"
+                      value={input}
+                      rows={2}
+                      placeholder="Write here…"
+                      disabled={streaming}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        autoResize();
+                      }}
+                      onKeyDown={onKeyDown}
+                      className="flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || streaming}
+                      aria-label="Send message"
+                      className="shrink-0 h-[46px] px-5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2 transition-colors"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Voice mode */}
+              {mode === "voice" && (
+                <div className="space-y-3">
+                  {/* Status indicator */}
+                  {isVoiceActive && (
+                    <VoiceIndicator status={voice.status as "listening" | "restarting" | "triggering"} />
+                  )}
+
+                  {/* Utterance buffer */}
+                  {voice.utteranceBuffer.length > 0 && (
+                    <div className="rounded-xl bg-stone-50 px-4 py-3 text-sm text-stone-700 leading-relaxed">
+                      {voice.utteranceBuffer.join(" ")}
+                    </div>
+                  )}
+
+                  {/* Interim text */}
+                  {voice.interimText && (
+                    <p className="text-sm text-stone-400 italic px-1">
+                      {voice.interimText}
+                    </p>
+                  )}
+
+                  {/* Pause countdown */}
+                  {voice.pauseSecondsLeft !== null && voice.pauseSecondsLeft > 0 && (
+                    <p className="text-xs text-stone-400">
+                      Sending in {voice.pauseSecondsLeft}s…
+                    </p>
+                  )}
+
+                  {/* Voice error */}
+                  {voiceError && (
+                    <p className="text-xs text-red-600">{voiceError}</p>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 flex-wrap">
+                    {voice.status === "idle" && !streaming && (
+                      <button
+                        type="button"
+                        onClick={() => voice.start()}
+                        className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors"
+                      >
+                        Start speaking
+                      </button>
+                    )}
+
+                    {isVoiceActive && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => voice.trigger()}
+                          disabled={
+                            voice.utteranceBuffer.length === 0 ||
+                            voice.status === "triggering"
+                          }
+                          className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          I&apos;m done
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => voice.cancel()}
+                          disabled={voice.status === "triggering"}
+                          className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Cadence picker */}
+                  {!streaming && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs text-stone-400">Auto-send:</span>
+                      {CADENCE_OPTIONS.map(({ label, value }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => handleCadenceChange(value)}
+                          className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                            cadence === value
+                              ? "bg-stone-200 text-stone-700 font-medium"
+                              : "text-stone-400 hover:text-stone-600"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* End session */}
               <div className="mt-3 text-center">
                 <button
                   type="button"
@@ -282,7 +547,7 @@ export default function Chat({ sessionId }: { sessionId: string }) {
                   End session
                 </button>
               </div>
-            </form>
+            </>
           )}
 
           <CrisisLine />

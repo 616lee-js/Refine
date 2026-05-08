@@ -73,7 +73,18 @@ Data architecture (filing-cabinet model):
 Phase 1 — complete
 Phase 2 — complete
 Phase 3 — complete
-Phase 4+ — not started
+Phase 4 — in progress (voice input + conversational paradigm shift)
+Phase 5+ — not started
+
+## Voice paradigm note
+
+Phase 4 adds voice input via Web Speech API. The conversational paradigm shifts:
+utterances accumulate client-side; per-utterance classification fires via
+`/api/classify`; the accumulated message (plus maxTier) is sent to `/api/chat`
+only when the user signals readiness (pause timer or "I'm done"). Audio is saved
+per-trigger to `./audio/[sessionId]/[uuid].webm` (unencrypted in v1). The
+TranscriptionProvider interface (`src/lib/transcription/types.ts`) is a one-way
+door — swap implementations without touching the hook.
 
 ## Where things live
 
@@ -102,3 +113,8 @@ Phase 4+ — not started
   description, session/entry IDs if applicable); mark resolved with date rather
   than deleting; do not edit prompts or UI copy in response to individual
   entries — this feeds a deliberate focused review, not in-flight fixes
+- Design system: `docs/refine_design_system.md` — tokens, component patterns,
+  accessibility commitments, open questions (OQ-### format). Consult when
+  building new UI; if a pattern is needed that isn't covered, propose adding it
+  before building. Implementation: tokens in `src/app/globals.css` (`@theme`),
+  shared components in `src/components/ui/`

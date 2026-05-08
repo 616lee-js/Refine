@@ -119,6 +119,28 @@ For solo local v1 use this is acceptable. Before multi-user deployment or any sh
 
 ---
 
+#### LIM-011 — Audio recordings stored unencrypted on disk in v1
+
+**Severity:** Significant (privacy)
+**Status:** Accepted for v1 solo local use; must resolve before v2
+
+Voice session audio is saved to `./audio/[sessionId]/[uuid].webm` in plain binary — no AES-GCM encryption. The `audio/` directory is `.gitignore`d. Contrast with text entries, which are AES-256-GCM encrypted at rest. On a solo local machine this is low risk; before any shared-server or cloud deployment, audio must be encrypted at the application layer (or via filesystem encryption).
+
+**Future:** Encrypt audio files at rest using the same key derivation as entry content, or use filesystem-level encryption for the audio directory.
+
+---
+
+#### LIM-012 — WebSpeech API restart gap loses utterances
+
+**Severity:** Minor
+**Status:** Accepted as inherent for Web Speech API v1; mitigated by status indicator
+
+The Web Speech API `SpeechRecognition` object stops silently when the browser detects a pause or network event. The `onend` handler restarts recognition, but there is a brief window (typically <500ms) during which speech is not captured. The UI shows "Restarting microphone…" during this gap. Any words spoken in the gap are lost.
+
+**Mitigation:** The status indicator alerts users. Switching to a push-to-talk model or a continuous server-side provider (Deepgram, Whisper streaming) at v2 would eliminate the gap.
+
+---
+
 #### LIM-005 — Voice transcription via browser Web Speech API in v1
 
 **Severity:** Minor for v1 development; significant for users at v2

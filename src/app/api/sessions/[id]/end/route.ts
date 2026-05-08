@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sessions, entries } from "@/lib/db/schema";
@@ -28,6 +28,17 @@ export async function POST(
 
   if (dbSession.endedAt) {
     return new Response("Session already ended", { status: 409 });
+  }
+
+  // Discard sessions with no user input — delete and return 204 (no closing message)
+  const [{ userEntryCount }] = await db
+    .select({ userEntryCount: sql<number>`COUNT(*)::int` })
+    .from(entries)
+    .where(and(eq(entries.sessionId, sessionId), ne(entries.source, "claude")));
+
+  if (userEntryCount === 0) {
+    await db.delete(sessions).where(eq(sessions.id, sessionId));
+    return new Response(null, { status: 204 });
   }
 
   let closingResult: Awaited<ReturnType<typeof runSessionClosing>>;

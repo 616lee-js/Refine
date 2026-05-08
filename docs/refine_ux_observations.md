@@ -32,3 +32,19 @@ No session list or session detail view existed after Phase 3 launch. Could not v
 **Tone, cadence, and response quality noticeably off in early testing**
 
 Specific observations to be added as testing continues. Deferred to a focused prompt review phase rather than piecemeal adjustment during Phase 3. This entry tracks the standing concern. Session/entry IDs will be appended as specific examples are captured during testing.
+
+---
+
+### OBS-005 | 2026-05-08 | Status: open (deferred to Phase 7)
+
+**Scheduled session lifecycle — unused/skipped sessions**
+
+Design question: what happens to a scheduled session that isn't used? If a user creates a scheduled session, never shows up, and later tries to schedule another — should the old one expire? Can it be rescheduled? Silently dropped? This requires product decisions about session scheduling, reminders, and grace periods that belong with Phase 7 (scheduling) work rather than Phase 4. Not blocking current build; flagged here so it surfaces at the right time.
+
+---
+
+### OBS-004 | 2026-05-08 | Status: open
+
+**Layer 2 system prompt uses text-chat language, off-paradigm for voice sessions**
+
+The Layer 2 system prompt was written under the assumption of text chat ("write", "share", "read back", etc.). With Phase 4 voice mode added, Claude's responses will be received as text but the user's input is spoken. The system prompt language may produce responses that implicitly ask the user to write things down, reference the "text", or otherwise assume a reading/typing interaction. This should be addressed in the dedicated prompt review phase (OBS-003 scope). Do not patch incrementally — collect specific voice-session examples first and revise in a focused pass.

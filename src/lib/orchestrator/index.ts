@@ -13,12 +13,18 @@ export type { Tier };
 export async function runOrchestrator({
   sessionId,
   message,
+  source = "user_text",
+  precomputedTier,
+  audioRef,
 }: {
   sessionId: string;
   message: string;
+  source?: "user_text" | "user_voice";
+  precomputedTier?: 0 | 1 | 2 | 3;
+  audioRef?: string;
 }) {
-  // 1. Classify
-  const tier = await classifyMessage(message);
+  // 1. Classify (skip if caller already classified)
+  const tier: Tier = precomputedTier ?? (await classifyMessage(message));
 
   // 2. Next sequence number for this session
   const [{ maxSeq }] = await db
@@ -33,20 +39,24 @@ export async function runOrchestrator({
     id: entryId,
     sessionId,
     sequence: userSequence,
-    source: "user_text",
+    source,
     encryptedContent: encrypt(message),
+    rawAudioRef: audioRef ?? null,
     tierClassification: tier,
   });
 
-  // 4. Log to safety_log
-  await db.insert(safetyLog).values({
-    id: randomUUID(),
-    sessionId,
-    entryId,
-    tier,
-    classifierVersion: "v1",
-    rawSignals: {},
-  });
+  // 4. Log to safety_log (skipped for voice — per-utterance rows already saved;
+  //    caller saves the summary row with the real entryId after stream completes)
+  if (source !== "user_voice") {
+    await db.insert(safetyLog).values({
+      id: randomUUID(),
+      sessionId,
+      entryId,
+      tier,
+      classifierVersion: "v1",
+      rawSignals: {},
+    });
+  }
 
   // 5. Fetch session history (includes the entry we just saved)
   const sessionEntries = await db
@@ -73,7 +83,7 @@ export async function runOrchestrator({
     messages,
   });
 
-  return { stream, tier };
+  return { stream, tier, entryId };
 }
 
 const SESSION_CLOSING_INSTRUCTION = `

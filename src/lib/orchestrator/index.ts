@@ -6,18 +6,20 @@ import { db } from "@/lib/db";
 import { entries, safetyLog } from "@/lib/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { classifyMessage, type Tier } from "./classifier";
-import { buildSystemPrompt } from "./context";
+import { buildSystemPrompt, buildLayer4Context } from "./context";
 
 export type { Tier };
 
 export async function runOrchestrator({
   sessionId,
+  userId,
   message,
   source = "user_text",
   precomputedTier,
   audioRef,
 }: {
   sessionId: string;
+  userId: string;
   message: string;
   source?: "user_text" | "user_voice";
   precomputedTier?: 0 | 1 | 2 | 3;
@@ -71,8 +73,9 @@ export async function runOrchestrator({
       content: decrypt(e.encryptedContent),
     }));
 
-  // 6. Build system prompt with tier-appropriate Layer 3 fragments
-  const systemPrompt = buildSystemPrompt(tier);
+  // 6. Build system prompt with tier-appropriate Layer 3 + Layer 4 context
+  const layer4 = await buildLayer4Context(userId);
+  const systemPrompt = buildSystemPrompt(tier, layer4);
 
   // 7. Start stream
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });
@@ -99,7 +102,7 @@ The user has indicated they are ready to end this session. Provide a warm, conte
  * Does not create a user entry or safety log row — the close is system-initiated.
  * The Claude response is saved as a 'claude' entry by the caller after streaming.
  */
-export async function runSessionClosing(sessionId: string) {
+export async function runSessionClosing(sessionId: string, userId: string) {
   // Look up the tier of the last user message in this session
   const [lastUserEntry] = await db
     .select({ tier: entries.tierClassification })
@@ -123,7 +126,8 @@ export async function runSessionClosing(sessionId: string) {
       content: decrypt(e.encryptedContent),
     }));
 
-  const systemPrompt = buildSystemPrompt(tier) + SESSION_CLOSING_INSTRUCTION;
+  const layer4 = await buildLayer4Context(userId);
+  const systemPrompt = buildSystemPrompt(tier, layer4) + SESSION_CLOSING_INSTRUCTION;
 
   // Anthropic requires ≥1 message and last message must be from `user`.
   messages.push({ role: "user", content: "I'm ready to wrap up." });

@@ -130,6 +130,32 @@ Voice session audio is saved to `./audio/[sessionId]/[uuid].webm` in plain binar
 
 ---
 
+#### LIM-014 — Cabinet 2 deletion propagation gap
+
+**Severity:** Minor for v1 (Cabinet 2 not yet built); Significant before longitudinal features ship
+**Status:** Open; accepted for v1; must address before Phase 6
+
+When a user deletes a memory entry, only the `user_memory` row is hard-deleted. Session summaries (Cabinet 2, Phase 6+) are not regenerated after deletion — they may still contain references to, or be shaped by, the deleted entry. If longitudinal synthesis features consume Cabinet 2 data, those references could surface stale context without any indicator that the source was deleted.
+
+**Implication:** In v1, Cabinet 2 does not exist, so no user is affected yet. The risk is forward-looking: if summary regeneration is not added alongside Cabinet 2, deleted memory could ghost into longitudinal insights.
+
+**Future:** When Cabinet 2 is built (Phase 6), design regeneration or invalidation logic for summaries that reference deleted entries. Document as a user-facing transparency item if partial propagation is accepted.
+
+---
+
+#### LIM-013 — Signout auto-end does not generate a closing AI response
+
+**Severity:** Minor
+**Status:** Accepted for v1; revisit at v2
+
+When a user signs out with an active session, the logout route stamps `endedAt` on all active sessions. The session's entries are fully preserved, but no closing AI response is generated — streaming requires an active client connection, which is unavailable during signout. Sessions ended this way will appear as Ended in the history but will not have a closing message from Claude.
+
+Same behavior applies to abandon-on-navigation (tab close, route change without explicit End): the session is marked ended but no closing message is written.
+
+The explicit "End session" button is the only path that generates a proper closing response.
+
+---
+
 #### LIM-012 — WebSpeech API restart gap loses utterances
 
 **Severity:** Minor

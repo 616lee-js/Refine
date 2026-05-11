@@ -15,7 +15,7 @@ export default async function SessionPage({
   if (!authSession.userId) notFound();
 
   const [session] = await db
-    .select({ id: sessions.id, userId: sessions.userId })
+    .select({ id: sessions.id, userId: sessions.userId, endedAt: sessions.endedAt })
     .from(sessions)
     .where(eq(sessions.id, id))
     .limit(1);
@@ -38,5 +38,11 @@ export default async function SessionPage({
     ? (prefs.voiceCadence as 0 | 10 | 20 | 30)
     : 10;
 
-  return <Chat sessionId={id} initialCadence={initialCadence} />;
+  return (
+    <Chat
+      sessionId={id}
+      initialCadence={initialCadence}
+      initialEnded={!!session.endedAt}
+    />
+  );
 }

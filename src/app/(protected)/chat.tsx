@@ -118,18 +118,21 @@ function VoiceIndicator({
 export default function Chat({
   sessionId,
   initialCadence,
+  initialEnded = false,
 }: {
   sessionId: string;
   initialCadence: 0 | 10 | 20 | 30;
+  initialEnded?: boolean;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [ended, setEnded] = useState(false);
+  const [ended, setEnded] = useState(initialEnded);
   const [mode, setMode] = useState<Mode>("text");
   const [cadence, setCadence] = useState<0 | 10 | 20 | 30>(initialCadence);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -137,6 +140,21 @@ export default function Chat({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Abandon beacon — fires on in-app navigation (component unmount)
+  useEffect(() => {
+    return () => {
+      navigator.sendBeacon(`/api/sessions/${sessionId}/abandon`);
+    };
+  }, [sessionId]);
+
+  // Abandon beacon — fires on tab/window close
+  useEffect(() => {
+    const handler = () =>
+      navigator.sendBeacon(`/api/sessions/${sessionId}/abandon`);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [sessionId]);
 
   // ── Shared send logic ─────────────────────────────────────────────────────
 
@@ -316,6 +334,15 @@ export default function Chat({
     }
   }
 
+  // ── Cancel session ───────────────────────────────────────────────────────
+
+  async function handleCancelSession() {
+    if (streaming || ended) return;
+    if (mode === "voice" && voice.status !== "idle") voice.cancel();
+    await fetch(`/api/sessions/${sessionId}/cancel`, { method: "POST" });
+    router.push("/");
+  }
+
   // ── Cadence change ────────────────────────────────────────────────────────
 
   function handleCadenceChange(value: 0 | 10 | 20 | 30) {
@@ -342,14 +369,22 @@ export default function Chat({
         <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
           Refine
         </h1>
-        <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
+        <div className="flex items-center gap-4">
+          <a
+            href="/sessions"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
-            Sign out
-          </button>
-        </form>
+            Reflections
+          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
 
       {/* ── Message list ── */}
@@ -536,16 +571,48 @@ export default function Chat({
                 </div>
               )}
 
-              {/* End session */}
-              <div className="mt-3 text-center">
-                <button
-                  type="button"
-                  onClick={handleEndSession}
-                  disabled={streaming}
-                  className="text-xs text-stone-400 hover:text-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  End session
-                </button>
+              {/* End / Cancel session */}
+              <div className="mt-3 text-center space-y-1">
+                {cancelConfirm ? (
+                  <p className="text-xs text-stone-500">
+                    Discard this reflection? Nothing will be saved.{" "}
+                    <button
+                      type="button"
+                      onClick={handleCancelSession}
+                      className="text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      Discard
+                    </button>
+                    {" · "}
+                    <button
+                      type="button"
+                      onClick={() => setCancelConfirm(false)}
+                      className="text-stone-400 hover:text-stone-600 transition-colors"
+                    >
+                      Keep going
+                    </button>
+                  </p>
+                ) : (
+                  <div className="flex items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={handleEndSession}
+                      disabled={streaming}
+                      className="text-xs text-stone-400 hover:text-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      End session
+                    </button>
+                    <span className="text-stone-200" aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setCancelConfirm(true)}
+                      disabled={streaming}
+                      className="text-xs text-stone-400 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}

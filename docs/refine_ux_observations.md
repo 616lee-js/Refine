@@ -43,6 +43,54 @@ Design question: what happens to a scheduled session that isn't used? If a user 
 
 ---
 
+### OBS-006 | 2026-05-08 | Status: resolved 2026-05-10
+
+**Skip button redundant on as-needed check-in**
+
+The as-needed check-in textarea already has an optional placeholder ("Optional — you can skip this"). The Skip button added a redundant path that called `startSession(true)` — identical in result to submitting the empty textarea. Resolved by removing the Skip button and widening the Start button to full width. `startSession(false)` already skips empty `presentText`.
+
+---
+
+### OBS-007 | 2026-05-08 | Status: resolved 2026-05-10
+
+**Voice pause timer could fire mid-speech**
+
+The pause countdown reset only on `onUtterance` (finalized transcript), not on `onInterim` (in-progress speech). A prior final's timer could expire while the user was still speaking, triggering too early. Resolved by calling `clearPauseTimer()` in `onInterim` when interim text is non-empty — any speech activity (interim or final) resets the countdown.
+
+---
+
+### OBS-008 | 2026-05-08 | Status: resolved 2026-05-10
+
+**Voice transcripts lack punctuation and capitalization**
+
+Web Speech API does not reliably add punctuation to final transcripts. Stored entries and text sent to Claude were lowercase mid-sentence fragments. Resolved by post-processing each final utterance through `addPunctuation()` in `use-voice-session.ts` — capitalizes first letter, appends a period if no sentence-ending punctuation is present.
+
+---
+
+### OBS-009 | 2026-05-08 | Status: resolved 2026-05-10
+
+**Sessions nav link absent from chat header**
+
+The home page always shows a Sessions link; the chat session view did not. Users had no way to navigate to their session history while in a session. Resolved by adding the Sessions link to the chat.tsx header alongside Sign Out.
+
+---
+
+### OBS-010 | 2026-05-08 | Status: resolved 2026-05-10
+
+**"Present:" label on session detail page unclear**
+
+The debug session detail view labeled `checkIn.presentText` as "Present:" — a database field name, not a human label. For as-needed sessions this field captures the response to "What's bringing you here today?". Renamed to "What brought you here:" to match the check-in form.
+
+---
+
+### OBS-011 | 2026-05-08 | Status: resolved 2026-05-10
+
+**Sessions persist as "Active" after signout or navigation away**
+
+Sessions without an explicit "End session" action remained in Active state indefinitely. Two fixes: (1) Logout route now stamps `endedAt` on all active sessions before destroying the auth cookie. (2) Chat component sends `navigator.sendBeacon` to `/api/sessions/[id]/abandon` on unmount and on `beforeunload` — abandon endpoint marks the session ended if it has user entries, or deletes it (cascade) if it has none. Server is idempotent; if session is already ended, beacon is a no-op. Note: signout auto-end does not generate a closing AI response — see LIM-013.
+
+---
+
 ### OBS-004 | 2026-05-08 | Status: open
 
 **Layer 2 system prompt uses text-chat language, off-paradigm for voice sessions**

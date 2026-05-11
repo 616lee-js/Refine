@@ -75,6 +75,7 @@ export async function POST(req: Request) {
 
   const { stream, tier, entryId } = await runOrchestrator({
     sessionId,
+    userId: session.userId,
     message,
     source,
     precomputedTier,

@@ -43,7 +43,7 @@ export async function POST(
 
   let closingResult: Awaited<ReturnType<typeof runSessionClosing>>;
   try {
-    closingResult = await runSessionClosing(sessionId);
+    closingResult = await runSessionClosing(sessionId, authSession.userId);
   } catch (err) {
     console.error("runSessionClosing failed:", err);
     return new Response("Internal server error", { status: 500 });

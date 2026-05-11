@@ -22,6 +22,11 @@ type UseVoiceSessionOptions = {
   onError: (err: Error) => void;
 };
 
+function addPunctuation(text: string): string {
+  const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(capitalized) ? capitalized : capitalized + ".";
+}
+
 export type VoiceStatus =
   | "idle"
   | "listening"
@@ -181,11 +186,12 @@ export function useVoiceSession({
     provider.start({
       onInterim(text) {
         setInterimText(text);
+        if (text) clearPauseTimer();
       },
 
       onUtterance(text) {
         setInterimText("");
-        const trimmed = text.trim();
+        const trimmed = addPunctuation(text.trim());
         if (!trimmed) return;
 
         const idx = utteranceIndexRef.current++;

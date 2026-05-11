@@ -68,6 +68,12 @@ export const users = pgTable("users", {
 /**
  * Cabinet 1: each session is a container for entries.
  * scheduled_for: set when session was pre-scheduled; null for as-needed.
+ * extraction_status: memory extraction lifecycle.
+ *   null     = not applicable (abandoned / no user entries / not yet run)
+ *   pending  = queued after session end
+ *   running  = extraction in flight
+ *   succeeded = proposed memory entries saved
+ *   failed   = extraction failed; raw output logged separately
  */
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
@@ -81,6 +87,7 @@ export const sessions = pgTable("sessions", {
     .defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+  extractionStatus: text("extraction_status"),
 });
 
 /**
@@ -120,6 +127,27 @@ export const entries = pgTable("entries", {
     .notNull()
     .defaultNow(),
   tierClassification: integer("tier_classification"),
+});
+
+/**
+ * User profile — PHI-grade content isolated from the auth-adjacent users row.
+ * One profile per user. Content encrypted as a single JSON blob.
+ * Fields (inside encrypted blob): tendencies, goals, background.
+ * Shape is two-way; evolves without migrations via the JSONB blob.
+ */
+export const userProfiles = pgTable("user_profiles", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedContent: text("encrypted_content"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 /**

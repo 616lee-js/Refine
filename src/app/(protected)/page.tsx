@@ -66,7 +66,7 @@ export default function Page() {
               href="/sessions"
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
-              Sessions
+              Reflections
             </a>
             <form action="/api/auth/logout" method="POST">
               <button
@@ -91,7 +91,7 @@ export default function Page() {
                 Start when ready
               </div>
               <div className="text-xs text-stone-400 mt-0.5">
-                Open-ended reflection, no structure required
+                Open-ended reflection, whenever you need it
               </div>
             </button>
             <button
@@ -102,7 +102,7 @@ export default function Page() {
                 Scheduled session
               </div>
               <div className="text-xs text-stone-400 mt-0.5">
-                Brief check-in before we begin
+                Structured check-in to track how you&apos;re doing over time
               </div>
             </button>
             <button
@@ -140,7 +140,7 @@ export default function Page() {
             href="/sessions"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
-            Sessions
+            Reflections
           </a>
         </div>
       </header>
@@ -162,30 +162,21 @@ export default function Page() {
                 placeholder="Optional — you can skip this"
                 className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white leading-relaxed transition-colors"
               />
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => startSession(true)}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Skip
-                </button>
-                <button
-                  onClick={() => startSession(false)}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? "Starting…" : "Start"}
-                </button>
-              </div>
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <button
+                onClick={() => startSession(false)}
+                disabled={loading}
+                className="w-full px-4 py-2.5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? "Starting…" : "Start"}
+              </button>
             </>
           )}
 
           {sessionType === "scheduled" && (
             <>
               <div>
-                <p className="text-sm text-stone-600 mb-3">
+                <p className="text-sm font-medium text-stone-700 mb-3">
                   How are you feeling right now?
                 </p>
                 <div className="flex gap-2">
@@ -214,7 +205,7 @@ export default function Page() {
                   htmlFor="present-text"
                   className="block text-sm text-stone-600 mb-1.5"
                 >
-                  A few words on how you&apos;re doing
+                  How are you doing right now, in a few words?
                 </label>
                 <textarea
                   id="present-text"
@@ -231,7 +222,7 @@ export default function Page() {
                   htmlFor="intention-text"
                   className="block text-sm text-stone-600 mb-1.5"
                 >
-                  What would you like to focus on?{" "}
+                  Since last time…{" "}
                   <span className="text-stone-400">(optional)</span>
                 </label>
                 <textarea
@@ -239,12 +230,12 @@ export default function Page() {
                   value={intentionText}
                   onChange={(e) => setIntentionText(e.target.value)}
                   rows={2}
-                  placeholder="Any intention or theme for today…"
+                  placeholder="Anything notable since your last reflection…"
                   className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white leading-relaxed transition-colors"
                 />
               </div>
 
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && <p className="text-xs text-red-600">{error}</p>}
 
               <button
                 onClick={() => startSession(false)}

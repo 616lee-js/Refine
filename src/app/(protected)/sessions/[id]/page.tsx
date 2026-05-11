@@ -66,10 +66,10 @@ export default async function SessionDetailPage({
           href="/sessions"
           className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
         >
-          ← Sessions
+          ← Reflections
         </Link>
         <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-          Refine — Session Detail
+          Refine — Reflection
         </h1>
       </header>
 
@@ -112,7 +112,7 @@ export default async function SessionDetailPage({
               )}
               {checkIn.presentText && (
                 <p>
-                  <span className="font-medium">Present:</span>{" "}
+                  <span className="font-medium">What brought you here:</span>{" "}
                   {checkIn.presentText}
                 </p>
               )}

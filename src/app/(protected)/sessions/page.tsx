@@ -31,19 +31,19 @@ export default async function SessionsPage() {
     <div className="min-h-screen bg-white text-stone-800">
       <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
         <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-          Refine — Sessions
+          Refine — Reflections
         </h1>
         <Link
           href="/"
           className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
         >
-          ← New session
+          ← New reflection
         </Link>
       </header>
 
       <main className="px-6 py-8 max-w-2xl mx-auto">
         {rows.length === 0 ? (
-          <p className="text-sm text-stone-400">No sessions yet.</p>
+          <p className="text-sm text-stone-400">No reflections yet.</p>
         ) : (
           <ol className="divide-y divide-stone-100">
             {rows.map((s) => (

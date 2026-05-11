@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     session.userId = user.id;
     await session.save();
 
-    return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.redirect(new URL("/onboarding", req.url));
   } catch (err) {
     if (err instanceof Error && err.message === "EMAIL_IN_USE") {
       return NextResponse.redirect(

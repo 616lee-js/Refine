@@ -73,8 +73,9 @@ Data architecture (filing-cabinet model):
 Phase 1 — complete
 Phase 2 — complete
 Phase 3 — complete
-Phase 4 — in progress (voice input + conversational paradigm shift)
-Phase 5+ — not started
+Phase 4 — complete
+Phase 5 — in progress (user memory + profile + onboarding; extraction prompt + system prompt review pending)
+Phase 6+ — not started
 
 ## Voice paradigm note
 
@@ -118,3 +119,24 @@ door — swap implementations without touching the hook.
   building new UI; if a pattern is needed that isn't covered, propose adding it
   before building. Implementation: tokens in `src/app/globals.css` (`@theme`),
   shared components in `src/components/ui/`
+
+## Phase 5 additions
+
+### New pages (Phase 5)
+- Memory UI: `src/app/(protected)/memory/page.tsx` — active/proposed memory, per-entry confirm/edit/delete, add new, bulk delete
+- Profile settings: `src/app/(protected)/settings/profile/page.tsx` — three optional profile fields (tendencies, goals, background)
+- Onboarding: `src/app/(protected)/onboarding/page.tsx` — post-signup profile capture, redirects to `/`
+
+### New schema
+- `user_profiles` table: PHI-isolated encrypted profile blob, one row per user
+- `sessions.extractionStatus`: null → pending → running → succeeded/failed (tracks memory extraction lifecycle)
+
+### Memory state model
+Reuses `user_memory.lastConfirmedAt` as proposed/active discriminator:
+- `lastConfirmedAt IS NULL + isActive = true` → proposed (claude-generated, awaiting confirmation)
+- `lastConfirmedAt IS NOT NULL` → active (confirmed or user-added)
+- Layer 4 orchestrator query: `isActive = true AND lastConfirmedAt IS NOT NULL`
+
+### Two pending PAUSE points
+- Memory extraction prompt (Step 11) — requires planning review before drafting
+- System prompt review — Layer 2 edits require focused review conversation before any changes

@@ -1,25 +1,25 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, safetyLog } from "@/lib/db/schema";
+import { reflections, safetyLog } from "@/lib/db/schema";
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: sessionId } = await params;
+  const { id: reflectionId } = await params;
   const authSession = await getSession();
   if (!authSession.userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const [dbSession] = await db
-    .select({ id: sessions.id, userId: sessions.userId })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
+  const [dbReflection] = await db
+    .select({ id: reflections.id, userId: reflections.userId })
+    .from(reflections)
+    .where(eq(reflections.id, reflectionId))
     .limit(1);
 
-  if (!dbSession || dbSession.userId !== authSession.userId) {
+  if (!dbReflection || dbReflection.userId !== authSession.userId) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -27,7 +27,7 @@ export async function POST(
     .delete(safetyLog)
     .where(
       and(
-        eq(safetyLog.sessionId, sessionId),
+        eq(safetyLog.reflectionId, reflectionId),
         isNull(safetyLog.entryId),
         sql`${safetyLog.rawSignals}->>'source' = 'utterance'`
       )

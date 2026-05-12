@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, users } from "@/lib/db/schema";
+import { reflections, users } from "@/lib/db/schema";
 import Chat from "../../chat";
 
-export default async function SessionPage({
+export default async function ReflectionPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -14,13 +14,13 @@ export default async function SessionPage({
   const authSession = await getSession();
   if (!authSession.userId) notFound();
 
-  const [session] = await db
-    .select({ id: sessions.id, userId: sessions.userId, endedAt: sessions.endedAt })
-    .from(sessions)
-    .where(eq(sessions.id, id))
+  const [reflection] = await db
+    .select({ id: reflections.id, userId: reflections.userId, endedAt: reflections.endedAt })
+    .from(reflections)
+    .where(eq(reflections.id, id))
     .limit(1);
 
-  if (!session || session.userId !== authSession.userId) notFound();
+  if (!reflection || reflection.userId !== authSession.userId) notFound();
 
   const [user] = await db
     .select({ preferences: users.preferences })
@@ -40,9 +40,9 @@ export default async function SessionPage({
 
   return (
     <Chat
-      sessionId={id}
+      reflectionId={id}
       initialCadence={initialCadence}
-      initialEnded={!!session.endedAt}
+      initialEnded={!!reflection.endedAt}
     />
   );
 }

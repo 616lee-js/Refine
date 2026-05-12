@@ -124,7 +124,7 @@ For solo local v1 use this is acceptable. Before multi-user deployment or any sh
 **Severity:** Significant (privacy)
 **Status:** Accepted for v1 solo local use; must resolve before v2
 
-Voice session audio is saved to `./audio/[sessionId]/[uuid].webm` in plain binary — no AES-GCM encryption. The `audio/` directory is `.gitignore`d. Contrast with text entries, which are AES-256-GCM encrypted at rest. On a solo local machine this is low risk; before any shared-server or cloud deployment, audio must be encrypted at the application layer (or via filesystem encryption).
+Voice session audio is saved to `./audio/[reflectionId]/[uuid].webm` in plain binary — no AES-GCM encryption. The `audio/` directory is `.gitignore`d. Contrast with text entries, which are AES-256-GCM encrypted at rest. On a solo local machine this is low risk; before any shared-server or cloud deployment, audio must be encrypted at the application layer (or via filesystem encryption).
 
 **Future:** Encrypt audio files at rest using the same key derivation as entry content, or use filesystem-level encryption for the audio directory.
 
@@ -135,7 +135,7 @@ Voice session audio is saved to `./audio/[sessionId]/[uuid].webm` in plain binar
 **Severity:** Minor for v1 (Cabinet 2 not yet built); Significant before longitudinal features ship
 **Status:** Open; accepted for v1; must address before Phase 6
 
-When a user deletes a memory entry, only the `user_memory` row is hard-deleted. Session summaries (Cabinet 2, Phase 6+) are not regenerated after deletion — they may still contain references to, or be shaped by, the deleted entry. If longitudinal synthesis features consume Cabinet 2 data, those references could surface stale context without any indicator that the source was deleted.
+When a user deletes a memory entry, only the `user_memory` row is hard-deleted. Reflection summaries (Cabinet 2, Phase 6+) are not regenerated after deletion — they may still contain references to, or be shaped by, the deleted entry. If longitudinal synthesis features consume Cabinet 2 data, those references could surface stale context without any indicator that the source was deleted.
 
 **Implication:** In v1, Cabinet 2 does not exist, so no user is affected yet. The risk is forward-looking: if summary regeneration is not added alongside Cabinet 2, deleted memory could ghost into longitudinal insights.
 
@@ -148,11 +148,11 @@ When a user deletes a memory entry, only the `user_memory` row is hard-deleted. 
 **Severity:** Minor
 **Status:** Accepted for v1; revisit at v2
 
-When a user signs out with an active session, the logout route stamps `endedAt` on all active sessions. The session's entries are fully preserved, but no closing AI response is generated — streaming requires an active client connection, which is unavailable during signout. Sessions ended this way will appear as Ended in the history but will not have a closing message from Claude.
+When a user signs out with an active reflection, the logout route stamps `endedAt` on all active reflections. The reflection's entries are fully preserved, but no closing AI response is generated — streaming requires an active client connection, which is unavailable during signout. Reflections ended this way will appear as Ended in the history but will not have a closing message from Claude.
 
-Same behavior applies to abandon-on-navigation (tab close, route change without explicit End): the session is marked ended but no closing message is written.
+Same behavior applies to abandon-on-navigation (tab close, route change without explicit End): the reflection is marked ended but no closing message is written.
 
-The explicit "End session" button is the only path that generates a proper closing response.
+The explicit "End reflection" button is the only path that generates a proper closing response.
 
 ---
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, checkIns } from "@/lib/db/schema";
+import { reflections, checkIns } from "@/lib/db/schema";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -31,10 +31,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "not_implemented" }, { status: 403 });
   }
 
-  const sessionId = randomUUID();
+  const reflectionId = randomUUID();
 
-  await db.insert(sessions).values({
-    id: sessionId,
+  await db.insert(reflections).values({
+    id: reflectionId,
     userId: session.userId,
     type,
     modality: "text",
@@ -42,11 +42,11 @@ export async function POST(req: Request) {
 
   await db.insert(checkIns).values({
     id: randomUUID(),
-    sessionId,
+    reflectionId,
     mood: checkin.mood ?? {},
     presentText: checkin.presentText ?? null,
     intentionText: checkin.intentionText ?? null,
   });
 
-  return Response.json({ sessionId });
+  return Response.json({ reflectionId });
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, entries, safetyLog } from "@/lib/db/schema";
+import { reflections, entries, safetyLog } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { runOrchestrator } from "@/lib/orchestrator";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
   const parsed = body as {
     message?: unknown;
-    sessionId?: unknown;
+    reflectionId?: unknown;
     // Voice-only fields
     source?: unknown;
     precomputedTier?: unknown;
@@ -31,10 +31,10 @@ export async function POST(req: Request) {
 
   const message =
     typeof parsed.message === "string" ? parsed.message.trim() : "";
-  const sessionId =
-    typeof parsed.sessionId === "string" ? parsed.sessionId.trim() : "";
+  const reflectionId =
+    typeof parsed.reflectionId === "string" ? parsed.reflectionId.trim() : "";
 
-  if (!message || !sessionId) {
+  if (!message || !reflectionId) {
     return new Response("Bad request", { status: 400 });
   }
 
@@ -62,19 +62,19 @@ export async function POST(req: Request) {
         })
       : null;
 
-  // Verify session belongs to this user
-  const [dbSession] = await db
-    .select({ id: sessions.id, userId: sessions.userId })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
+  // Verify reflection belongs to this user
+  const [dbReflection] = await db
+    .select({ id: reflections.id, userId: reflections.userId })
+    .from(reflections)
+    .where(eq(reflections.id, reflectionId))
     .limit(1);
 
-  if (!dbSession || dbSession.userId !== session.userId) {
+  if (!dbReflection || dbReflection.userId !== session.userId) {
     return new Response("Not found", { status: 404 });
   }
 
   const { stream, tier, entryId } = await runOrchestrator({
-    sessionId,
+    reflectionId,
     userId: session.userId,
     message,
     source,
@@ -98,11 +98,11 @@ export async function POST(req: Request) {
         const saveAssistant = db
           .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
           .from(entries)
-          .where(eq(entries.sessionId, sessionId))
+          .where(eq(entries.reflectionId, reflectionId))
           .then(([{ maxSeq }]) =>
             db.insert(entries).values({
               id: randomUUID(),
-              sessionId,
+              reflectionId,
               sequence: maxSeq + 1,
               source: "claude",
               encryptedContent: encrypt(assistantText),
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
           ? saveAssistant.then(() =>
               db.insert(safetyLog).values({
                 id: randomUUID(),
-                sessionId,
+                reflectionId,
                 entryId,
                 tier,
                 classifierVersion: "v1",

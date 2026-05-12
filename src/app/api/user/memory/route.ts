@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     kind: kind as "fact" | "thread" | "preference" | "diagnostic_context" | "other",
     encryptedContent: encrypt(content.trim()),
     source: "user_added",
-    sessionId: null,
+    reflectionId: null,
     isActive: true,
     lastConfirmedAt: now,
     createdAt: now,

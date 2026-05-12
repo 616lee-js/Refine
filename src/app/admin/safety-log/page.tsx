@@ -26,7 +26,7 @@ export default async function SafetyLogPage() {
   const rows = await db
     .select({
       id: safetyLog.id,
-      sessionId: safetyLog.sessionId,
+      reflectionId: safetyLog.reflectionId,
       tier: safetyLog.tier,
       classifierVersion: safetyLog.classifierVersion,
       createdAt: safetyLog.createdAt,
@@ -68,7 +68,7 @@ export default async function SafetyLogPage() {
               <tr className="text-left text-xs text-stone-400 border-b border-stone-100">
                 <th className="pb-2 pr-4 font-medium">Tier</th>
                 <th className="pb-2 pr-4 font-medium">Timestamp</th>
-                <th className="pb-2 pr-4 font-medium">Session</th>
+                <th className="pb-2 pr-4 font-medium">Reflection</th>
                 <th className="pb-2 pr-4 font-medium">Classifier</th>
                 <th className="pb-2 pr-4 font-medium">Chars</th>
                 <th className="pb-2 pr-4 font-medium">Reviewed</th>
@@ -93,7 +93,7 @@ export default async function SafetyLogPage() {
                       : "—"}
                   </td>
                   <td className="py-3 pr-4 font-mono text-xs text-stone-400">
-                    {row.sessionId.slice(0, 8)}…
+                    {row.reflectionId.slice(0, 8)}…
                   </td>
                   <td className="py-3 pr-4 text-xs text-stone-400">
                     {row.classifierVersion}

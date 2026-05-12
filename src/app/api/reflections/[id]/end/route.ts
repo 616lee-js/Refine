@@ -2,50 +2,50 @@ import { randomUUID } from "crypto";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, entries } from "@/lib/db/schema";
+import { reflections, entries } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
-import { runSessionClosing } from "@/lib/orchestrator";
+import { runReflectionClosing } from "@/lib/orchestrator";
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: sessionId } = await params;
+  const { id: reflectionId } = await params;
   const authSession = await getSession();
   if (!authSession.userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const [dbSession] = await db
-    .select({ id: sessions.id, userId: sessions.userId, endedAt: sessions.endedAt })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
+  const [dbReflection] = await db
+    .select({ id: reflections.id, userId: reflections.userId, endedAt: reflections.endedAt })
+    .from(reflections)
+    .where(eq(reflections.id, reflectionId))
     .limit(1);
 
-  if (!dbSession || dbSession.userId !== authSession.userId) {
+  if (!dbReflection || dbReflection.userId !== authSession.userId) {
     return new Response("Not found", { status: 404 });
   }
 
-  if (dbSession.endedAt) {
-    return new Response("Session already ended", { status: 409 });
+  if (dbReflection.endedAt) {
+    return new Response("Reflection already ended", { status: 409 });
   }
 
-  // Discard sessions with no user input — delete and return 204 (no closing message)
+  // Discard reflections with no user input — delete and return 204 (no closing message)
   const [{ userEntryCount }] = await db
     .select({ userEntryCount: sql<number>`COUNT(*)::int` })
     .from(entries)
-    .where(and(eq(entries.sessionId, sessionId), ne(entries.source, "claude")));
+    .where(and(eq(entries.reflectionId, reflectionId), ne(entries.source, "claude")));
 
   if (userEntryCount === 0) {
-    await db.delete(sessions).where(eq(sessions.id, sessionId));
+    await db.delete(reflections).where(eq(reflections.id, reflectionId));
     return new Response(null, { status: 204 });
   }
 
-  let closingResult: Awaited<ReturnType<typeof runSessionClosing>>;
+  let closingResult: Awaited<ReturnType<typeof runReflectionClosing>>;
   try {
-    closingResult = await runSessionClosing(sessionId, authSession.userId);
+    closingResult = await runReflectionClosing(reflectionId, authSession.userId);
   } catch (err) {
-    console.error("runSessionClosing failed:", err);
+    console.error("runReflectionClosing failed:", err);
     return new Response("Internal server error", { status: 500 });
   }
 
@@ -62,15 +62,15 @@ export async function POST(
 
       stream.on("finalMessage", () => {
         controller.close();
-        // Save closing response + mark session ended — fire and forget
+        // Save closing response + mark reflection ended — fire and forget
         db
           .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
           .from(entries)
-          .where(eq(entries.sessionId, sessionId))
+          .where(eq(entries.reflectionId, reflectionId))
           .then(([{ maxSeq }]) =>
             db.insert(entries).values({
               id: randomUUID(),
-              sessionId,
+              reflectionId,
               sequence: maxSeq + 1,
               source: "claude",
               encryptedContent: encrypt(assistantText),
@@ -79,11 +79,11 @@ export async function POST(
           )
           .then(() =>
             db
-              .update(sessions)
+              .update(reflections)
               .set({ endedAt: new Date() })
-              .where(eq(sessions.id, sessionId))
+              .where(eq(reflections.id, reflectionId))
           )
-          .catch((err) => console.error("Failed to close session:", err));
+          .catch((err) => console.error("Failed to close reflection:", err));
       });
 
       stream.on("error", (err) => {

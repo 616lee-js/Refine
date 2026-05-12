@@ -11,14 +11,14 @@ import { buildSystemPrompt, buildLayer4Context } from "./context";
 export type { Tier };
 
 export async function runOrchestrator({
-  sessionId,
+  reflectionId,
   userId,
   message,
   source = "user_text",
   precomputedTier,
   audioRef,
 }: {
-  sessionId: string;
+  reflectionId: string;
   userId: string;
   message: string;
   source?: "user_text" | "user_voice";
@@ -28,18 +28,18 @@ export async function runOrchestrator({
   // 1. Classify (skip if caller already classified)
   const tier: Tier = precomputedTier ?? (await classifyMessage(message));
 
-  // 2. Next sequence number for this session
+  // 2. Next sequence number for this reflection
   const [{ maxSeq }] = await db
     .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
     .from(entries)
-    .where(eq(entries.sessionId, sessionId));
+    .where(eq(entries.reflectionId, reflectionId));
   const userSequence = maxSeq + 1;
 
   // 3. Save user entry
   const entryId = randomUUID();
   await db.insert(entries).values({
     id: entryId,
-    sessionId,
+    reflectionId,
     sequence: userSequence,
     source,
     encryptedContent: encrypt(message),
@@ -52,7 +52,7 @@ export async function runOrchestrator({
   if (source !== "user_voice") {
     await db.insert(safetyLog).values({
       id: randomUUID(),
-      sessionId,
+      reflectionId,
       entryId,
       tier,
       classifierVersion: "v1",
@@ -60,15 +60,15 @@ export async function runOrchestrator({
     });
   }
 
-  // 5. Fetch session history (includes the entry we just saved)
-  const sessionEntries = await db
+  // 5. Fetch reflection history (includes the entry we just saved)
+  const reflectionEntries = await db
     .select()
     .from(entries)
-    .where(eq(entries.sessionId, sessionId))
+    .where(eq(entries.reflectionId, reflectionId))
     .orderBy(asc(entries.sequence));
 
   const messages: Array<{ role: "user" | "assistant"; content: string }> =
-    sessionEntries.map((e) => ({
+    reflectionEntries.map((e) => ({
       role: e.source === "claude" ? "assistant" : "user",
       content: decrypt(e.encryptedContent),
     }));
@@ -89,45 +89,45 @@ export async function runOrchestrator({
   return { stream, tier, entryId };
 }
 
-const SESSION_CLOSING_INSTRUCTION = `
+const REFLECTION_CLOSING_INSTRUCTION = `
 ---
 
-## Session Closing
+## Reflection Closing
 
-The user has indicated they are ready to end this session. Provide a warm, contextually appropriate closing response that draws on what has been shared in this conversation. Keep it brief. The tone and safety boundaries of this closing must remain consistent with the tier context already active — if elevated safety concerns were present, maintain the open-door, continued-presence language through the close.`;
+The user has indicated they are ready to end this reflection. Provide a warm, contextually appropriate closing response that draws on what has been shared in this conversation. Keep it brief. The tone and safety boundaries of this closing must remain consistent with the tier context already active — if elevated safety concerns were present, maintain the open-door, continued-presence language through the close.`;
 
 /**
- * Runs the full orchestrator pipeline for a session-closing response.
+ * Runs the full orchestrator pipeline for a reflection-closing response.
  * Uses the last user entry's recorded tier rather than re-classifying.
  * Does not create a user entry or safety log row — the close is system-initiated.
  * The Claude response is saved as a 'claude' entry by the caller after streaming.
  */
-export async function runSessionClosing(sessionId: string, userId: string) {
-  // Look up the tier of the last user message in this session
+export async function runReflectionClosing(reflectionId: string, userId: string) {
+  // Look up the tier of the last user message in this reflection
   const [lastUserEntry] = await db
     .select({ tier: entries.tierClassification })
     .from(entries)
-    .where(and(eq(entries.sessionId, sessionId), ne(entries.source, "claude")))
+    .where(and(eq(entries.reflectionId, reflectionId), ne(entries.source, "claude")))
     .orderBy(desc(entries.sequence))
     .limit(1);
 
   const tier: Tier = (lastUserEntry?.tier as Tier) ?? 0;
 
-  // Fetch full session history for context
-  const sessionEntries = await db
+  // Fetch full reflection history for context
+  const reflectionEntries = await db
     .select()
     .from(entries)
-    .where(eq(entries.sessionId, sessionId))
+    .where(eq(entries.reflectionId, reflectionId))
     .orderBy(asc(entries.sequence));
 
   const messages: Array<{ role: "user" | "assistant"; content: string }> =
-    sessionEntries.map((e) => ({
+    reflectionEntries.map((e) => ({
       role: e.source === "claude" ? "assistant" : "user",
       content: decrypt(e.encryptedContent),
     }));
 
   const layer4 = await buildLayer4Context(userId);
-  const systemPrompt = buildSystemPrompt(tier, layer4) + SESSION_CLOSING_INSTRUCTION;
+  const systemPrompt = buildSystemPrompt(tier, layer4) + REFLECTION_CLOSING_INSTRUCTION;
 
   // Anthropic requires ≥1 message and last message must be from `user`.
   messages.push({ role: "user", content: "I'm ready to wrap up." });

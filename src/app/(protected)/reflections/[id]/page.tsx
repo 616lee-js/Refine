@@ -4,47 +4,47 @@ import { asc, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, entries, checkIns, contentAccessLog } from "@/lib/db/schema";
+import { reflections, entries, checkIns, contentAccessLog } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 
-export default async function SessionDetailPage({
+export default async function ReflectionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id: sessionId } = await params;
+  const { id: reflectionId } = await params;
   const authSession = await getSession();
   if (!authSession.userId) notFound();
 
-  const [session] = await db
+  const [reflection] = await db
     .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
+    .from(reflections)
+    .where(eq(reflections.id, reflectionId))
     .limit(1);
 
-  if (!session || session.userId !== authSession.userId) notFound();
+  if (!reflection || reflection.userId !== authSession.userId) notFound();
 
   // Audit: log this deliberate content access
   await db.insert(contentAccessLog).values({
     id: randomUUID(),
     userId: authSession.userId,
-    sessionId,
-    context: "session_detail_view",
+    reflectionId,
+    context: "reflection_detail_view",
   });
 
   const [checkIn] = await db
     .select()
     .from(checkIns)
-    .where(eq(checkIns.sessionId, sessionId))
+    .where(eq(checkIns.reflectionId, reflectionId))
     .limit(1);
 
-  const sessionEntries = await db
+  const reflectionEntries = await db
     .select()
     .from(entries)
-    .where(eq(entries.sessionId, sessionId))
+    .where(eq(entries.reflectionId, reflectionId))
     .orderBy(asc(entries.sequence));
 
-  const decoded = sessionEntries.map((e) => {
+  const decoded = reflectionEntries.map((e) => {
     let content = "[decrypt error]";
     try {
       content = decrypt(e.encryptedContent);
@@ -61,39 +61,50 @@ export default async function SessionDetailPage({
 
   return (
     <div className="min-h-screen bg-white text-stone-800">
-      <header className="px-6 py-4 border-b border-stone-100 flex items-center gap-4">
-        <Link
-          href="/sessions"
-          className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
-        >
-          ← Reflections
-        </Link>
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-          Refine — Reflection
-        </h1>
+      <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
+        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Refine</h1>
+        <nav className="flex items-center gap-4">
+          <Link href="/reflections" className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
+            Reflections
+          </Link>
+          <Link href="/memory" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+            Mirror
+          </Link>
+          <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+            Profile
+          </Link>
+          <a href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
+            New reflection
+          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+              Sign out
+            </button>
+          </form>
+        </nav>
       </header>
 
       <main className="px-6 py-8 max-w-2xl mx-auto space-y-8">
-        {/* ── Session metadata ── */}
+        {/* ── Reflection metadata ── */}
         <section className="text-xs text-stone-400 space-y-1">
           <p>
             <span className="font-medium text-stone-500">ID:</span>{" "}
-            <span className="font-mono">{session.id}</span>
+            <span className="font-mono">{reflection.id}</span>
           </p>
           <p>
             <span className="font-medium text-stone-500">Type:</span>{" "}
-            {session.type}
+            {reflection.type}
           </p>
           <p>
             <span className="font-medium text-stone-500">Started:</span>{" "}
-            {session.startedAt
-              ? new Date(session.startedAt).toLocaleString()
+            {reflection.startedAt
+              ? new Date(reflection.startedAt).toLocaleString()
               : "—"}
           </p>
           <p>
             <span className="font-medium text-stone-500">Ended:</span>{" "}
-            {session.endedAt
-              ? new Date(session.endedAt).toLocaleString()
+            {reflection.endedAt
+              ? new Date(reflection.endedAt).toLocaleString()
               : "Active"}
           </p>
         </section>
@@ -118,7 +129,7 @@ export default async function SessionDetailPage({
               )}
               {checkIn.intentionText && (
                 <p>
-                  <span className="font-medium">Intention:</span>{" "}
+                  <span className="font-medium">Since last time:</span>{" "}
                   {checkIn.intentionText}
                 </p>
               )}

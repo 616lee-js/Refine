@@ -16,7 +16,7 @@ export type VoiceTriggerPayload = {
 };
 
 type UseVoiceSessionOptions = {
-  sessionId: string;
+  reflectionId: string;
   cadence: 0 | 10 | 20 | 30;
   onTrigger: (payload: VoiceTriggerPayload) => void;
   onError: (err: Error) => void;
@@ -34,7 +34,7 @@ export type VoiceStatus =
   | "triggering";
 
 export function useVoiceSession({
-  sessionId,
+  reflectionId,
   cadence,
   onTrigger,
   onError,
@@ -87,7 +87,7 @@ export function useVoiceSession({
           mr.onstop = async () => {
             const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
             try {
-              const res = await fetch(`/api/sessions/${sessionId}/audio`, {
+              const res = await fetch(`/api/reflections/${reflectionId}/audio`, {
                 method: "POST",
                 body: blob,
                 headers: { "Content-Type": "audio/webm" },
@@ -126,7 +126,7 @@ export function useVoiceSession({
         voiceSummary: { triggerType, utteranceTiers, maxTier: precomputedTier },
       });
     },
-    [clearPauseTimer, sessionId, onTrigger]
+    [clearPauseTimer, reflectionId, onTrigger]
   );
 
   const startPauseTimer = useCallback(
@@ -202,7 +202,7 @@ export function useVoiceSession({
         fetch("/api/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, text: trimmed, utteranceIndex: idx }),
+          body: JSON.stringify({ reflectionId, text: trimmed, utteranceIndex: idx }),
         })
           .then((r) => r.json())
           .then((data: { tier: number }) => {
@@ -230,7 +230,7 @@ export function useVoiceSession({
         onError(err);
       },
     });
-  }, [status, sessionId, cadence, startPauseTimer, onError]);
+  }, [status, reflectionId, cadence, startPauseTimer, onError]);
 
   const trigger = useCallback(() => {
     doTrigger("manual");
@@ -257,10 +257,10 @@ export function useVoiceSession({
     setStatus("idle");
 
     // Delete pending utterance safetyLog rows
-    fetch(`/api/sessions/${sessionId}/cancel-utterance`, { method: "POST" }).catch(
+    fetch(`/api/reflections/${reflectionId}/cancel-utterance`, { method: "POST" }).catch(
       () => {}
     );
-  }, [clearPauseTimer, sessionId]);
+  }, [clearPauseTimer, reflectionId]);
 
   return {
     status,

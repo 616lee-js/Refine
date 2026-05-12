@@ -10,13 +10,13 @@ import {
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
-export const sessionTypeEnum = pgEnum("session_type", [
+export const reflectionTypeEnum = pgEnum("reflection_type", [
   "scheduled",
   "as_needed",
   "guided",
 ]);
 
-export const sessionModalityEnum = pgEnum("session_modality", [
+export const reflectionModalityEnum = pgEnum("reflection_modality", [
   "voice",
   "text",
   "mixed",
@@ -66,22 +66,22 @@ export const users = pgTable("users", {
 });
 
 /**
- * Cabinet 1: each session is a container for entries.
- * scheduled_for: set when session was pre-scheduled; null for as-needed.
+ * Cabinet 1: each reflection is a container for entries.
+ * scheduled_for: set when reflection was pre-scheduled; null for as-needed.
  * extraction_status: memory extraction lifecycle.
  *   null     = not applicable (abandoned / no user entries / not yet run)
- *   pending  = queued after session end
+ *   pending  = queued after reflection end
  *   running  = extraction in flight
  *   succeeded = proposed memory entries saved
  *   failed   = extraction failed; raw output logged separately
  */
-export const sessions = pgTable("sessions", {
+export const reflections = pgTable("reflections", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  type: sessionTypeEnum("type").notNull(),
-  modality: sessionModalityEnum("modality").notNull(),
+  type: reflectionTypeEnum("type").notNull(),
+  modality: reflectionModalityEnum("modality").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -91,17 +91,17 @@ export const sessions = pgTable("sessions", {
 });
 
 /**
- * Structured check-in at session start. Shape varies by session type:
+ * Structured check-in at reflection start. Shape varies by reflection type:
  *   as_needed  — mood: {}, present_text: optional ("what's bringing you here?"),
  *                intention_text: null, tier_at_start: null (inferred from body)
- *   scheduled  — mood: { rating: 1–5 }, present_text: optional, intention_text: optional
+ *   scheduled  — mood: { rating: 1–5 }, present_text: required, intention_text: optional
  *   guided     — TBD (Phase 3 pause point; content worked through with product owner)
  */
 export const checkIns = pgTable("check_ins", {
   id: text("id").primaryKey(),
-  sessionId: text("session_id")
+  reflectionId: text("reflection_id")
     .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
+    .references(() => reflections.id, { onDelete: "cascade" }),
   mood: jsonb("mood").notNull().default({}),
   presentText: text("present_text"),
   intentionText: text("intention_text"),
@@ -109,16 +109,16 @@ export const checkIns = pgTable("check_ins", {
 });
 
 /**
- * Cabinet 1: individual message-level entries within a session.
+ * Cabinet 1: individual message-level entries within a reflection.
  * encrypted_content: AES-256-GCM ciphertext (format: iv:tag:ciphertext, base64).
  * raw_audio_ref: local file path for voice entries; null for text.
  * tier_classification: safety tier of this message (null for claude entries).
  */
 export const entries = pgTable("entries", {
   id: text("id").primaryKey(),
-  sessionId: text("session_id")
+  reflectionId: text("reflection_id")
     .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
+    .references(() => reflections.id, { onDelete: "cascade" }),
   sequence: integer("sequence").notNull(),
   source: entrySourceEnum("source").notNull(),
   encryptedContent: text("encrypted_content").notNull(),
@@ -133,7 +133,7 @@ export const entries = pgTable("entries", {
  * User profile — PHI-grade content isolated from the auth-adjacent users row.
  * One profile per user. Content encrypted as a single JSON blob.
  * Fields (inside encrypted blob): tendencies, goals, background.
- * Shape is two-way; evolves without migrations via the JSONB blob.
+ * Shape is two-way; evolves without migrations via the blob.
  */
 export const userProfiles = pgTable("user_profiles", {
   id: text("id").primaryKey(),
@@ -151,17 +151,17 @@ export const userProfiles = pgTable("user_profiles", {
 });
 
 /**
- * Cabinet 2: narrative summary generated after each session.
+ * Cabinet 2: narrative summary generated after each reflection.
  * encrypted_summary: AES-256-GCM ciphertext.
  * notable_quotes: encrypted JSON list of { quote, entry_id }.
  * generation_version: tracks prompt version so re-processed summaries are distinguishable.
  * Not surfaced to user in v1 — accumulates for v1.5 longitudinal features.
  */
-export const sessionSummaries = pgTable("session_summaries", {
+export const reflectionSummaries = pgTable("reflection_summaries", {
   id: text("id").primaryKey(),
-  sessionId: text("session_id")
+  reflectionId: text("reflection_id")
     .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
+    .references(() => reflections.id, { onDelete: "cascade" }),
   encryptedSummary: text("encrypted_summary").notNull(),
   notableQuotes: text("notable_quotes").notNull(),
   generatedAt: timestamp("generated_at", { withTimezone: true })
@@ -184,7 +184,7 @@ export const userMemory = pgTable("user_memory", {
   kind: memoryKindEnum("kind").notNull(),
   encryptedContent: text("encrypted_content").notNull(),
   source: memorySourceEnum("source").notNull(),
-  sessionId: text("session_id").references(() => sessions.id, {
+  reflectionId: text("reflection_id").references(() => reflections.id, {
     onDelete: "set null",
   }),
   isActive: boolean("is_active").notNull().default(true),
@@ -205,9 +205,9 @@ export const userMemory = pgTable("user_memory", {
  */
 export const safetyLog = pgTable("safety_log", {
   id: text("id").primaryKey(),
-  sessionId: text("session_id")
+  reflectionId: text("reflection_id")
     .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
+    .references(() => reflections.id, { onDelete: "cascade" }),
   entryId: text("entry_id").references(() => entries.id, {
     onDelete: "set null",
   }),
@@ -223,7 +223,7 @@ export const safetyLog = pgTable("safety_log", {
 
 /**
  * Audit log for deliberate content decryption events.
- * Written whenever a user views decrypted session entries (session detail page).
+ * Written whenever a user views decrypted reflection entries (reflection detail page).
  * context: human-readable label for the access point.
  */
 export const contentAccessLog = pgTable("content_access_log", {
@@ -231,9 +231,9 @@ export const contentAccessLog = pgTable("content_access_log", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  sessionId: text("session_id")
+  reflectionId: text("reflection_id")
     .notNull()
-    .references(() => sessions.id, { onDelete: "cascade" }),
+    .references(() => reflections.id, { onDelete: "cascade" }),
   accessedAt: timestamp("accessed_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

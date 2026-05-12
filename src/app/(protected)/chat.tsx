@@ -116,11 +116,11 @@ function VoiceIndicator({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Chat({
-  sessionId,
+  reflectionId,
   initialCadence,
   initialEnded = false,
 }: {
-  sessionId: string;
+  reflectionId: string;
   initialCadence: 0 | 10 | 20 | 30;
   initialEnded?: boolean;
 }) {
@@ -144,17 +144,17 @@ export default function Chat({
   // Abandon beacon — fires on in-app navigation (component unmount)
   useEffect(() => {
     return () => {
-      navigator.sendBeacon(`/api/sessions/${sessionId}/abandon`);
+      navigator.sendBeacon(`/api/reflections/${reflectionId}/abandon`);
     };
-  }, [sessionId]);
+  }, [reflectionId]);
 
   // Abandon beacon — fires on tab/window close
   useEffect(() => {
     const handler = () =>
-      navigator.sendBeacon(`/api/sessions/${sessionId}/abandon`);
+      navigator.sendBeacon(`/api/reflections/${reflectionId}/abandon`);
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [sessionId]);
+  }, [reflectionId]);
 
   // ── Shared send logic ─────────────────────────────────────────────────────
 
@@ -183,7 +183,7 @@ export default function Chat({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: text,
-            sessionId,
+            reflectionId,
             ...(opts?.source && { source: opts.source }),
             ...(opts?.precomputedTier !== undefined && {
               precomputedTier: opts.precomputedTier,
@@ -224,7 +224,7 @@ export default function Chat({
         setStreaming(false);
       }
     },
-    [sessionId, streaming]
+    [reflectionId, streaming]
   );
 
   // ── Voice session hook ────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ export default function Chat({
   );
 
   const voice = useVoiceSession({
-    sessionId,
+    reflectionId,
     cadence,
     onTrigger: handleVoiceTrigger,
     onError: (err) => setVoiceError(err.message),
@@ -295,7 +295,7 @@ export default function Chat({
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/end`, {
+      const res = await fetch(`/api/reflections/${reflectionId}/end`, {
         method: "POST",
       });
       if (res.status === 204) {
@@ -339,7 +339,7 @@ export default function Chat({
   async function handleCancelSession() {
     if (streaming || ended) return;
     if (mode === "voice" && voice.status !== "idle") voice.cancel();
-    await fetch(`/api/sessions/${sessionId}/cancel`, { method: "POST" });
+    await fetch(`/api/reflections/${reflectionId}/cancel`, { method: "POST" });
     router.push("/");
   }
 
@@ -371,10 +371,22 @@ export default function Chat({
         </h1>
         <div className="flex items-center gap-4">
           <a
-            href="/sessions"
+            href="/reflections"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Reflections
+          </a>
+          <a
+            href="/memory"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            Mirror
+          </a>
+          <a
+            href="/settings/profile"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            Profile
           </a>
           <form action="/api/auth/logout" method="POST">
             <button
@@ -421,7 +433,7 @@ export default function Chat({
         <div className="max-w-2xl mx-auto px-6 py-5">
           {ended ? (
             <p className="text-xs text-stone-400 text-center py-2">
-              Session ended.
+              Reflection ended.
             </p>
           ) : (
             <>
@@ -600,7 +612,7 @@ export default function Chat({
                       disabled={streaming}
                       className="text-xs text-stone-400 hover:text-stone-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      End session
+                      End reflection
                     </button>
                     <span className="text-stone-200" aria-hidden="true">·</span>
                     <button

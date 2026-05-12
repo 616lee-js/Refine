@@ -42,22 +42,31 @@ export default function ProfileSettingsPage() {
   return (
     <div className="min-h-screen bg-white text-stone-800">
       <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-          Refine — Profile
-        </h1>
-        <div className="flex items-center gap-4">
+        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Refine</h1>
+        <nav className="flex items-center gap-4">
+          <Link href="/reflections" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+            Reflections
+          </Link>
           <Link href="/memory" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Memory
+            Mirror
           </Link>
-          <Link href="/" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            ← Home
-          </Link>
-        </div>
+          <span className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
+            Profile
+          </span>
+          <a href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
+            New reflection
+          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+              Sign out
+            </button>
+          </form>
+        </nav>
       </header>
 
       <main className="px-6 py-8 max-w-2xl mx-auto">
         <p className="text-sm text-stone-500 mb-8 leading-relaxed">
-          This profile is shared with Claude at the start of every session. All fields are optional — fill in what's useful, leave blank what isn't.
+          This profile is shared with Claude at the start of every reflection. All fields are optional — fill in what's useful, leave blank what isn't.
         </p>
 
         {loading ? (

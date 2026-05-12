@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sessions, safetyLog } from "@/lib/db/schema";
+import { reflections, safetyLog } from "@/lib/db/schema";
 import { classifyMessage } from "@/lib/orchestrator/classifier";
 
 export async function POST(req: Request) {
@@ -19,28 +19,28 @@ export async function POST(req: Request) {
   }
 
   const parsed = body as {
-    sessionId?: unknown;
+    reflectionId?: unknown;
     text?: unknown;
     utteranceIndex?: unknown;
   };
 
-  const sessionId =
-    typeof parsed.sessionId === "string" ? parsed.sessionId.trim() : "";
+  const reflectionId =
+    typeof parsed.reflectionId === "string" ? parsed.reflectionId.trim() : "";
   const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
   const utteranceIndex =
     typeof parsed.utteranceIndex === "number" ? parsed.utteranceIndex : 0;
 
-  if (!sessionId || !text) {
+  if (!reflectionId || !text) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const [dbSession] = await db
-    .select({ id: sessions.id, userId: sessions.userId })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
+  const [dbReflection] = await db
+    .select({ id: reflections.id, userId: reflections.userId })
+    .from(reflections)
+    .where(eq(reflections.id, reflectionId))
     .limit(1);
 
-  if (!dbSession || dbSession.userId !== authSession.userId) {
+  if (!dbReflection || dbReflection.userId !== authSession.userId) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
   await db.insert(safetyLog).values({
     id: randomUUID(),
-    sessionId,
+    reflectionId,
     entryId: null,
     tier,
     classifierVersion: "v1",

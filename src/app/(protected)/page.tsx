@@ -3,35 +3,35 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type SessionType = "as_needed" | "scheduled";
+type ReflectionType = "as_needed" | "scheduled";
 type Step = "type" | "checkin";
 
 export default function Page() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("type");
-  const [sessionType, setSessionType] = useState<SessionType | null>(null);
+  const [reflectionType, setReflectionType] = useState<ReflectionType | null>(null);
   const [presentText, setPresentText] = useState("");
   const [moodRating, setMoodRating] = useState<number | null>(null);
   const [intentionText, setIntentionText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function selectType(type: SessionType) {
-    setSessionType(type);
+  function selectType(type: ReflectionType) {
+    setReflectionType(type);
     setStep("checkin");
   }
 
-  async function startSession(skipCheckin = false) {
-    if (!sessionType) return;
+  async function startReflection(skipCheckin = false) {
+    if (!reflectionType) return;
     setLoading(true);
     setError(null);
 
     const checkin: Record<string, unknown> = {};
     if (!skipCheckin) {
-      if (sessionType === "as_needed" && presentText.trim()) {
+      if (reflectionType === "as_needed" && presentText.trim()) {
         checkin.presentText = presentText.trim();
       }
-      if (sessionType === "scheduled") {
+      if (reflectionType === "scheduled") {
         if (moodRating !== null) checkin.mood = { rating: moodRating };
         if (presentText.trim()) checkin.presentText = presentText.trim();
         if (intentionText.trim()) checkin.intentionText = intentionText.trim();
@@ -39,15 +39,15 @@ export default function Page() {
     }
 
     try {
-      const res = await fetch("/api/sessions", {
+      const res = await fetch("/api/reflections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: sessionType, checkin }),
+        body: JSON.stringify({ type: reflectionType, checkin }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { sessionId } = (await res.json()) as { sessionId: string };
-      router.push(`/session/${sessionId}`);
+      const { reflectionId } = (await res.json()) as { reflectionId: string };
+      router.push(`/reflection/${reflectionId}`);
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -63,10 +63,22 @@ export default function Page() {
           </h1>
           <div className="flex items-center gap-4">
             <a
-              href="/sessions"
+              href="/reflections"
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
               Reflections
+            </a>
+            <a
+              href="/memory"
+              className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Mirror
+            </a>
+            <a
+              href="/settings/profile"
+              className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Profile
             </a>
             <form action="/api/auth/logout" method="POST">
               <button
@@ -99,7 +111,7 @@ export default function Page() {
               className="w-full text-left px-5 py-4 rounded-xl border border-stone-200 hover:border-stone-300 hover:bg-stone-50 transition-colors"
             >
               <div className="text-sm font-medium text-stone-800">
-                Scheduled session
+                Scheduled reflection
               </div>
               <div className="text-xs text-stone-400 mt-0.5">
                 Structured check-in to track how you&apos;re doing over time
@@ -110,7 +122,7 @@ export default function Page() {
               className="w-full text-left px-5 py-4 rounded-xl border border-stone-100 opacity-40 cursor-not-allowed"
             >
               <div className="text-sm font-medium text-stone-600">
-                Guided session
+                Guided reflection
               </div>
               <div className="text-xs text-stone-400 mt-0.5">Coming soon</div>
             </button>
@@ -137,16 +149,36 @@ export default function Page() {
         </div>
         <div className="flex items-center gap-4">
           <a
-            href="/sessions"
+            href="/reflections"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Reflections
           </a>
+          <a
+            href="/memory"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            Mirror
+          </a>
+          <a
+            href="/settings/profile"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            Profile
+          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center px-6">
         <div className="w-full max-w-md space-y-5">
-          {sessionType === "as_needed" && (
+          {reflectionType === "as_needed" && (
             <>
               <label
                 htmlFor="present-text"
@@ -164,7 +196,7 @@ export default function Page() {
               />
               {error && <p className="text-xs text-red-600">{error}</p>}
               <button
-                onClick={() => startSession(false)}
+                onClick={() => startReflection(false)}
                 disabled={loading}
                 className="w-full px-4 py-2.5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
@@ -173,7 +205,7 @@ export default function Page() {
             </>
           )}
 
-          {sessionType === "scheduled" && (
+          {reflectionType === "scheduled" && (
             <>
               <div>
                 <p className="text-sm font-medium text-stone-700 mb-3">
@@ -238,11 +270,11 @@ export default function Page() {
               {error && <p className="text-xs text-red-600">{error}</p>}
 
               <button
-                onClick={() => startSession(false)}
+                onClick={() => startReflection(false)}
                 disabled={loading || !presentText.trim()}
                 className="w-full px-4 py-2.5 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? "Starting…" : "Begin session"}
+                {loading ? "Starting…" : "Begin reflection"}
               </button>
             </>
           )}

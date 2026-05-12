@@ -35,6 +35,25 @@ Reasoning behind decisions: `docs/refine_brainstorm_summary.md`
    - Decisions that look two-way but carry one-way implications once data
      accumulates: call out the asymmetry explicitly.
 
+## Naming conventions
+
+Names throughout this codebase must reinforce the reflective journaling framing —
+self-driven reflection, journaling practice, user agency. Names that frame the app
+as AI-companion, chatbot, therapist-substitute, or generic conversational AI are
+wrong for this product. Check any new name against this framing before applying.
+
+- **reflection** — a user's completed reflective experience (DB table: `reflections`,
+  route: `/reflection/[id]`, list: `/reflections`)
+- **entry** — an individual message within a reflection (DB table: `entries`)
+- **Mirror** — user-facing name for the shared Memory + Insights surface (v1.5+).
+  Nav label: "Mirror". Route: `/memory` (stays as-is). Internal code, DB, APIs
+  use "memory" and eventual "insights" — Mirror is the container name only.
+  Metaphor: silver refined → mirror → holds a reflection. In v1 Mirror shows
+  memory entries only; Insights becomes a second section when it ships in v1.5.
+- **session** — stays only in technical, non-user-facing contexts: auth sessions,
+  iron-session library, HTTP sessions, browser session APIs. Never use for the
+  journaling experience.
+
 ## Stack and architecture
 
 - Next.js (App Router) + TypeScript
@@ -50,7 +69,7 @@ Claude call):
 - Layer 1: model selection
 - Layer 2: application system prompt (visible to user, read-only)
 - Layer 3: clinically-grounded reference fragments, pulled selectively
-- Layer 4: user-specific context (memory, recent session summaries,
+- Layer 4: user-specific context (memory, recent reflection summaries,
   current conversation)
 
 Data architecture (filing-cabinet model):
@@ -74,8 +93,9 @@ Phase 1 — complete
 Phase 2 — complete
 Phase 3 — complete
 Phase 4 — complete
-Phase 5 — in progress (user memory + profile + onboarding; extraction prompt + system prompt review pending)
-Phase 6+ — not started
+Phase 5 — complete (user memory + profile + onboarding + full terminology rename)
+Phase 6 — not started (blocked: system prompt review required first)
+Phase 7+ — not started
 
 ## Voice paradigm note
 
@@ -83,7 +103,7 @@ Phase 4 adds voice input via Web Speech API. The conversational paradigm shifts:
 utterances accumulate client-side; per-utterance classification fires via
 `/api/classify`; the accumulated message (plus maxTier) is sent to `/api/chat`
 only when the user signals readiness (pause timer or "I'm done"). Audio is saved
-per-trigger to `./audio/[sessionId]/[uuid].webm` (unencrypted in v1). The
+per-trigger to `./audio/[reflectionId]/[uuid].webm` (unencrypted in v1). The
 TranscriptionProvider interface (`src/lib/transcription/types.ts`) is a one-way
 door — swap implementations without touching the hook.
 
@@ -111,7 +131,7 @@ door — swap implementations without touching the hook.
   do not reference during current build phases; surface before v1.5 starts
 - UX observations: `docs/refine_ux_observations.md` — log when user provides
   feedback on specific responses or interactions (OBS-### format, date,
-  description, session/entry IDs if applicable); mark resolved with date rather
+  description, reflection/entry IDs if applicable); mark resolved with date rather
   than deleting; do not edit prompts or UI copy in response to individual
   entries — this feeds a deliberate focused review, not in-flight fixes
 - Design system: `docs/refine_design_system.md` — tokens, component patterns,
@@ -129,7 +149,7 @@ door — swap implementations without touching the hook.
 
 ### New schema
 - `user_profiles` table: PHI-isolated encrypted profile blob, one row per user
-- `sessions.extractionStatus`: null → pending → running → succeeded/failed (tracks memory extraction lifecycle)
+- `reflections.extractionStatus`: null → pending → running → succeeded/failed (tracks memory extraction lifecycle)
 
 ### Memory state model
 Reuses `user_memory.lastConfirmedAt` as proposed/active discriminator:
@@ -137,6 +157,12 @@ Reuses `user_memory.lastConfirmedAt` as proposed/active discriminator:
 - `lastConfirmedAt IS NOT NULL` → active (confirmed or user-added)
 - Layer 4 orchestrator query: `isActive = true AND lastConfirmedAt IS NOT NULL`
 
-### Two pending PAUSE points
-- Memory extraction prompt (Step 11) — requires planning review before drafting
-- System prompt review — Layer 2 edits require focused review conversation before any changes
+### Phase 5 also included
+- Full terminology rename: "session" → "reflection" throughout — DB schema, routes, code, docs
+- Phase ordering decision: memory extraction deferred to Phase 6 (must consume summaries, not raw entries)
+- Standing naming convention section added (see above)
+
+### PAUSE before Phase 6
+- **System prompt review required** — testing surfaced affirmation-heavy responses, question loops, length
+  issues. Layer 2 edits must be reviewed in a focused conversation before Phase 6 starts.
+- Memory extraction prompt (Step 11) — planned as part of Phase 6 design, not separately

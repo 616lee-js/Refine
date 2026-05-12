@@ -209,29 +209,29 @@ The schema below is a v1 starting point. Field names are illustrative; final nam
 
 - `id`, `display_name`, `created_at`, `preferences` (JSON: reminder cadence, modality preference, etc.)
 
-#### sessions
+#### reflections
 
-- `id`, `user_id`, `type` (scheduled | as_needed | guided), `modality` (voice | text | mixed), `started_at`, `ended_at`, `scheduled_for` (nullable)
+- `id`, `user_id`, `type` (scheduled | as_needed | guided), `modality` (voice | text | mixed), `started_at`, `ended_at`, `scheduled_for` (nullable), `extraction_status` (null | pending | running | succeeded | failed)
 
 #### check_ins
 
-- `id`, `session_id`, `mood` (structured), `present_text` (free text), `tier_at_start` (computed)
+- `id`, `reflection_id`, `mood` (structured), `present_text` (free text), `tier_at_start` (computed)
 
 #### entries
 
-- `id`, `session_id`, `sequence` (order within session), `source` (user_voice | user_text | claude), `encrypted_content` (the encrypted journal text or transcript or assistant response), `raw_audio_ref` (nullable, file path or storage ref), `created_at`, `tier_classification` (nullable for assistant entries)
+- `id`, `reflection_id`, `sequence` (order within reflection), `source` (user_voice | user_text | claude), `encrypted_content` (the encrypted journal text or transcript or assistant response), `raw_audio_ref` (nullable, file path or storage ref), `created_at`, `tier_classification` (nullable for assistant entries)
 
-#### session_summaries
+#### reflection_summaries
 
-- `id`, `session_id`, `encrypted_summary` (narrative format), `notable_quotes` (encrypted JSON list of `{quote, entry_id}`), `generated_at`, `generation_version` (so re-processed summaries can be tracked)
+- `id`, `reflection_id`, `encrypted_summary` (narrative format), `notable_quotes` (encrypted JSON list of `{quote, entry_id}`), `generated_at`, `generation_version` (so re-processed summaries can be tracked)
 
 #### user_memory
 
-- `id`, `user_id`, `kind` (fact | thread | preference | diagnostic_context | other), `encrypted_content`, `source` (user_added | claude_inferred | session_derived), `session_id` (nullable), `is_active` (for soft-delete distinct from full delete), `created_at`, `updated_at`, `last_confirmed_at`
+- `id`, `user_id`, `kind` (fact | thread | preference | diagnostic_context | other), `encrypted_content`, `source` (user_added | claude_inferred | reflection_derived), `reflection_id` (nullable), `is_active` (for soft-delete distinct from full delete), `created_at`, `updated_at`, `last_confirmed_at`
 
 #### safety_log
 
-- `id`, `session_id`, `entry_id`, `tier`, `classifier_version`, `raw_signals`, `reviewed` (bool), `reviewer_notes` — used for product owner to review tier-detection accuracy during v1 use.
+- `id`, `reflection_id`, `entry_id`, `tier`, `classifier_version`, `raw_signals`, `reviewed` (bool), `reviewer_notes` — used for product owner to review tier-detection accuracy during v1 use.
 
 All `encrypted_*` fields use field-level encryption. The user can view decrypted content in their UI; everything else (database backups, debug exports, anything that leaves the running app process) is ciphertext.
 
@@ -390,18 +390,30 @@ Prioritized order for building v1, designed to minimize rework and maximize earl
 
 ### Phase 5: user memory and editing
 
-- Memory write path: Claude can propose memory updates after sessions; `user_memory` entries are added.
+- Memory write path: Claude can propose memory updates after reflections; `user_memory` entries are added.
 - Memory edit UI: full view, edit, delete (per item, per kind, all).
 - System prompt visible to user (read-only).
-- Memory deletion is genuine — content is removed from memory and from any references in active session contexts.
+- Memory deletion is genuine — content is removed from memory and from any references in active reflection contexts.
+- Also included: full terminology rename ("session" → "reflection" throughout — DB, routes, UI, docs).
 
 **Done:** the product owner can see and edit everything the system has stored about them, and deletion actually works.
 
-### Phase 6: background summarization
+> **Note:** Memory extraction (originally scoped to Phase 5 Step 11) is moved to Phase 6.
+> Reason: extraction should consume structured summaries (Cabinet 2), not raw entries. Building it
+> against raw entries first would lock in the wrong data source. This was caught during build.
 
-- After session end, a background pass generates the Cabinet 2 narrative summary plus notable quotes.
+> **PAUSE before Phase 6:** System prompt review required. Testing surfaced affirmation-heavy
+> responses, question-after-question loops, and excessive length. These must be addressed in a
+> focused review conversation before Phase 6 starts, because Phase 6 generates summaries that are
+> shaped by Claude's conversational pattern — building summaries against an unreviewed prompt bakes
+> in the same problems.
+
+### Phase 6: background summarization + memory extraction
+
+- After reflection end, a background pass generates the Cabinet 2 narrative summary plus notable quotes.
 - Summaries are stored, encrypted, but not surfaced to the user.
-- Re-processability: a script can regenerate summaries for past sessions when the prompt evolves.
+- Memory extraction designed against summaries (not raw entries) — integrated with summarization in this phase.
+- Re-processability: a script can regenerate summaries for past reflections when the prompt evolves.
 
 **Done:** data is accumulating in Cabinet 2, ready for v1.5 to build longitudinal features against.
 

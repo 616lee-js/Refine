@@ -48,7 +48,15 @@ export default async function ReflectionDetailPage({
     let content = "[decrypt error]";
     try {
       content = decrypt(e.encryptedContent);
-    } catch {}
+    } catch (err) {
+      // Shown to the user as an explicit marker rather than blanked, so a
+      // key problem reads as an error and not as an empty entry. Logged so it
+      // is visible in ops as well as on screen.
+      console.error(
+        `Entry decrypt failed for entry ${e.id} (reflection ${reflectionId}):`,
+        err instanceof Error ? err.message : err
+      );
+    }
     return { ...e, content };
   });
 
@@ -73,9 +81,9 @@ export default async function ReflectionDetailPage({
           <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Profile
           </Link>
-          <a href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
+          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
             New reflection
-          </a>
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
               Sign out

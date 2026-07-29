@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CrisisResourcePanel } from "@/components/ui/crisis-resource-panel";
+import { VOICE_ENABLED } from "@/lib/flags";
 import { useRouter } from "next/navigation";
 import {
   useVoiceSession,
@@ -9,7 +12,17 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Message = { role: "user" | "assistant"; content: string };
+/**
+ * `tier` is set only on assistant messages, from the X-Tier response header.
+ * That header carries the exact tier the response was generated under — in voice
+ * mode it is the running max across the accumulated utterances, not a re-read of
+ * the final text — so the panel and the prompt always agree.
+ */
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  tier?: number;
+};
 type Mode = "text" | "voice";
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -63,17 +76,6 @@ function EmptyState({ mode }: { mode: Mode }) {
         )}
       </p>
     </div>
-  );
-}
-
-function CrisisLine() {
-  return (
-    <p className="mt-4 text-xs text-stone-400 text-center leading-relaxed">
-      In crisis?{" "}
-      <strong className="font-medium text-stone-500">Call or text 988</strong>
-      <span aria-hidden="true"> · </span>
-      <strong className="font-medium text-stone-500">Text HOME to 741741</strong>
-    </p>
   );
 }
 
@@ -195,6 +197,22 @@ export default function Chat({
 
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
+        // Read the tier before consuming the stream. Attached to the assistant
+        // message so the resource panel renders against the tier this specific
+        // response was generated under, not the latest tier in the reflection.
+        const tierHeader = res.headers.get("X-Tier");
+        const parsedTier = tierHeader === null ? NaN : Number(tierHeader);
+        const responseTier = Number.isInteger(parsedTier) ? parsedTier : undefined;
+
+        setMessages((prev) => {
+          const next = [...prev];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            tier: responseTier,
+          };
+          return next;
+        });
+
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
 
@@ -205,7 +223,8 @@ export default function Chat({
           setMessages((prev) => {
             const next = [...prev];
             next[next.length - 1] = {
-              role: "assistant",
+              // Spread, don't rebuild — rebuilding drops the tier set above.
+              ...next[next.length - 1],
               content: next[next.length - 1].content + chunk,
             };
             return next;
@@ -304,6 +323,21 @@ export default function Chat({
       }
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
+      // Same X-Tier contract as /api/chat. A reflection can end at Tier 2 or 3,
+      // and the closing message is the last thing the user sees.
+      const closingTierHeader = res.headers.get("X-Tier");
+      const parsedClosingTier =
+        closingTierHeader === null ? NaN : Number(closingTierHeader);
+      const closingTier = Number.isInteger(parsedClosingTier)
+        ? parsedClosingTier
+        : undefined;
+
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = { ...next[next.length - 1], tier: closingTier };
+        return next;
+      });
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       while (true) {
@@ -313,7 +347,8 @@ export default function Chat({
         setMessages((prev) => {
           const next = [...prev];
           next[next.length - 1] = {
-            role: "assistant",
+            // Spread, don't rebuild — rebuilding drops the tier set above.
+            ...next[next.length - 1],
             content: next[next.length - 1].content + chunk,
           };
           return next;
@@ -370,24 +405,24 @@ export default function Chat({
           Refine
         </h1>
         <div className="flex items-center gap-4">
-          <a
+          <Link
             href="/reflections"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Reflections
-          </a>
-          <a
+          </Link>
+          <Link
             href="/memory"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Mirror
-          </a>
-          <a
+          </Link>
+          <Link
             href="/settings/profile"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Profile
-          </a>
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
@@ -419,6 +454,11 @@ export default function Chat({
                 return (
                   <li key={i}>
                     <MessageItem message={msg} showCursor={isLastAssistant} />
+                    {/* Resources render once the response has finished streaming,
+                        so they don't appear before the user has been met. */}
+                    {msg.role === "assistant" &&
+                      msg.tier !== undefined &&
+                      !isLastAssistant && <CrisisResourcePanel tier={msg.tier} />}
                   </li>
                 );
               })}
@@ -437,23 +477,26 @@ export default function Chat({
             </p>
           ) : (
             <>
-              {/* Mode toggle */}
-              <div className="flex gap-1 mb-4">
-                {(["text", "voice"] as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => switchMode(m)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                      mode === m
-                        ? "bg-stone-800 text-white"
-                        : "text-stone-400 hover:text-stone-600"
-                    }`}
-                  >
-                    {m === "text" ? "Text" : "Voice"}
-                  </button>
-                ))}
-              </div>
+              {/* Mode toggle — hidden while voice is flagged off, which pins
+                  `mode` to its "text" default. */}
+              {VOICE_ENABLED && (
+                <div className="flex gap-1 mb-4">
+                  {(["text", "voice"] as Mode[]).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => switchMode(m)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        mode === m
+                          ? "bg-stone-800 text-white"
+                          : "text-stone-400 hover:text-stone-600"
+                      }`}
+                    >
+                      {m === "text" ? "Text" : "Voice"}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Text mode */}
               {mode === "text" && (
@@ -490,7 +533,7 @@ export default function Chat({
               )}
 
               {/* Voice mode */}
-              {mode === "voice" && (
+              {VOICE_ENABLED && mode === "voice" && (
                 <div className="space-y-3">
                   {/* Status indicator */}
                   {isVoiceActive && (
@@ -629,7 +672,6 @@ export default function Chat({
             </>
           )}
 
-          <CrisisLine />
         </div>
       </footer>
     </div>

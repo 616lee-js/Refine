@@ -39,7 +39,11 @@ export const memoryKindEnum = pgEnum("memory_kind", [
 export const memorySourceEnum = pgEnum("memory_source", [
   "user_added",
   "claude_inferred",
-  "session_derived",
+  // Renamed from "session_derived" — the Phase 5 terminology rename missed this
+  // enum value because migration 0003 dropped only the session_type and
+  // session_modality types, not memory_source. Changed while the deployment
+  // database is still empty; after data exists it costs a migration.
+  "reflection_derived",
 ]);
 
 // ── Tables ───────────────────────────────────────────────────────────────────
@@ -63,6 +67,39 @@ export const users = pgTable("users", {
     .notNull()
     .defaultNow(),
   preferences: jsonb("preferences").notNull().default({}),
+});
+
+/**
+ * Invite codes — the only path to an account.
+ *
+ * Signup is gated: no valid, unexpired, unused, unrevoked code means no account.
+ * Cloud deployment brought tester access forward ahead of the v2 gate (LIM-006),
+ * and this is what keeps that access to a known, bounded group.
+ *
+ * Single-use by construction: `used_at` and `used_by_user_id` are written in the
+ * same transaction that creates the user, with the code row locked FOR UPDATE,
+ * so two concurrent signups cannot consume one code.
+ *
+ * code:        the value typed at signup. Unique, case-normalised on lookup.
+ * expires_at:  null means never expires.
+ * revoked_at:  set by the CLI to disable a code that has not been used.
+ * used_by_user_id: ON DELETE SET NULL — deleting a user must not delete the
+ *   audit trail of which codes were consumed, but nor should it leave a
+ *   dangling reference.
+ */
+export const inviteCodes = pgTable("invite_codes", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  usedByUserId: text("used_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
 /**

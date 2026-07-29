@@ -41,9 +41,9 @@ export default async function ReflectionsPage() {
           <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Profile
           </Link>
-          <a href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
+          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
             New reflection
-          </a>
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
               Sign out

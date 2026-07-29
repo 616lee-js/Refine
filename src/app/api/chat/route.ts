@@ -4,7 +4,14 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reflections, entries, safetyLog } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
+import { CLASSIFIER_VERSION } from "@/lib/orchestrator/classifier";
 import { runOrchestrator } from "@/lib/orchestrator";
+import { persistAfterResponse } from "@/lib/after-response";
+
+// Streaming an LLM response plus the post-response write can exceed Vercel's
+// default function timeout (10s on Hobby). 60s is the Hobby ceiling and is
+// comfortably above a 1024-token completion.
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -85,6 +92,10 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   let assistantText = "";
 
+  // Registered here, in the request context — after() cannot be called from
+  // inside the stream callbacks below.
+  const persist = persistAfterResponse("chat: save assistant entry");
+
   const readable = new ReadableStream<Uint8Array>({
     start(controller) {
       stream.on("text", (delta) => {
@@ -95,46 +106,43 @@ export async function POST(req: Request) {
       stream.on("finalMessage", () => {
         controller.close();
 
-        const saveAssistant = db
-          .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
-          .from(entries)
-          .where(eq(entries.reflectionId, reflectionId))
-          .then(([{ maxSeq }]) =>
-            db.insert(entries).values({
+        persist.run(async () => {
+          const [{ maxSeq }] = await db
+            .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
+            .from(entries)
+            .where(eq(entries.reflectionId, reflectionId));
+
+          await db.insert(entries).values({
+            id: randomUUID(),
+            reflectionId,
+            sequence: maxSeq + 1,
+            source: "claude",
+            encryptedContent: encrypt(assistantText),
+            tierClassification: null,
+          });
+
+          if (voiceSummary) {
+            await db.insert(safetyLog).values({
               id: randomUUID(),
               reflectionId,
-              sequence: maxSeq + 1,
-              source: "claude",
-              encryptedContent: encrypt(assistantText),
-              tierClassification: null,
-            })
-          );
-
-        const saveVoiceSafetyLog = voiceSummary
-          ? saveAssistant.then(() =>
-              db.insert(safetyLog).values({
-                id: randomUUID(),
-                reflectionId,
-                entryId,
-                tier,
-                classifierVersion: "v1",
-                rawSignals: {
-                  source: "voice_response",
-                  triggerType: voiceSummary.triggerType,
-                  utteranceTiers: voiceSummary.utteranceTiers,
-                  maxTier: voiceSummary.maxTier,
-                },
-              })
-            )
-          : saveAssistant;
-
-        saveVoiceSafetyLog.catch((err) =>
-          console.error("Failed to save assistant entry:", err)
-        );
+              entryId,
+              tier,
+              classifierVersion: CLASSIFIER_VERSION,
+              rawSignals: {
+                source: "voice_response",
+                triggerType: voiceSummary.triggerType,
+                utteranceTiers: voiceSummary.utteranceTiers,
+                maxTier: voiceSummary.maxTier,
+              },
+            });
+          }
+        });
       });
 
       stream.on("error", (err) => {
         controller.error(err);
+        // Partial text is discarded, as before — nothing to persist.
+        persist.abort();
       });
     },
   });

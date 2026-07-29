@@ -53,9 +53,9 @@ export default function ProfileSettingsPage() {
           <span className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
             Profile
           </span>
-          <a href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
+          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
             New reflection
-          </a>
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
               Sign out
@@ -66,7 +66,7 @@ export default function ProfileSettingsPage() {
 
       <main className="px-6 py-8 max-w-2xl mx-auto">
         <p className="text-sm text-stone-500 mb-8 leading-relaxed">
-          This profile is shared with Claude at the start of every reflection. All fields are optional — fill in what's useful, leave blank what isn't.
+          This profile is shared with Claude at the start of every reflection. All fields are optional — fill in what&apos;s useful, leave blank what isn&apos;t.
         </p>
 
         {loading ? (
@@ -95,7 +95,7 @@ export default function ProfileSettingsPage() {
                 What do you want to get from this practice?
               </label>
               <p className="text-xs text-stone-400 mb-2">
-                What you're working toward, or what brought you here.
+                What you&apos;re working toward, or what brought you here.
               </p>
               <textarea
                 id="goals"
@@ -138,6 +138,18 @@ export default function ProfileSettingsPage() {
             </div>
           </form>
         )}
+
+        <div className="mt-10 pt-6 border-t border-stone-100">
+          <Link
+            href="/settings/system-prompt"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors underline underline-offset-2"
+          >
+            View the system prompt
+          </Link>
+          <p className="mt-1 text-xs text-stone-400 leading-relaxed">
+            The standing instructions Claude is given at the start of every reflection.
+          </p>
+        </div>
       </main>
     </div>
   );

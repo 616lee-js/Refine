@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reflections, safetyLog } from "@/lib/db/schema";
-import { classifyMessage } from "@/lib/orchestrator/classifier";
+import { classifyMessage, CLASSIFIER_VERSION } from "@/lib/orchestrator/classifier";
 
 export async function POST(req: Request) {
   const authSession = await getSession();
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     reflectionId,
     entryId: null,
     tier,
-    classifierVersion: "v1",
+    classifierVersion: CLASSIFIER_VERSION,
     rawSignals: { source: "utterance", index: utteranceIndex },
   });
 

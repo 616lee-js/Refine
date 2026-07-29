@@ -2,16 +2,20 @@
   "name": "refine",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
+    "db:migrate": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs migrate",
+    "db:studio": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs studio",
     "db:reset": "node --env-file=.env --import tsx scripts/reset-db.ts",
-    "setup:seed": "node --env-file=.env --import tsx scripts/seed.ts"
+    "setup:seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
+    "invites": "node --env-file=.env.local --import tsx scripts/invite-codes.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",

@@ -5,6 +5,11 @@ const PUBLIC_PATHS = [
   "/signup",
   "/api/auth/login",
   "/api/auth/signup",
+  // Vercel Cron sends no session cookie. The matcher below catches everything,
+  // so without this the daily keep-alive would be redirected to /login, never
+  // reach Postgres, and let the Supabase project pause while reporting success.
+  // The route authenticates itself with CRON_SECRET.
+  "/api/health",
 ];
 
 // Middleware runs in the edge runtime — no Node.js crypto allowed.

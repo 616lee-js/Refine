@@ -77,6 +77,119 @@ Data architecture (filing-cabinet model):
 - Cabinet 2: structured narrative summaries (Phase 6+)
 - Cabinets 3-5: deferred to v1.5+
 
+## Deployment — Vercel + Supabase (text-only)
+
+Supabase is a **Postgres host and nothing else** — not its auth, not its storage,
+not RLS. The app's own email/password + iron-session auth and AES-256-GCM field
+encryption are unchanged.
+
+### Connection strings
+
+| Var | Which string | Used by |
+|---|---|---|
+| `DATABASE_URL` | Transaction pooler, port **6543** | the app |
+| `DATABASE_URL_DIRECT` | Session pooler, port **5432** | migrations + CLI scripts only |
+
+The true direct host (`db.<ref>.supabase.co`) is **IPv6-only and unreachable from
+this network** — it has an AAAA record and no A record. The session pooler is the
+permanent substitute for "direct" here; it is safe for DDL, unlike transaction
+mode.
+
+Transaction mode (6543) forbids prepared statements and session state. Nothing
+uses them: drizzle's node-postgres driver only prepares on an explicit
+`.prepare()`, and no call site does. **Adding one would break in production
+only.** Explicit `db.transaction()` is fine — the connection pins for its
+duration, which is what makes the invite-code claim safe.
+
+### TLS
+
+Supabase serves its database endpoints from its **own private CA**, not a
+publicly-trusted one. Every config that checks the system trust store fails with
+`SELF_SIGNED_CERT_IN_CHAIN`. The root is pinned in `src/lib/db/supabase-ca.ts`
+and used by both the app pool and drizzle. Do not replace it with
+`rejectUnauthorized: false` — and note that removing the `ssl` option entirely is
+worse still, because it connects in **plaintext**. See LIM-017.
+
+### Migrations
+
+Manual, never on deploy:
+
+```
+npm run db:migrate      # reads DATABASE_URL_DIRECT from .env.local
+```
+
+`npm run db:generate` writes to `drizzle/migrations/`. The pre-squash migrations
+are archived in `drizzle/archive-pre-squash-2026-07-29/` — the old `0003`
+contained a `DROP TABLE ... CASCADE` and must never be re-applied.
+
+### Invite codes
+
+```
+npm run invites -- generate 1 [--expires <days>] [--note "text"]
+npm run invites -- list
+npm run invites -- revoke <CODE>
+npm run invites -- whoami <email>     # user UUID, for ADMIN_USER_IDS
+```
+
+Signup requires a valid, unused, unexpired, unrevoked code. `scripts/seed.ts`
+requires one too — there is deliberately no bypass path.
+
+### Keep-alive
+
+`vercel.json` runs `/api/health` daily. Free-tier Supabase projects pause after
+~7 days idle and need a manual un-pause. The endpoint runs a real `SELECT 1` — a
+bare 200 would not touch Postgres and the project would pause anyway.
+
+## Schema ownership — Drizzle only
+
+**Drizzle is the sole owner of the database schema.** Migrations live in
+`drizzle/migrations/`, are generated with `drizzle-kit generate`, and are applied
+manually with `npm run db:migrate` against `DATABASE_URL_DIRECT`.
+
+Supabase's GitHub integration must stay **disabled** for migration-apply. Two
+systems writing one schema means the Supabase side diffs against a database it
+did not create, and the conflict surfaces as a failed or destructive deploy
+rather than a clean error.
+
+Consequences to hold to:
+- Never run `supabase init` or create a `supabase/` directory. It is gitignored
+  as a backstop, but the real rule is: don't.
+- Never add `@supabase/*` packages for database access. The app connects with
+  `pg` over a connection string; Supabase is a Postgres host and nothing else —
+  not its auth, not its storage, not RLS.
+- `npm run db:reset` refuses to run against a non-localhost `DATABASE_URL`. That
+  guard exists because `.env.local` now points at Supabase; there is no override
+  flag by design.
+
+## Route protection — structural gotcha
+
+Pages under `src/app/(protected)/` inherit an auth check from that route group's
+`layout.tsx`, which calls `getSession()` and redirects when there is no session.
+
+**`src/app/admin/` sits OUTSIDE that route group and inherits nothing.** Anything
+added under `src/app/admin/` must gate itself explicitly with `requireAdmin()`
+from `src/lib/auth/admin.ts`. `src/middleware.ts` is not a substitute — it only
+checks that a session cookie is *present*, not that it is valid, and it runs in
+the edge runtime where the real check cannot.
+
+This is the pattern that caused a real miss: `/admin/safety-log` shipped reading
+and decrypting every user's journal content with no session check at all, and was
+additionally being statically prerendered — which would have baked decrypted PHI
+into a CDN-served HTML file and run any authorization check once at build time
+rather than per visitor.
+
+Rules for anything under `src/app/admin/`:
+- Call `await requireAdmin()` before any query. It responds `notFound()` (404,
+  not 403 — a 403 confirms the route exists).
+- Add `export const dynamic = "force-dynamic"` so protection never depends on a
+  `cookies()` call as a side effect.
+- Gate every **server action** separately. Server actions are independently
+  addressable endpoints; a check on the page that renders them does not protect
+  them.
+- Admin membership comes only from the `ADMIN_USER_IDS` env var. There is no
+  admin column, no first-user-is-admin, no default, and no code path that grants
+  it. Fail closed when unset.
+
 ## Security non-negotiables
 
 - Anthropic API key lives only in `.env.local`. Never logged, echoed,
@@ -91,9 +204,15 @@ Data architecture (filing-cabinet model):
 
 Phase 1 — complete
 Phase 2 — complete
-Phase 3 — complete
+Phase 3 — complete **except guided reflections, formally deferred** (2026-07-29). The
+  `guided` enum value exists and `/reflections` renders a label for it, but the type
+  is not selectable and `POST /api/reflections` rejects it. The home screen shows it
+  as "Coming soon". Guided check-in shape was a Phase 3 pause point that was never
+  closed; it is now a deliberate deferral, not an outstanding task.
 Phase 4 — complete
-Phase 5 — complete (user memory + profile + onboarding + full terminology rename)
+Phase 5 — complete (user memory + profile + onboarding + full terminology rename).
+  The spec's "system prompt visible to user (read-only)" was missed at the time and
+  was built on 2026-07-29 at `/settings/system-prompt`, linked from profile settings.
 Phase 6 — not started (blocked: system prompt review required first)
 Phase 7+ — not started
 

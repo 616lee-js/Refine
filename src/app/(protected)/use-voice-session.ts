@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback } from "react";
 import { WebSpeechProvider } from "@/lib/transcription/web-speech";
+import { VOICE_ENABLED } from "@/lib/flags";
 import type { Tier } from "@/lib/orchestrator";
 
 export type VoiceTriggerPayload = {
@@ -45,8 +46,6 @@ export function useVoiceSession({
   const [pauseSecondsLeft, setPauseSecondsLeft] = useState<number | null>(null);
 
   const providerRef = useRef<WebSpeechProvider | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<BlobPart[]>([]);
   const utteranceIndexRef = useRef(0);
   const utteranceTiersRef = useRef<number[]>([]);
   const maxTierRef = useRef<Tier>(0);
@@ -79,31 +78,9 @@ export function useVoiceSession({
         providerRef.current = null;
       }
 
-      // Stop MediaRecorder and collect audio
-      let audioRef: string | undefined;
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        await new Promise<void>((resolve) => {
-          const mr = mediaRecorderRef.current!;
-          mr.onstop = async () => {
-            const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-            try {
-              const res = await fetch(`/api/reflections/${reflectionId}/audio`, {
-                method: "POST",
-                body: blob,
-                headers: { "Content-Type": "audio/webm" },
-              });
-              if (res.ok) {
-                const data = (await res.json()) as { audioRef: string };
-                audioRef = data.audioRef;
-              }
-            } catch {
-              // non-fatal; audioRef stays undefined
-            }
-            resolve();
-          };
-          mr.stop();
-        });
-      }
+      // Audio upload removed — see the note in start(). `audioRef` stays
+      // undefined, so entries.raw_audio_ref is written null.
+      const audioRef: string | undefined = undefined;
 
       const precomputedTier = maxTierRef.current;
       const utteranceTiers = [...utteranceTiersRef.current];
@@ -113,8 +90,6 @@ export function useVoiceSession({
       utteranceTiersRef.current = [];
       maxTierRef.current = 0;
       utteranceIndexRef.current = 0;
-      audioChunksRef.current = [];
-      mediaRecorderRef.current = null;
       setUtteranceBuffer([]);
       setInterimText("");
       setStatus("idle");
@@ -154,28 +129,27 @@ export function useVoiceSession({
   const start = useCallback(async () => {
     if (status !== "idle") return;
 
-    // Request mic for audio recording
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      // Audio recording unavailable; voice still works without audio saving
-    }
+    // Belt-and-braces: the UI renders no voice controls while the flag is off,
+    // so this should be unreachable. Guarding here means the Web Speech API is
+    // never constructed even if some future call site forgets to check.
+    if (!VOICE_ENABLED) return;
 
-    if (stream) {
-      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      mr.start(250); // collect in 250ms chunks
-      mediaRecorderRef.current = mr;
-    }
+    // ── Audio capture removed for the serverless deployment ──────────────────
+    // v1 opened a MediaRecorder here and POSTed the blob to
+    // /api/reflections/[id]/audio, which wrote it to ./audio/. Vercel has no
+    // persistent filesystem, so that path is gone. (The server route it posted
+    // to had in fact never existed — .gitignore's unanchored `audio/` pattern
+    // swallowed the file before it was ever committed, and the client silently
+    // ignored the resulting 404.)
+    //
+    // Cloud audio storage reattaches here: capture the stream, upload to object
+    // storage, and pass the returned reference through as `audioRef` in
+    // doTrigger(). Everything downstream of that already handles it.
 
     bufferRef.current = [];
     utteranceTiersRef.current = [];
     maxTierRef.current = 0;
     utteranceIndexRef.current = 0;
-    audioChunksRef.current = [];
     setUtteranceBuffer([]);
     setInterimText("");
     setStatus("listening");
@@ -242,16 +216,11 @@ export function useVoiceSession({
       providerRef.current.stop();
       providerRef.current = null;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
-    }
 
     bufferRef.current = [];
     utteranceTiersRef.current = [];
     maxTierRef.current = 0;
     utteranceIndexRef.current = 0;
-    audioChunksRef.current = [];
     setUtteranceBuffer([]);
     setInterimText("");
     setStatus("idle");

@@ -293,9 +293,67 @@ In chat (centered, with top breathing room):
 
 ---
 
-### Crisis line
+### Crisis line — REMOVED 2026-07-29
 
-Displayed in the chat footer. Hard-coded content, not configurable. Appears below input area on every active session.
+There is no persistent crisis-line footer. The pattern existed briefly and was
+removed as a deliberate Tier 0 design decision.
+
+**Rationale:** Refine is an AI-augmented reflective journaling tool, not a
+crisis-centric mental health app. An always-present crisis affordance framed every
+screen — home, Mirror, history, settings — around crisis, which contradicts the
+product's positioning. Normal reflection should carry no ambient crisis framing.
+
+**Replaced by:** the tier-conditional crisis resource panel below, which surfaces
+resources when a Tier 2/3 signal is actually detected. That is now the app's only
+resource surface. See LIM-016 for what that concentration implies.
+
+Do not reintroduce an ambient crisis affordance without revisiting that decision.
+
+---
+
+### Crisis resource panel (tier-conditional)
+
+Implemented as `src/components/ui/crisis-resource-panel.tsx`. Content and the
+tier-to-content mapping live in `src/lib/safety/crisis-resources.ts`, transcribed
+from the Layer 3 `crisis-resources.md` fragment.
+
+**This is the app's only crisis-resource surface.** It appears alongside a Claude
+response generated at Tier 2 or Tier 3, and only after that response has finished
+streaming — resources should not arrive before the user has been met. It renders
+on both normal responses (`/api/chat`) and reflection-closing messages
+(`/api/reflections/[id]/end`); both send the tier as an `X-Tier` response header.
+
+Tier 0 and Tier 1 render nothing. Tier 1 explicitly does not pivot to resources.
+
+| Tier | Heading posture | Contents |
+|---|---|---|
+| 2 | Available, not required | Lower-threshold options lead — SAMHSA, warmlines, sliding-scale directories — with 988 and Crisis Text Line following rather than heading the list. Present, but not the headline. |
+| 3 | Direct, still present | Expanded and acute-first: 988 and Crisis Text Line lead, followed by the full support and directory set. Nothing is withheld — the panel must not read as the app narrowing to a handoff. |
+
+```html
+<aside aria-label="Support resources"
+       class="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-5 py-4">
+  <p class="text-sm font-medium text-stone-700">[heading]</p>
+  <p class="mt-1 text-xs text-stone-500 leading-relaxed">[framing]</p>
+  <ul class="mt-4 space-y-4"><!-- resource items --></ul>
+</aside>
+```
+
+**Posture rules — these are not stylistic preferences.**
+
+- Inline in the message list, directly after the response it belongs to. Never a
+  modal, never an interstitial, never dismissible-before-continuing. The user can
+  keep typing with the panel on screen.
+- `aria-label`, not `role="alert"`. An alert interrupts the screen reader
+  mid-response; this is a region the user reaches when ready.
+- Same stone palette as the rest of the app. No red, no warning iconography, no
+  urgency styling. The content carries the weight; the chrome stays quiet.
+- Links open in a new tab (`rel="noopener noreferrer"`) so the user never loses
+  their reflection to navigate to a resource.
+
+Content is pending clinical review — see LIM-015. Changes to which resources
+appear, at which tier, or to the framing copy are safety changes, not design
+iteration.
 
 ```html
 <p class="mt-4 text-xs text-stone-400 text-center leading-relaxed">

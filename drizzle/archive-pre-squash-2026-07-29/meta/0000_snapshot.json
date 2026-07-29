@@ -1,5 +1,5 @@
 {
-  "id": "f0ca21e1-72a7-46a1-92f2-025d4c62f16e",
+  "id": "ba1c86a1-80fe-4e2a-8419-950fd29127f8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -14,8 +14,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "reflection_id": {
-          "name": "reflection_id",
+        "session_id": {
+          "name": "session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -48,83 +48,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "check_ins_reflection_id_reflections_id_fk": {
-          "name": "check_ins_reflection_id_reflections_id_fk",
+        "check_ins_session_id_sessions_id_fk": {
+          "name": "check_ins_session_id_sessions_id_fk",
           "tableFrom": "check_ins",
-          "tableTo": "reflections",
+          "tableTo": "sessions",
           "columnsFrom": [
-            "reflection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.content_access_log": {
-      "name": "content_access_log",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reflection_id": {
-          "name": "reflection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "accessed_at": {
-          "name": "accessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "context": {
-          "name": "context",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "content_access_log_user_id_users_id_fk": {
-          "name": "content_access_log_user_id_users_id_fk",
-          "tableFrom": "content_access_log",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "content_access_log_reflection_id_reflections_id_fk": {
-          "name": "content_access_log_reflection_id_reflections_id_fk",
-          "tableFrom": "content_access_log",
-          "tableTo": "reflections",
-          "columnsFrom": [
-            "reflection_id"
+            "session_id"
           ],
           "columnsTo": [
             "id"
@@ -149,8 +78,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "reflection_id": {
-          "name": "reflection_id",
+        "session_id": {
+          "name": "session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -196,238 +125,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "entries_reflection_id_reflections_id_fk": {
-          "name": "entries_reflection_id_reflections_id_fk",
+        "entries_session_id_sessions_id_fk": {
+          "name": "entries_session_id_sessions_id_fk",
           "tableFrom": "entries",
-          "tableTo": "reflections",
+          "tableTo": "sessions",
           "columnsFrom": [
-            "reflection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.invite_codes": {
-      "name": "invite_codes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_by_user_id": {
-          "name": "used_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "invite_codes_used_by_user_id_users_id_fk": {
-          "name": "invite_codes_used_by_user_id_users_id_fk",
-          "tableFrom": "invite_codes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "used_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "invite_codes_code_unique": {
-          "name": "invite_codes_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reflection_summaries": {
-      "name": "reflection_summaries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "reflection_id": {
-          "name": "reflection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "encrypted_summary": {
-          "name": "encrypted_summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "notable_quotes": {
-          "name": "notable_quotes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "generated_at": {
-          "name": "generated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "generation_version": {
-          "name": "generation_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "reflection_summaries_reflection_id_reflections_id_fk": {
-          "name": "reflection_summaries_reflection_id_reflections_id_fk",
-          "tableFrom": "reflection_summaries",
-          "tableTo": "reflections",
-          "columnsFrom": [
-            "reflection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reflections": {
-      "name": "reflections",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "reflection_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "modality": {
-          "name": "modality",
-          "type": "reflection_modality",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scheduled_for": {
-          "name": "scheduled_for",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "extraction_status": {
-          "name": "extraction_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "reflections_user_id_users_id_fk": {
-          "name": "reflections_user_id_users_id_fk",
-          "tableFrom": "reflections",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
+            "session_id"
           ],
           "columnsTo": [
             "id"
@@ -452,8 +155,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "reflection_id": {
-          "name": "reflection_id",
+        "session_id": {
+          "name": "session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -506,12 +209,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "safety_log_reflection_id_reflections_id_fk": {
-          "name": "safety_log_reflection_id_reflections_id_fk",
+        "safety_log_session_id_sessions_id_fk": {
+          "name": "safety_log_session_id_sessions_id_fk",
           "tableFrom": "safety_log",
-          "tableTo": "reflections",
+          "tableTo": "sessions",
           "columnsFrom": [
-            "reflection_id"
+            "session_id"
           ],
           "columnsTo": [
             "id"
@@ -530,6 +233,142 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session_summaries": {
+      "name": "session_summaries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_summary": {
+          "name": "encrypted_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notable_quotes": {
+          "name": "notable_quotes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generated_at": {
+          "name": "generated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "generation_version": {
+          "name": "generation_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "session_summaries_session_id_sessions_id_fk": {
+          "name": "session_summaries_session_id_sessions_id_fk",
+          "tableFrom": "session_summaries",
+          "tableTo": "sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "session_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "modality": {
+          "name": "modality",
+          "type": "session_modality",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scheduled_for": {
+          "name": "scheduled_for",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -575,8 +414,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "reflection_id": {
-          "name": "reflection_id",
+        "session_id": {
+          "name": "session_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -624,12 +463,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "user_memory_reflection_id_reflections_id_fk": {
-          "name": "user_memory_reflection_id_reflections_id_fk",
+        "user_memory_session_id_sessions_id_fk": {
+          "name": "user_memory_session_id_sessions_id_fk",
           "tableFrom": "user_memory",
-          "tableTo": "reflections",
+          "tableTo": "sessions",
           "columnsFrom": [
-            "reflection_id"
+            "session_id"
           ],
           "columnsTo": [
             "id"
@@ -640,73 +479,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_profiles": {
-      "name": "user_profiles",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "encrypted_content": {
-          "name": "encrypted_content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_profiles_user_id_users_id_fk": {
-          "name": "user_profiles_user_id_users_id_fk",
-          "tableFrom": "user_profiles",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "user_profiles_user_id_unique": {
-          "name": "user_profiles_user_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -810,11 +582,11 @@
       "values": [
         "user_added",
         "claude_inferred",
-        "reflection_derived"
+        "session_derived"
       ]
     },
-    "public.reflection_modality": {
-      "name": "reflection_modality",
+    "public.session_modality": {
+      "name": "session_modality",
       "schema": "public",
       "values": [
         "voice",
@@ -822,8 +594,8 @@
         "mixed"
       ]
     },
-    "public.reflection_type": {
-      "name": "reflection_type",
+    "public.session_type": {
+      "name": "session_type",
       "schema": "public",
       "values": [
         "scheduled",

@@ -1,9 +1,12 @@
 # ========================
 # SECRETS — NEVER COMMIT
 # ========================
-.env
-.env.local
-.env.*.local
+# Catch-all: every .env variant is ignored, including ad-hoc ones like
+# .env.bak, .env.old, .env.prod, .env.2. The previous explicit list
+# (.env / .env.local / .env.*.local) let those through.
+# .env.example is the single deliberate exception — it holds no real values.
+.env*
+!.env.example
 *.pem
 *.key
 *.p8
@@ -29,10 +32,20 @@ node_modules/
 postgres-data/
 *.sql.bak
 
+# Supabase CLI scaffolding. Drizzle is the SOLE owner of this schema — see
+# CLAUDE.md. If `supabase init` is ever run by accident, this keeps its
+# migrations directory out of the repo, where Supabase's GitHub integration
+# would otherwise pick it up and start applying schema changes in parallel
+# with drizzle-kit. Two systems writing one schema is the failure to avoid.
+supabase/
+
 # ========================
 # Audio recordings (unencrypted in v1)
 # ========================
-audio/
+# Anchored to the repo root. Unanchored `audio/` also matched **/audio/, which
+# silently swallowed src/app/api/reflections/[id]/audio/route.ts — the file was
+# never committed and was lost in the sessions->reflections rename.
+/audio/
 
 # ========================
 # Planning source docs (duplicated as .md in docs/)

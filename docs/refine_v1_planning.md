@@ -181,6 +181,20 @@ The following are deliberately deferred. Each one would expand v1 scope in ways 
 - **Multi-user support.** v1 has exactly one user (the product owner). User account systems, auth, and multi-tenancy are v2 concerns.
 - **Mobile apps.** Web-first, mobile-web friendly is sufficient for v1. Native mobile is a Phase 2 decision based on real usage data.
 - **Cloud deployment.** Local hosting only through v1.5. Cloud is a v2 gate item.
+  > **SUPERSEDED 2026-07-29 — deliberate decision, recorded here so it is not mistaken for drift.**
+  > The app is being deployed to Vercel + Supabase Postgres (text-only) to support a small,
+  > controlled group of invited testers. This contradicts both this non-goal and product
+  > principle 10, which places cloud deployment and tester access behind the non-movable v2 gate.
+  >
+  > **Reasoning:** real feedback from a handful of known testers was judged more valuable at this
+  > stage than holding the line on local-only hosting, and the deployment is small enough to
+  > constrain. **Risk posture accepted:** invite-gated signup with single-use codes, a small and
+  > known tester group, no public discoverability, field-level encryption with environment-scoped
+  > keys, and no secret exposed to the browser.
+  >
+  > **Not claimed as satisfied:** clinical review of the safety architecture, Layer 2 prompt,
+  > Layer 3 fragments, tier classification logic, and the crisis resource list; privacy and legal
+  > review; formal tester consent flows. Those v2 gate items remain outstanding. See LIM-006.
 - **Payment, pricing tiers, subscription.** No commerce in v1 or v1.5. v2 concern.
 - **Product-improvement data pipelines.** No collection of user data for product improvement. v2 concern with proper consent flows.
 - **Polished UI.** v1 should be functional and respectful of the content it holds, but visual design polish is not the goal. Don't spend cycles on aesthetic refinement until the experience is validated.
@@ -232,6 +246,18 @@ The schema below is a v1 starting point. Field names are illustrative; final nam
 #### safety_log
 
 - `id`, `reflection_id`, `entry_id`, `tier`, `classifier_version`, `raw_signals`, `reviewed` (bool), `reviewer_notes` — used for product owner to review tier-detection accuracy during v1 use.
+
+#### content_access_log
+
+- `id`, `user_id`, `reflection_id`, `accessed_at`, `context` (human-readable label for the access point)
+
+Audit log of deliberate decryption events — written whenever a user views decrypted reflection entries. *Added during the build; not part of the original data model. Recorded here 2026-07-29.* It exists because PHI-grade handling means being able to answer "when was this content actually decrypted and surfaced," not merely "who could have."
+
+#### user_profiles
+
+- `id`, `user_id` (unique), `encrypted_content` (JSON blob: tendencies, goals, background), `created_at`, `updated_at`
+
+*Added in Phase 5.* A dedicated table rather than a JSONB column on `users`, so PHI-grade profile content is isolated from the auth-adjacent row and has its own access pattern. The blob shape can evolve without migrations.
 
 All `encrypted_*` fields use field-level encryption. The user can view decrypted content in their UI; everything else (database backups, debug exports, anything that leaves the running app process) is ciphertext.
 
@@ -311,6 +337,23 @@ Classifier prompt is documented separately and stored in the Layer 3 reference l
 
 - Crisis resources persistent in UI (a discreet "need help right now?" link or icon, always present, never modal-ing the user).
 - No additional system behavior beyond default.
+
+> **SUPERSEDED 2026-07-29 — deliberate decision, recorded so it is not mistaken for drift.**
+> There is no persistent crisis affordance. Tier 0 renders no crisis framing at all.
+>
+> **Reasoning:** Refine is positioned as an AI-augmented reflective journaling tool, not a
+> crisis-centric mental health app. An always-present crisis line framed every screen —
+> home, Mirror, history, settings — around crisis, contradicting the intended design.
+> Normal reflection should carry no ambient crisis framing.
+>
+> **Replaced by:** a tier-conditional resource panel that renders alongside any Claude
+> response generated at Tier 2 or Tier 3, including reflection-closing messages. Resources
+> surface on detected distress rather than ambiently.
+>
+> **Accepted trade-off:** crisis resources now appear if and only if the classifier returns
+> Tier 2 or Tier 3. A false negative means no resources anywhere. This makes tier-detection
+> accuracy load-bearing and compounds LIM-001. Tracked in LIM-016; the safety log should be
+> reviewed for false negatives throughout testing.
 
 ### Tier 1 — elevated distress
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -62,24 +63,24 @@ export default function Page() {
             Refine
           </h1>
           <div className="flex items-center gap-4">
-            <a
+            <Link
               href="/reflections"
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
               Reflections
-            </a>
-            <a
+            </Link>
+            <Link
               href="/memory"
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
               Mirror
-            </a>
-            <a
+            </Link>
+            <Link
               href="/settings/profile"
               className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
             >
               Profile
-            </a>
+            </Link>
             <form action="/api/auth/logout" method="POST">
               <button
                 type="submit"
@@ -148,24 +149,24 @@ export default function Page() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <a
+          <Link
             href="/reflections"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Reflections
-          </a>
-          <a
+          </Link>
+          <Link
             href="/memory"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Mirror
-          </a>
-          <a
+          </Link>
+          <Link
             href="/settings/profile"
             className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
           >
             Profile
-          </a>
+          </Link>
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"

@@ -5,8 +5,13 @@ const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
+// Parsed once. The hex string is validated at startup in env.ts, and the key
+// never changes within a process, so re-parsing it on every encrypt/decrypt was
+// pure overhead — and these run in a loop over every entry in a reflection.
+const KEY = Buffer.from(env.encryptionKey, "hex");
+
 function getKey(): Buffer {
-  return Buffer.from(env.encryptionKey, "hex");
+  return KEY;
 }
 
 /**

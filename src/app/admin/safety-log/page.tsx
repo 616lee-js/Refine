@@ -3,9 +3,24 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { safetyLog, entries } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { requireAdmin } from "@/lib/auth/admin";
+
+// This page reads and decrypts safety-log content across ALL users. It must never
+// be statically prerendered: a prerendered copy would bake decrypted PHI into an
+// HTML file served from the CDN, and the authorization check below would run once
+// at build time instead of once per visitor.
+//
+// requireAdmin() calls getSession() -> cookies(), which already forces dynamic
+// rendering — this is here so that protection does not silently depend on that
+// side effect.
+export const dynamic = "force-dynamic";
 
 async function markReviewed(formData: FormData) {
   "use server";
+  // Server actions are independently addressable endpoints. Re-check authorization
+  // here; the page-level check does not protect this.
+  await requireAdmin();
+
   const logId = formData.get("logId") as string;
   if (!logId) return;
   await db
@@ -23,6 +38,9 @@ const TIER_COLORS: Record<number, string> = {
 };
 
 export default async function SafetyLogPage() {
+  // Gate BEFORE any query runs. This page decrypts other users' journal content.
+  await requireAdmin();
+
   const rows = await db
     .select({
       id: safetyLog.id,
@@ -44,8 +62,12 @@ export default async function SafetyLogPage() {
     if (row.encryptedContent) {
       try {
         content = decrypt(row.encryptedContent);
-      } catch {
+      } catch (err) {
         content = "[decrypt error]";
+        console.error(
+          `Safety-log entry decrypt failed for entry ${row.entryId}:`,
+          err instanceof Error ? err.message : err
+        );
       }
     }
     return { ...row, content };

@@ -48,6 +48,74 @@ The items below are limitations identified during planning that exist by design 
 
 ---
 
+### Infrastructure limitations
+
+#### LIM-017 — Pinned Supabase CA was not verified against the authenticated dashboard
+
+**Severity:** Low-moderate — affects trust provenance, not current connection security
+**Status:** Accepted 2026-07-29; upgrade opportunistically
+
+Supabase serves its Postgres endpoints from its own private CA (`Supabase Root 2021 CA`, self-signed), not a publicly-trusted one. This was verified empirically: every TLS configuration that checks the system trust store fails with `SELF_SIGNED_CERT_IN_CHAIN`, including `ssl: true`, `sslmode=require`, and `sslmode=verify-full`. Only two configurations connect — one that does not encrypt at all, and one that encrypts without verifying the peer. Pinning the CA is therefore the only route to verified TLS, and it is stronger than the system store: exactly one issuer is accepted.
+
+The certificate is pinned in `src/lib/db/supabase-ca.ts` and used by both the app pool and drizzle migrations. A live connection using it verifies successfully (`authorized: true`, TLS_AES_256_GCM_SHA384).
+
+**The limitation:** its provenance was established by fingerprint agreement between two sources — the root presented by the live pooler connection, and the certificate published at Supabase's public download bucket. They are byte-identical:
+
+```
+80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA
+Supabase Root 2021 CA — valid 2021-04-28 -> 2031-04-26
+```
+
+It was **not** confirmed against the authenticated Supabase dashboard, which is the authoritative source. TLS proves the download bucket is the S3 bucket it claims to be; it does not prove Supabase owns that bucket. So both sources could in principle share an origin that was never independently authenticated. The practical risk is low — an attacker would need to control both the live database connection and that bucket — but it is not zero, and it is the trust anchor for a link carrying journal content.
+
+**To close this:** open the SSL section of the Supabase dashboard, compare the SHA-256 above, and delete the provenance paragraph in `src/lib/db/supabase-ca.ts` once it matches.
+
+**Rotation:** expiry is 2031. Node's `ca` option accepts an array, so a replacement root can be added alongside this one before any cutover. Failure is loud rather than silent — connections refuse outright, and the daily `/api/health` cron surfaces it within 24 hours.
+
+---
+
+### Safety architecture limitations
+
+#### LIM-016 — The tier-conditional panel is the only crisis-resource surface
+
+**Severity:** Significant — makes tier-detection accuracy load-bearing for safety
+**Status:** Accepted design decision (2026-07-29); requires active monitoring during testing
+
+The persistent crisis-line footer was removed from all authenticated pages. Refine is positioned as an AI-augmented reflective journaling tool, not a crisis-centric mental health app, and an always-present crisis affordance framed every screen — home, Mirror, history, settings — around crisis in a way that contradicts the intended design. The Tier 0 posture is now: **normal reflection carries no ambient crisis framing; resources surface on detected distress.**
+
+**This supersedes the planning doc's Tier 0 specification,** which calls for crisis resources "persistent in the UI... always present, never modal-ing the user." Recorded as a deliberate decision rather than left as drift.
+
+**What this concentrates.** Previously a mis-classified message had a fallback: the user still saw 988 and Crisis Text Line at the bottom of the screen. That fallback is gone. Crisis resources now appear if and only if the classifier returns Tier 2 or Tier 3. A false negative means a user in real distress sees no resources anywhere in the app.
+
+This compounds **LIM-001** (the classifier sees the current message only, without conversation context, so it can under-trigger when prior context would have escalated the signal). Under-triggering was previously a degraded experience; it is now a silent absence.
+
+**Mitigation and what to watch:**
+- Every classification is written to `safety_log` with the prompt version that produced it. **Review it regularly during testing** — specifically for false negatives, which are now the failure mode that matters most. The planning doc's standing advice ("don't skip the safety logging") applies with more force than when it was written.
+- The panel renders on both normal responses and reflection-closing messages, so a reflection that ends at an elevated tier still surfaces resources on its final message.
+- Tier 2 panel content now includes 988 and Crisis Text Line. It briefly did not, on the reasoning that the footer displayed them permanently; removing the footer invalidated that reasoning and they were restored the same day.
+
+**Open question for clinical review:** whether a journaling app with no ambient crisis affordance is appropriate for users who may arrive in distress, or whether some minimal always-available path (a nav item rather than a footer line, for instance) is warranted. This decision was made on product-positioning grounds, not clinical ones.
+
+---
+
+#### LIM-015 — Crisis resource panel content is pending clinician review
+
+**Severity:** Significant — this is safety-surface content shown at Tier 2 and Tier 3
+**Status:** Open; blocks nothing structurally, but must be reviewed before the v2 gate and ideally before tester access widens
+
+The tier-conditional crisis resource panel (`src/components/ui/crisis-resource-panel.tsx`, content in `src/lib/safety/crisis-resources.ts`) was built to close a real gap: the Tier 2 and Tier 3 Layer 3 protocols tell Claude that the app renders a resource list and that Claude therefore need not list resources in detail — but until now the app rendered nothing beyond the persistent 988 / Crisis Text Line footer. Resources reached Claude's context and never the user's screen.
+
+**What is not yet reviewed:**
+
+- **The resource list itself.** Transcribed verbatim from `src/lib/layer3/crisis-resources.md`, which describes itself as a v1 starter list pending full curation at the v2 clinical review gate. Nothing was added, removed, or substituted — but a starter list rendered to a user in acute distress carries more weight than a starter list sitting in a prompt.
+- **The tier split.** Tier 2 shows the support-oriented subset (SAMHSA, warmlines, sliding-scale directories) on the reasoning that 988 and Crisis Text Line are already persistently visible in the footer on the same screen. Tier 3 shows the full set, crisis lines first. This division was an implementation judgment, not a clinical one.
+- **The framing copy.** The panel headings and the one-line framing above each list were written to match the protocols' continued-presence posture ("no pressure to use any of these," "this is bigger than what this app can hold"). A clinician should confirm the wording does not read as dismissal at Tier 3 or as alarm at Tier 2.
+- **US-only.** Every resource is US-specific, inheriting LIM-007's English-only and US-centric assumptions. A user outside the US in acute distress is shown numbers they cannot call.
+
+**Mitigation:** resource data is structured as typed records in a single module, separate from both the rendering component and the Layer 3 prompt fragment, so a reviewer can change entries, categories, and tier membership without touching UI code. The Layer 3 fragment and this module must be kept in agreement — the protocols' claim that "the rendered list is the source of truth" is only honest while they match.
+
+---
+
 ### AI / model limitations
 
 #### LIM-001 — Tier classifier sees current message only, not conversation context
@@ -178,12 +246,24 @@ Web Speech API is free and requires no additional accounts but has lower transcr
 
 ---
 
-#### LIM-006 — Local-only deployment through v1 and v1.5
+#### LIM-006 — Cloud deployment brought forward ahead of the v2 gate
 
-**Severity:** Inherent to current build approach
-**Status:** Accepted; resolved at v2
+**Severity:** Significant — deliberately accepted risk
+**Status:** Superseded 2026-07-29. Previously "Local-only deployment through v1 and v1.5."
 
-The app runs locally on the developer's machine through v1 and v1.5. No remote access. No backups beyond local. This is by design — it keeps costs near zero and avoids cloud commitments while the product is being validated. The v2 gate addresses cloud deployment formally.
+**What changed.** The original entry recorded that the app runs only on the developer's machine through v1 and v1.5, with cloud deployment handled formally at the v2 gate. That is no longer true. The app is being deployed to Vercel with Supabase Postgres, text-only, to support a small controlled group of invited testers.
+
+**Why this is a limitation and not just a change.** `refine_v1_planning.md` lists cloud deployment as an explicit v1 non-goal ("Local hosting only through v1.5. Cloud is a v2 gate item"), and product principle 10 makes clinical review, privacy and legal review, cloud deployment with proper encryption, and tester consent flows a non-movable gate before any human other than the product owner uses the app. Bringing testers in ahead of that gate means people other than the product owner are using the app before those reviews have happened.
+
+**Risk posture accepted by the product owner:**
+- Access is invite-gated — single-use codes, no open signup.
+- The tester group is small, known, and constrained.
+- The app is not publicly advertised or discoverable.
+- Field-level AES-256-GCM encryption is in place, keys are environment-scoped, and no secret is exposed to the browser.
+
+**What is still outstanding.** The v2 gate items are not satisfied and are not claimed to be. In particular, clinical review of the safety architecture, Layer 2 prompt, Layer 3 fragments, tier classification logic, and the crisis resource list has not occurred. The resource list remains a self-described starter list. Privacy/legal review and formal consent flows have not been completed.
+
+**Related deployment-era limitations:** audio capture is disabled and voice is feature-flagged off because serverless has no persistent filesystem (see LIM-011, now moot for the deployed build); background processing for Phase 6 must be serverless-compatible rather than fire-and-forget.
 
 ---
 
@@ -195,7 +275,7 @@ These are deliberate v1 non-goals from the planning doc, listed here for cross-r
 - No export reports in v1 (v1.5)
 - No validated assessments in v1 (v1.5+)
 - No personality assessment in v1 (v1.5+ if at all)
-- No multi-user support in v1 (v2)
+- No multi-user support in v1 (v2) — *partially superseded: invite-gated tester accounts exist as of the Vercel deployment; see LIM-006*
 - No mobile apps in v1 (potential v2 phase 2)
 - No payment / pricing tiers (v2+)
 - No product-improvement data pipeline (v2+)

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -60,9 +62,9 @@ export default async function LoginPage({
 
         <p className="text-center text-sm text-stone-500">
           No account?{" "}
-          <a href="/signup" className="font-medium text-stone-800 hover:underline">
+          <Link href="/signup" className="font-medium text-stone-800 hover:underline">
             Create one
-          </a>
+          </Link>
         </p>
       </div>
     </main>

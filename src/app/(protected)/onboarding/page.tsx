@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -93,9 +94,9 @@ export default function OnboardingPage() {
 
         <p className="text-xs text-stone-400 text-center">
           You can update this anytime in{" "}
-          <a href="/settings/profile" className="hover:text-stone-600 transition-colors underline underline-offset-2">
+          <Link href="/settings/profile" className="hover:text-stone-600 transition-colors underline underline-offset-2">
             Profile Settings
-          </a>
+          </Link>
           .
         </p>
       </main>

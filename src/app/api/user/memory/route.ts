@@ -14,14 +14,28 @@ export async function GET() {
     .from(userMemory)
     .where(and(eq(userMemory.userId, authSession.userId), eq(userMemory.isActive, true)));
 
+  // An entry that fails to decrypt is marked, not blanked. Returning "" made an
+  // unreadable memory look like an empty one the user could safely delete —
+  // which is exactly the wrong conclusion when the cause is a key mismatch.
   const decoded = rows.map((r) => {
-    let content = "";
-    try { content = decrypt(r.encryptedContent); } catch { /* skip */ }
+    let content: string;
+    let decryptFailed = false;
+    try {
+      content = decrypt(r.encryptedContent);
+    } catch (err) {
+      decryptFailed = true;
+      content = "";
+      console.error(
+        `Memory decrypt failed for entry ${r.id} (user ${authSession.userId}):`,
+        err instanceof Error ? err.message : err
+      );
+    }
     return {
       id: r.id,
       kind: r.kind,
       source: r.source,
       content,
+      decryptFailed,
       confirmed: r.lastConfirmedAt !== null,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,

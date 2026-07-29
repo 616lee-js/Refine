@@ -5,6 +5,11 @@ import { db } from "@/lib/db";
 import { reflections, entries } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { runReflectionClosing } from "@/lib/orchestrator";
+import { persistAfterResponse } from "@/lib/after-response";
+
+// See the note in /api/chat — streaming plus the post-response write can exceed
+// the default 10s Hobby timeout.
+export const maxDuration = 60;
 
 export async function POST(
   _req: Request,
@@ -49,9 +54,13 @@ export async function POST(
     return new Response("Internal server error", { status: 500 });
   }
 
-  const { stream } = closingResult;
+  const { stream, tier } = closingResult;
   const encoder = new TextEncoder();
   let assistantText = "";
+
+  // Registered here, in the request context — after() cannot be called from
+  // inside the stream callbacks below.
+  const persist = persistAfterResponse("end: save closing entry + mark ended");
 
   const readable = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -62,37 +71,47 @@ export async function POST(
 
       stream.on("finalMessage", () => {
         controller.close();
-        // Save closing response + mark reflection ended — fire and forget
-        db
-          .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
-          .from(entries)
-          .where(eq(entries.reflectionId, reflectionId))
-          .then(([{ maxSeq }]) =>
-            db.insert(entries).values({
-              id: randomUUID(),
-              reflectionId,
-              sequence: maxSeq + 1,
-              source: "claude",
-              encryptedContent: encrypt(assistantText),
-              tierClassification: null,
-            })
-          )
-          .then(() =>
-            db
-              .update(reflections)
-              .set({ endedAt: new Date() })
-              .where(eq(reflections.id, reflectionId))
-          )
-          .catch((err) => console.error("Failed to close reflection:", err));
+
+        // Save closing response, then mark the reflection ended. Held open by
+        // after() — previously fire-and-forget, which meant a reflection could
+        // intermittently stay open with its closing message lost.
+        persist.run(async () => {
+          const [{ maxSeq }] = await db
+            .select({ maxSeq: sql<number>`COALESCE(MAX(${entries.sequence}), 0)` })
+            .from(entries)
+            .where(eq(entries.reflectionId, reflectionId));
+
+          await db.insert(entries).values({
+            id: randomUUID(),
+            reflectionId,
+            sequence: maxSeq + 1,
+            source: "claude",
+            encryptedContent: encrypt(assistantText),
+            tierClassification: null,
+          });
+
+          await db
+            .update(reflections)
+            .set({ endedAt: new Date() })
+            .where(eq(reflections.id, reflectionId));
+        });
       });
 
       stream.on("error", (err) => {
         controller.error(err);
+        persist.abort();
       });
     },
   });
 
+  // X-Tier carries the tier the closing response was generated under — the tier
+  // of the last user message, not a re-classification. The client renders the
+  // crisis resource panel from this. Without it, a reflection ending at Tier 2/3
+  // would show no resources at all on its final message.
   return new Response(readable, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Tier": String(tier),
+    },
   });
 }

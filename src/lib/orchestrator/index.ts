@@ -5,8 +5,12 @@ import { getAnthropicApiKey } from "@/lib/env";
 import { db } from "@/lib/db";
 import { entries, safetyLog } from "@/lib/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
-import { classifyMessage, type Tier } from "./classifier";
-import { buildSystemPrompt, buildLayer4Context } from "./context";
+import { classifyMessage, CLASSIFIER_VERSION, type Tier } from "./classifier";
+import {
+  buildSystemPrompt,
+  buildLayer4Context,
+  logPromptComposition,
+} from "./context";
 
 export type { Tier };
 
@@ -55,7 +59,7 @@ export async function runOrchestrator({
       reflectionId,
       entryId,
       tier,
-      classifierVersion: "v1",
+      classifierVersion: CLASSIFIER_VERSION,
       rawSignals: {},
     });
   }
@@ -75,14 +79,23 @@ export async function runOrchestrator({
 
   // 6. Build system prompt with tier-appropriate Layer 3 + Layer 4 context
   const layer4 = await buildLayer4Context(userId);
-  const systemPrompt = buildSystemPrompt(tier, layer4);
+  const composed = buildSystemPrompt(tier, layer4.text);
+
+  logPromptComposition({
+    call: "reflection",
+    reflectionId,
+    tier,
+    composed,
+    layer4,
+    historyEntries: messages.length,
+  });
 
   // 7. Start stream
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });
   const stream = client.messages.stream({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    system: systemPrompt,
+    system: composed.prompt,
     messages,
   });
 
@@ -127,7 +140,16 @@ export async function runReflectionClosing(reflectionId: string, userId: string)
     }));
 
   const layer4 = await buildLayer4Context(userId);
-  const systemPrompt = buildSystemPrompt(tier, layer4) + REFLECTION_CLOSING_INSTRUCTION;
+  const composed = buildSystemPrompt(tier, layer4.text);
+
+  logPromptComposition({
+    call: "closing",
+    reflectionId,
+    tier,
+    composed,
+    layer4,
+    historyEntries: messages.length,
+  });
 
   // Anthropic requires ≥1 message and last message must be from `user`.
   messages.push({ role: "user", content: "I'm ready to wrap up." });
@@ -136,7 +158,7 @@ export async function runReflectionClosing(reflectionId: string, userId: string)
   const stream = client.messages.stream({
     model: "claude-sonnet-4-6",
     max_tokens: 512,
-    system: systemPrompt,
+    system: composed.prompt + REFLECTION_CLOSING_INSTRUCTION,
     messages,
   });
 

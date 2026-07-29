@@ -1,7 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { getAnthropicApiKey } from "@/lib/env";
+
+// Bundled at build time, not read from disk. See next.config.ts.
+import classifierPrompt from "@/lib/layer3/tier-classifier-prompt.md";
+import { promptVersion } from "./prompt-version";
+
+/**
+ * Recorded against every safety_log row. Derived from the classifier prompt's
+ * own header rather than hardcoded, so edits to the prompt are traceable in the
+ * log without anyone remembering to bump a literal.
+ */
+export const CLASSIFIER_VERSION = promptVersion(classifierPrompt);
 
 export type Tier = 0 | 1 | 2 | 3;
 
@@ -11,11 +20,6 @@ const TIER_MAP: Record<string, Tier> = {
   tier2: 2,
   tier3: 3,
 };
-
-const classifierPrompt = readFileSync(
-  join(process.cwd(), "src/lib/layer3/tier-classifier-prompt.md"),
-  "utf-8"
-);
 
 export async function classifyMessage(message: string): Promise<Tier> {
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });

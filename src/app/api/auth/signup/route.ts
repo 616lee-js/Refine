@@ -5,10 +5,7 @@ import {
   SignupError,
   MIN_PASSWORD_LENGTH,
 } from "@/lib/auth";
-
-function origin(req: NextRequest) {
-  return `http://${req.headers.get("host")}`;
-}
+import { requestOrigin } from "@/lib/request-origin";
 
 /** Maps a failure to the ?error= value the signup page renders a message for. */
 const ERROR_CODES: Record<string, string> = {
@@ -36,11 +33,11 @@ export async function POST(req: NextRequest) {
     !displayName ||
     !inviteCode
   ) {
-    return NextResponse.redirect(new URL("/signup?error=1", origin(req)));
+    return NextResponse.redirect(new URL("/signup?error=1", requestOrigin(req)), 303);
   }
 
   if (password.length < MIN_PASSWORD_LENGTH) {
-    return NextResponse.redirect(new URL("/signup?error=password_short", origin(req)));
+    return NextResponse.redirect(new URL("/signup?error=password_short", requestOrigin(req)), 303);
   }
 
   try {
@@ -50,16 +47,16 @@ export async function POST(req: NextRequest) {
     session.userId = user.id;
     await session.save();
 
-    return NextResponse.redirect(new URL("/onboarding", origin(req)));
+    return NextResponse.redirect(new URL("/onboarding", requestOrigin(req)), 303);
   } catch (err) {
     // A revoked code reports as generically invalid rather than confirming it
     // once existed. Used and expired are distinguished because the person
     // holding that code needs to know to ask for a new one.
     if (err instanceof SignupError) {
       const code = ERROR_CODES[err.reason] ?? "1";
-      return NextResponse.redirect(new URL(`/signup?error=${code}`, origin(req)));
+      return NextResponse.redirect(new URL(`/signup?error=${code}`, requestOrigin(req)), 303);
     }
     console.error("Signup failed:", err instanceof Error ? err.message : err);
-    return NextResponse.redirect(new URL("/signup?error=1", origin(req)));
+    return NextResponse.redirect(new URL("/signup?error=1", requestOrigin(req)), 303);
   }
 }

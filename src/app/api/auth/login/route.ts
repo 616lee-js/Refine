@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loginUser, getSession } from "@/lib/auth";
-
-function origin(req: NextRequest) {
-  return `http://${req.headers.get("host")}`;
-}
+import { requestOrigin } from "@/lib/request-origin";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -16,17 +13,17 @@ export async function POST(req: NextRequest) {
     !email ||
     !password
   ) {
-    return NextResponse.redirect(new URL("/login?error=1", origin(req)));
+    return NextResponse.redirect(new URL("/login?error=1", requestOrigin(req)), 303);
   }
 
   const user = await loginUser(email, password);
   if (!user) {
-    return NextResponse.redirect(new URL("/login?error=1", origin(req)));
+    return NextResponse.redirect(new URL("/login?error=1", requestOrigin(req)), 303);
   }
 
   const session = await getSession();
   session.userId = user.id;
   await session.save();
 
-  return NextResponse.redirect(new URL("/", origin(req)));
+  return NextResponse.redirect(new URL("/", requestOrigin(req)), 303);
 }

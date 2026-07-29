@@ -228,6 +228,9 @@ door — swap implementations without touching the hook.
 
 ## Where things live
 
+- Operations guide: `docs/refine_operations.md` — running the deployed app:
+  invite codes, admin access, health checks, troubleshooting. Written for the
+  product owner to use without assistance; keep it jargon-free if editing.
 - Planning specification: `docs/refine_v1_planning.md`
 - Decision reasoning: `docs/refine_brainstorm_summary.md`
 - Prompt changelog: `docs/prompt-changelog.md`

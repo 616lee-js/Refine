@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { requestOrigin } from "@/lib/request-origin";
 import { db } from "@/lib/db";
 import { reflections } from "@/lib/db/schema";
 
@@ -15,5 +16,5 @@ export async function POST(req: NextRequest) {
   }
 
   session.destroy();
-  return NextResponse.redirect(new URL("/login", `http://${req.headers.get("host")}`));
+  return NextResponse.redirect(new URL("/login", requestOrigin(req)), 303);
 }

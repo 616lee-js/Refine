@@ -1,40 +1,74 @@
 import { resourcePanelFor, type CrisisResource } from "@/lib/safety/crisis-resources";
+import { Sheet, Eyebrow } from "./sheet";
 
 /**
- * Tier-conditional crisis resource panel.
+ * Tier-conditional crisis resources.
  *
- * Renders alongside a Claude response that was generated at Tier 2 or Tier 3.
+ * Renders below the entry once it has been set down, and only when the
+ * classifier returned Tier 2 or 3. Tiers 0 and 1 render nothing — Tier 1
+ * explicitly does not pivot to resources.
  *
- * This is the app's ONLY crisis-resource surface. A persistent footer affordance
- * existed briefly and was removed deliberately: Refine is a reflective journaling
- * tool, and an always-present crisis line framed every screen around crisis. The
- * Tier 0 posture is now "no ambient crisis framing; resources surface on detected
- * distress." That makes this panel — and the tier detection behind it — the whole
- * safety surface. See LIM-016.
+ * ── It is the app's only resource surface ─────────────────────────────────────
+ * A persistent crisis-line footer existed briefly and was removed: an
+ * always-present crisis affordance framed every screen around crisis, which is
+ * wrong for a journalling tool. The consequence is that this panel, and the tier
+ * detection behind it, carry the whole safety surface. See LIM-016.
  *
- * Posture: this is support appearing, not the app pivoting away. It is inline
- * and non-blocking — never a modal, never an interstitial, never something that
- * has to be dismissed before the conversation can continue. The user can keep
- * talking with it on screen. That is the continued-presence commitment expressed
- * in layout: nothing here gates further conversation.
+ * ── Dawn treatment ────────────────────────────────────────────────────────────
+ * On paper, in the warm palette, with the same sheet the entry sits on. No red,
+ * no warning iconography, no urgency styling. It must not read as a clinical
+ * alert — the person has just written something hard, and being met with an
+ * alarm is the opposite of what the continued-presence commitment promises. The
+ * content carries the weight; the chrome stays quiet.
  *
- * Content and tier mapping live in src/lib/safety/crisis-resources.ts and are
- * pending clinical review (LIM-015).
+ * `aria-label`, not `role="alert"`: an alert interrupts a screen reader. This is
+ * a region reached when ready.
  */
 function ResourceItem({ resource }: { resource: CrisisResource }) {
   return (
-    <li className="space-y-0.5">
-      <p className="text-sm font-medium text-stone-700">{resource.name}</p>
+    <li className="space-y-1">
+      <p
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "16px",
+          lineHeight: 1.4,
+          color: "var(--rf-text)",
+        }}
+      >
+        {resource.name}
+      </p>
       {resource.contact && (
-        <p className="text-sm text-stone-800 font-medium">{resource.contact}</p>
+        <p
+          style={{
+            fontSize: "13.5px",
+            fontWeight: 500,
+            color: "var(--rf-text)",
+          }}
+        >
+          {resource.contact}
+        </p>
       )}
-      <p className="text-xs text-stone-500 leading-relaxed">{resource.description}</p>
+      <p
+        style={{
+          fontSize: "12.5px",
+          lineHeight: 1.55,
+          color: "var(--rf-text-3)",
+        }}
+      >
+        {resource.description}
+      </p>
       {resource.url && (
         <a
           href={`https://${resource.url}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block text-xs text-stone-500 underline underline-offset-2 hover:text-stone-700 transition-colors"
+          className="inline-block transition-colors hover:!text-[var(--rf-text)]"
+          style={{
+            fontSize: "12.5px",
+            color: "var(--rf-text-3)",
+            borderBottom: "1px solid var(--rf-border-strong)",
+            paddingBottom: "1px",
+          }}
         >
           {resource.url}
         </a>
@@ -48,21 +82,41 @@ export function CrisisResourcePanel({ tier }: { tier: number }) {
   if (!content) return null;
 
   return (
-    <aside
-      // aria-label rather than role="alert": an alert would interrupt the screen
-      // reader mid-response. This is a supporting region the user reaches when
-      // they are ready, consistent with the non-disruptive posture.
-      aria-label="Support resources"
-      className="mt-4 rounded-xl border border-stone-200 bg-stone-50 px-5 py-4"
+    <Sheet
+      as="section"
+      className="mt-5 px-[34px] pb-[24px] pt-[22px]"
     >
-      <p className="text-sm font-medium text-stone-700">{content.heading}</p>
-      <p className="mt-1 text-xs text-stone-500 leading-relaxed">{content.framing}</p>
+      <Eyebrow size={9.5}>Alongside this</Eyebrow>
 
-      <ul className="mt-4 space-y-4">
+      <p
+        className="mt-[10px]"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "18px",
+          lineHeight: 1.45,
+          color: "var(--rf-text)",
+          maxWidth: 460,
+        }}
+      >
+        {content.heading}
+      </p>
+      <p
+        className="mt-[6px]"
+        style={{
+          fontSize: "12.5px",
+          lineHeight: 1.6,
+          color: "var(--rf-text-3)",
+          maxWidth: 460,
+        }}
+      >
+        {content.framing}
+      </p>
+
+      <ul className="mt-6 flex flex-col gap-5">
         {content.resources.map((r) => (
           <ResourceItem key={r.id} resource={r} />
         ))}
       </ul>
-    </aside>
+    </Sheet>
   );
 }

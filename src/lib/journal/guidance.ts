@@ -34,6 +34,16 @@ export type GuidanceItem = {
   /** One or two sentences. Plain, unhurried, never imperative about feelings. */
   body: string;
   source: GuidanceSource;
+  /**
+   * Provenance eyebrow, rendered above the item — "From Sun 26 Jul",
+   * "Thread · Sleep". Only meaningful for `source: "personal"`: generic practice
+   * guidance has no provenance worth stating, and labelling every item "Generic"
+   * would be noise.
+   *
+   * The rail already renders this when present, so personal footholds need no
+   * component change when they arrive — only data.
+   */
+  sourceLabel?: string;
 };
 
 export type GuidanceSection = {

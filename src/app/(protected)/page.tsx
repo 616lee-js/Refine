@@ -53,7 +53,7 @@ export default function Page() {
               color: "var(--rf-text)",
             }}
           >
-            What would you like to set down?
+            What would you like to do?
           </h1>
 
           <div className="grid gap-[18px] sm:grid-cols-2">

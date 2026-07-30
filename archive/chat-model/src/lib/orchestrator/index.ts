@@ -3,9 +3,10 @@ import { randomUUID } from "crypto";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { getAnthropicApiKey } from "@/lib/env";
 import { db } from "@/lib/db";
-import { entries, safetyLog } from "@/lib/db/schema";
+import { entries } from "@/lib/db/schema";
 import { encrypt, decrypt } from "@/lib/crypto";
-import { classifyMessage, CLASSIFIER_VERSION, type Tier } from "./classifier";
+import { classifyMessage, type Tier } from "./classifier";
+import { logSafetyClassification } from "@/lib/safety/classify-and-log";
 import {
   buildSystemPrompt,
   buildLayer4Context,
@@ -53,13 +54,21 @@ export async function runOrchestrator({
 
   // 4. Log to safety_log (skipped for voice — per-utterance rows already saved;
   //    caller saves the summary row with the real entryId after stream completes)
+  //
+  // The write goes through the shared helper so there is one implementation of
+  // "how a safety classification is recorded" across the chat path, the journal
+  // path, and the future framework check-in.
+  //
+  // Note the classification itself above is still single-shot for chat: this
+  // path predates chunking, and chat messages drive Layer 3 selection and the
+  // response, so changing how they are classified would change replies. Journal
+  // entries use the chunked classifyAndLog() instead. When the framework
+  // check-in is designed it should use the chunked path too.
   if (source !== "user_voice") {
-    await db.insert(safetyLog).values({
-      id: randomUUID(),
+    await logSafetyClassification({
       reflectionId,
       entryId,
       tier,
-      classifierVersion: CLASSIFIER_VERSION,
       rawSignals: {},
     });
   }

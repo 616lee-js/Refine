@@ -7,26 +7,29 @@
  */
 
 /**
- * Voice input. OFF for the Vercel deployment.
+ * Voice input. OFF.
  *
- * Voice itself works — the Web Speech API is browser-native and needs no server.
- * What does not work on serverless is audio retention: v1 wrote `.webm` blobs to
- * `./audio/[reflectionId]/`, and Vercel's filesystem is ephemeral, so anything
- * written there is gone when the instance recycles.
+ * Two separate reasons, worth keeping distinct:
  *
- * Rather than ship voice that silently discards the recordings it implies it is
- * keeping, voice is disabled until cloud audio storage exists.
+ * 1. Audio retention does not work on serverless. v1 wrote `.webm` blobs to
+ *    `./audio/[reflectionId]/`, and Vercel's filesystem is ephemeral, so
+ *    anything written there is gone when the instance recycles. Shipping voice
+ *    that silently discards recordings it implies it is keeping is worse than
+ *    not shipping it.
  *
- * PRESERVED, not deleted — re-enabling is flipping this constant plus restoring
- * the audio upload path:
+ * 2. The voice *session* model was chat-shaped. Its pause/completion trigger
+ *    existed to decide when to send an articulation to Claude for a response —
+ *    and journal entries have no send and no response. That hook now lives in
+ *    `archive/chat-model/`.
+ *
+ * What survives and is genuinely reusable for dictating into a journal textarea:
  *   - src/lib/transcription/types.ts       TranscriptionProvider interface
  *   - src/lib/transcription/web-speech.ts  WebSpeech implementation
- *   - src/app/(protected)/use-voice-session.ts
- *       accumulated articulation, pause/completion trigger, per-utterance
- *       tier classification with running max
- *   - src/app/api/classify/route.ts        per-utterance classification
- *   - src/app/api/reflections/[id]/cancel-utterance/route.ts
- *   - voiceCadence in src/app/api/user/preferences/route.ts
- *   - entries.rawAudioRef column (stays null while voice is off)
+ *   - src/types/speech.d.ts                ambient SpeechRecognition types
+ *
+ * Re-enabling voice for journal entries is therefore NOT just flipping this
+ * constant: it needs a dictation integration (provider → textarea) plus cloud
+ * audio storage. The old accumulate-and-trigger paradigm is not what a writing
+ * surface wants — see archive/chat-model/README.md.
  */
 export const VOICE_ENABLED = false;

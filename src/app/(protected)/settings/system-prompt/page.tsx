@@ -20,7 +20,7 @@ export default function SystemPromptPage() {
           <Link href="/reflections" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Reflections
           </Link>
-          <Link href="/memory" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+          <Link href="/mirror" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Mirror
           </Link>
           <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
@@ -60,7 +60,7 @@ export default function SystemPromptPage() {
           <p>
             Separately, Claude receives your profile and any confirmed entries in your{" "}
             <Link
-              href="/memory"
+              href="/mirror"
               className="underline underline-offset-2 hover:text-stone-700 transition-colors"
             >
               Mirror

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { userMemory } from "@/lib/db/schema";
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     kind: kind as "fact" | "thread" | "preference" | "diagnostic_context" | "other",
     encryptedContent: encrypt(content.trim()),
     source: "user_added",
-    reflectionId: null,
+    journalEntryId: null,
     isActive: true,
     lastConfirmedAt: now,
     createdAt: now,

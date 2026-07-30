@@ -8,7 +8,6 @@ type Profile = { tendencies: string; goals: string; background: string };
 const EMPTY: Profile = { tendencies: "", goals: "", background: "" };
 
 export default function ProfileSettingsPage() {
-  const [profile, setProfile] = useState<Profile>(EMPTY);
   const [draft, setDraft] = useState<Profile>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -18,7 +17,6 @@ export default function ProfileSettingsPage() {
     fetch("/api/user/profile")
       .then((r) => r.json())
       .then((data: Profile) => {
-        setProfile(data);
         setDraft(data);
         setLoading(false);
       });
@@ -33,7 +31,6 @@ export default function ProfileSettingsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
     });
-    setProfile(draft);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -47,7 +44,7 @@ export default function ProfileSettingsPage() {
           <Link href="/reflections" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Reflections
           </Link>
-          <Link href="/memory" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+          <Link href="/mirror" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Mirror
           </Link>
           <span className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">

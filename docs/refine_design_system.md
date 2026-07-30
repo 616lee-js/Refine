@@ -130,6 +130,30 @@ Refine uses a compressed type scale — almost everything is `text-xs` or `text-
 
 ---
 
+### Responsive breakpoints — PROPOSED 2026-07-29
+
+The system had no responsive conventions until the guidance sidebar needed one.
+This records the first, so the next multi-column surface does not invent its own.
+
+Tailwind defaults, only two of which the app uses:
+
+| Breakpoint | Min width | What changes |
+|---|---|---|
+| `lg` | 1024px | **The only layout breakpoint.** Side-by-side becomes single-column below it |
+| `sm` | 640px | Reserved for typography and spacing tweaks; no layout change |
+
+Rules:
+
+- **Single-column is the base case, not the fallback.** Write the narrow layout
+  first and add `lg:` for the wide one. A phone should never receive markup
+  designed for a desktop and then have it undone.
+- **One breakpoint per surface.** If a layout needs three, it is doing too much.
+- **Never hide content at a breakpoint** — move it. Anything that disappears
+  below `lg` must remain reachable by a toggle, and anything genuinely optional
+  should be optional at every width.
+
+---
+
 ### Border radius
 
 | Scale | Class | Usage |
@@ -366,6 +390,72 @@ iteration.
 
 ---
 
+### Guidance sidebar — PROPOSED 2026-07-29
+
+Implemented as `src/components/ui/journal-guidance-sidebar.tsx`. Optional
+supporting content beside the journal writing surface.
+
+**The constraint that shapes everything else: the entry always holds width
+priority.** The sidebar is a fixed `20rem` column; the entry takes `1fr`. It is
+never a half-and-half split, and collapsing returns the full width to the entry.
+The writing is the point; the guidance is a margin note.
+
+```html
+<!-- lg and up: two columns, entry takes remaining space -->
+<div class="lg:grid lg:grid-cols-[1fr_20rem]">
+  <main><!-- entry --></main>
+  <aside class="hidden lg:block border-l border-stone-100"><!-- guidance --></aside>
+</div>
+```
+
+**Behaviour:**
+
+- **Expanded by default**, state persisted per user in `users.preferences`.
+  Guidance nobody can find is guidance that does not exist.
+- **Below `lg`** the sidebar leaves the flow entirely and becomes an overlay
+  panel opened by a toggle in the header. The entry is alone on screen by
+  default — on a phone, a writing surface sharing space with anything else is not
+  a writing surface.
+- The toggle is always present at every width. Collapsing is not a desktop-only
+  affordance.
+
+**Hard rule — it never reads the entry.** The sidebar receives no props carrying
+the body text, and no handler in it observes the textarea. It is beside the
+writing, not about it. Content is generic today; when personal or trend-based
+prompts arrive they come from stored data, still never from the live text.
+
+---
+
+### Toast — PROPOSED 2026-07-29
+
+Transient confirmation of an action that already succeeded. Bottom-centre,
+auto-dismissing.
+
+```html
+<div role="status" aria-live="polite"
+     class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50
+            rounded-xl bg-stone-800 text-white text-sm px-4 py-2.5 shadow-lg">
+  Moved to trash
+</div>
+```
+
+**Use for:** save confirmed, moved to trash, restored, permanently deleted.
+
+**Do not use for:** anything the user must read or act on. A toast that carries
+information available nowhere else is a bug — it disappears, and it disappears
+fastest for the people least able to read it quickly.
+
+- `role="status"` with `aria-live="polite"`, never `alert` — these confirm, they
+  do not interrupt.
+- ~4 seconds, and never the only feedback: the underlying view should already
+  reflect the change.
+- One at a time. A queue of toasts means too much is being confirmed.
+- Distinct from **inline confirmation** (`Remove? / Cancel` in place), which is
+  the existing pattern for asking *before* a destructive action. Toasts report
+  after; inline confirms before.
+
+---
+
 ## Interaction patterns
 
 ### Focus states
@@ -431,7 +521,15 @@ Before any new color combination is introduced, verify contrast at [WebAIM Contr
 
 - `animate-pulse` is used for the streaming cursor and voice indicator. Wrap in `@media (prefers-reduced-motion: reduce)` to suppress. Not yet implemented — see OQ-005.
 
-### Voice mode accessibility
+### Voice mode accessibility — STALE 2026-07-29
+
+Voice is archived (`archive/chat-model/`) and the journal surface has no voice
+mode. Retained because the transcription provider survives in
+`src/lib/transcription/` and dictation-into-a-textarea is a likely future
+feature — but the specifics below describe the retired accumulate-and-send
+paradigm, not anything currently in the app. Re-derive rather than reuse.
+
+### Voice mode accessibility (retired paradigm)
 
 - Voice mode has a visible status indicator (Listening / Restarting / Sending)
 - Interim and buffered text are visible on screen (not just auditory)

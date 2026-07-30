@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { eq, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reflections, entries, safetyLog } from "@/lib/db/schema";
+import { reflections, entries } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
-import { CLASSIFIER_VERSION } from "@/lib/orchestrator/classifier";
+import { logSafetyClassification } from "@/lib/safety/classify-and-log";
 import { runOrchestrator } from "@/lib/orchestrator";
 import { persistAfterResponse } from "@/lib/after-response";
 
@@ -122,12 +122,12 @@ export async function POST(req: Request) {
           });
 
           if (voiceSummary) {
-            await db.insert(safetyLog).values({
-              id: randomUUID(),
+            // Already classified per utterance as the user spoke; this row is
+            // the summary against the real entryId. No reclassification.
+            await logSafetyClassification({
               reflectionId,
               entryId,
               tier,
-              classifierVersion: CLASSIFIER_VERSION,
               rawSignals: {
                 source: "voice_response",
                 triggerType: voiceSummary.triggerType,

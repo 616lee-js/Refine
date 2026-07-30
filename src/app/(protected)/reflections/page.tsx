@@ -1,31 +1,30 @@
 import Link from "next/link";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reflections, entries } from "@/lib/db/schema";
-
-const TYPE_LABELS: Record<string, string> = {
-  as_needed: "As-needed",
-  scheduled: "Scheduled",
-  guided: "Guided",
-};
+import { journalEntries } from "@/lib/db/schema";
 
 export default async function ReflectionsPage() {
   const authSession = await getSession();
+  // Trashed and purged entries are excluded. `deleted_at` covers both, since
+  // purge leaves it set — but purgedAt is checked explicitly so the intent
+  // survives any future change to that.
   const rows = await db
-    .selectDistinct({
-      id: reflections.id,
-      type: reflections.type,
-      startedAt: reflections.startedAt,
-      endedAt: reflections.endedAt,
+    .select({
+      id: journalEntries.id,
+      createdAt: journalEntries.createdAt,
+      updatedAt: journalEntries.updatedAt,
+      completedAt: journalEntries.completedAt,
     })
-    .from(reflections)
-    .innerJoin(
-      entries,
-      and(eq(entries.reflectionId, reflections.id), ne(entries.source, "claude"))
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.userId, authSession.userId!),
+        isNull(journalEntries.deletedAt),
+        isNull(journalEntries.purgedAt)
+      )
     )
-    .where(eq(reflections.userId, authSession.userId!))
-    .orderBy(desc(reflections.startedAt));
+    .orderBy(desc(journalEntries.updatedAt));
 
   return (
     <div className="min-h-screen bg-white text-stone-800">
@@ -35,7 +34,7 @@ export default async function ReflectionsPage() {
           <span className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
             Reflections
           </span>
-          <Link href="/memory" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
+          <Link href="/mirror" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
             Mirror
           </Link>
           <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
@@ -69,28 +68,28 @@ export default async function ReflectionsPage() {
             {rows.map((r) => (
               <li key={r.id}>
                 <Link
-                  href={`/reflections/${r.id}`}
+                  href={r.completedAt ? `/reflections/${r.id}` : `/reflection/${r.id}`}
                   className="flex items-center justify-between py-3 hover:bg-stone-50 -mx-2 px-2 rounded-lg transition-colors"
                 >
                   <div className="space-y-0.5">
                     <p className="text-sm text-stone-700">
-                      {r.startedAt
-                        ? new Date(r.startedAt).toLocaleString()
-                        : "—"}
+                      {new Date(r.completedAt ?? r.createdAt).toLocaleDateString(
+                        undefined,
+                        { weekday: "long", month: "long", day: "numeric" }
+                      )}
                     </p>
                     <p className="text-xs text-stone-400">
-                      {TYPE_LABELS[r.type] ?? r.type}
+                      {new Date(r.completedAt ?? r.updatedAt).toLocaleTimeString(
+                        undefined,
+                        { hour: "numeric", minute: "2-digit" }
+                      )}
                     </p>
                   </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded font-medium ${
-                      r.endedAt
-                        ? "bg-stone-100 text-stone-400"
-                        : "bg-green-50 text-green-600"
-                    }`}
-                  >
-                    {r.endedAt ? "Ended" : "Active"}
-                  </span>
+                  {!r.completedAt && (
+                    <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-50 text-amber-700">
+                      Draft
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}

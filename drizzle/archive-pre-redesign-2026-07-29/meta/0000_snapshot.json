@@ -1,9 +1,73 @@
 {
-  "id": "b5768785-2ca8-41b4-8973-ef0afa505e19",
+  "id": "f0ca21e1-72a7-46a1-92f2-025d4c62f16e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.check_ins": {
+      "name": "check_ins",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "reflection_id": {
+          "name": "reflection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mood": {
+          "name": "mood",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "present_text": {
+          "name": "present_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intention_text": {
+          "name": "intention_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tier_at_start": {
+          "name": "tier_at_start",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "check_ins_reflection_id_reflections_id_fk": {
+          "name": "check_ins_reflection_id_reflections_id_fk",
+          "tableFrom": "check_ins",
+          "tableTo": "reflections",
+          "columnsFrom": [
+            "reflection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.content_access_log": {
       "name": "content_access_log",
       "schema": "",
@@ -20,17 +84,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
+        "reflection_id": {
+          "name": "reflection_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
-        },
-        "questionnaire_response_id": {
-          "name": "questionnaire_response_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "accessed_at": {
           "name": "accessed_at",
@@ -61,25 +119,89 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "content_access_log_journal_entry_id_journal_entries_id_fk": {
-          "name": "content_access_log_journal_entry_id_journal_entries_id_fk",
+        "content_access_log_reflection_id_reflections_id_fk": {
+          "name": "content_access_log_reflection_id_reflections_id_fk",
           "tableFrom": "content_access_log",
-          "tableTo": "journal_entries",
+          "tableTo": "reflections",
           "columnsFrom": [
-            "journal_entry_id"
+            "reflection_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.entries": {
+      "name": "entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
         },
-        "content_access_log_questionnaire_response_id_questionnaire_responses_id_fk": {
-          "name": "content_access_log_questionnaire_response_id_questionnaire_responses_id_fk",
-          "tableFrom": "content_access_log",
-          "tableTo": "questionnaire_responses",
+        "reflection_id": {
+          "name": "reflection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "entry_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "encrypted_content": {
+          "name": "encrypted_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_audio_ref": {
+          "name": "raw_audio_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "tier_classification": {
+          "name": "tier_classification",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "entries_reflection_id_reflections_id_fk": {
+          "name": "entries_reflection_id_reflections_id_fk",
+          "tableFrom": "entries",
+          "tableTo": "reflections",
           "columnsFrom": [
-            "questionnaire_response_id"
+            "reflection_id"
           ],
           "columnsTo": [
             "id"
@@ -178,8 +300,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.journal_entries": {
-      "name": "journal_entries",
+    "public.reflection_summaries": {
+      "name": "reflection_summaries",
       "schema": "",
       "columns": {
         "id": {
@@ -188,111 +310,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "encrypted_body": {
-          "name": "encrypted_body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "modality": {
-          "name": "modality",
-          "type": "entry_modality",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'text'"
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tier_classification": {
-          "name": "tier_classification",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "classified_at": {
-          "name": "classified_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purged_at": {
-          "name": "purged_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "extraction_status": {
-          "name": "extraction_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "journal_entries_user_id_users_id_fk": {
-          "name": "journal_entries_user_id_users_id_fk",
-          "tableFrom": "journal_entries",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.journal_entry_summaries": {
-      "name": "journal_entry_summaries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
+        "reflection_id": {
+          "name": "reflection_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -303,8 +322,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "encrypted_notable_quotes": {
-          "name": "encrypted_notable_quotes",
+        "notable_quotes": {
+          "name": "notable_quotes",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -325,12 +344,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "journal_entry_summaries_journal_entry_id_journal_entries_id_fk": {
-          "name": "journal_entry_summaries_journal_entry_id_journal_entries_id_fk",
-          "tableFrom": "journal_entry_summaries",
-          "tableTo": "journal_entries",
+        "reflection_summaries_reflection_id_reflections_id_fk": {
+          "name": "reflection_summaries_reflection_id_reflections_id_fk",
+          "tableFrom": "reflection_summaries",
+          "tableTo": "reflections",
           "columnsFrom": [
-            "journal_entry_id"
+            "reflection_id"
           ],
           "columnsTo": [
             "id"
@@ -345,8 +364,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.questionnaire_responses": {
-      "name": "questionnaire_responses",
+    "public.reflections": {
+      "name": "reflections",
       "schema": "",
       "columns": {
         "id": {
@@ -361,80 +380,51 @@
           "primaryKey": false,
           "notNull": true
         },
-        "questionnaire_slug": {
-          "name": "questionnaire_slug",
-          "type": "text",
+        "type": {
+          "name": "type",
+          "type": "reflection_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "questionnaire_version": {
-          "name": "questionnaire_version",
-          "type": "text",
+        "modality": {
+          "name": "modality",
+          "type": "reflection_modality",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "encrypted_answers": {
-          "name": "encrypted_answers",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "encrypted_scoring": {
-          "name": "encrypted_scoring",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tier_classification": {
-          "name": "tier_classification",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "classified_at": {
-          "name": "classified_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purged_at": {
-          "name": "purged_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
+        "started_at": {
+          "name": "started_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "ended_at": {
+          "name": "ended_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
+        },
+        "scheduled_for": {
+          "name": "scheduled_for",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "extraction_status": {
+          "name": "extraction_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "questionnaire_responses_user_id_users_id_fk": {
-          "name": "questionnaire_responses_user_id_users_id_fk",
-          "tableFrom": "questionnaire_responses",
+        "reflections_user_id_users_id_fk": {
+          "name": "reflections_user_id_users_id_fk",
+          "tableFrom": "reflections",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -462,29 +452,17 @@
           "primaryKey": true,
           "notNull": true
         },
-        "user_id": {
-          "name": "user_id",
+        "reflection_id": {
+          "name": "reflection_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
+        "entry_id": {
+          "name": "entry_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "questionnaire_response_id": {
-          "name": "questionnaire_response_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "tier": {
           "name": "tier",
@@ -528,12 +506,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "safety_log_user_id_users_id_fk": {
-          "name": "safety_log_user_id_users_id_fk",
+        "safety_log_reflection_id_reflections_id_fk": {
+          "name": "safety_log_reflection_id_reflections_id_fk",
           "tableFrom": "safety_log",
-          "tableTo": "users",
+          "tableTo": "reflections",
           "columnsFrom": [
-            "user_id"
+            "reflection_id"
           ],
           "columnsTo": [
             "id"
@@ -541,25 +519,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "safety_log_journal_entry_id_journal_entries_id_fk": {
-          "name": "safety_log_journal_entry_id_journal_entries_id_fk",
+        "safety_log_entry_id_entries_id_fk": {
+          "name": "safety_log_entry_id_entries_id_fk",
           "tableFrom": "safety_log",
-          "tableTo": "journal_entries",
+          "tableTo": "entries",
           "columnsFrom": [
-            "journal_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "safety_log_questionnaire_response_id_questionnaire_responses_id_fk": {
-          "name": "safety_log_questionnaire_response_id_questionnaire_responses_id_fk",
-          "tableFrom": "safety_log",
-          "tableTo": "questionnaire_responses",
-          "columnsFrom": [
-            "questionnaire_response_id"
+            "entry_id"
           ],
           "columnsTo": [
             "id"
@@ -610,8 +575,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
+        "reflection_id": {
+          "name": "reflection_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -659,12 +624,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "user_memory_journal_entry_id_journal_entries_id_fk": {
-          "name": "user_memory_journal_entry_id_journal_entries_id_fk",
+        "user_memory_reflection_id_reflections_id_fk": {
+          "name": "user_memory_reflection_id_reflections_id_fk",
           "tableFrom": "user_memory",
-          "tableTo": "journal_entries",
+          "tableTo": "reflections",
           "columnsFrom": [
-            "journal_entry_id"
+            "reflection_id"
           ],
           "columnsTo": [
             "id"
@@ -819,13 +784,13 @@
     }
   },
   "enums": {
-    "public.entry_modality": {
-      "name": "entry_modality",
+    "public.entry_source": {
+      "name": "entry_source",
       "schema": "public",
       "values": [
-        "text",
-        "voice",
-        "mixed"
+        "user_voice",
+        "user_text",
+        "claude"
       ]
     },
     "public.memory_kind": {
@@ -845,7 +810,25 @@
       "values": [
         "user_added",
         "claude_inferred",
-        "entry_derived"
+        "reflection_derived"
+      ]
+    },
+    "public.reflection_modality": {
+      "name": "reflection_modality",
+      "schema": "public",
+      "values": [
+        "voice",
+        "text",
+        "mixed"
+      ]
+    },
+    "public.reflection_type": {
+      "name": "reflection_type",
+      "schema": "public",
+      "values": [
+        "scheduled",
+        "as_needed",
+        "guided"
       ]
     }
   },

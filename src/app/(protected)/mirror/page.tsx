@@ -451,6 +451,21 @@ export default function MemoryPage() {
             </section>
           </>
         )}
+
+        {/* Trash is a recovery affordance, not a destination — findable without
+            adding a deletion concept to the main nav on every screen. */}
+        <div className="mt-12 pt-6 border-t border-stone-100">
+          <Link
+            href="/trash"
+            className="text-xs text-stone-400 hover:text-stone-600 transition-colors underline underline-offset-2"
+          >
+            Trash
+          </Link>
+          <p className="mt-1 text-xs text-stone-400 leading-relaxed">
+            Deleted reflections, kept for 30 days before they&apos;re permanently
+            removed.
+          </p>
+        </div>
       </main>
     </div>
   );

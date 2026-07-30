@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { safetyLog, entries } from "@/lib/db/schema";
+import { safetyLog, journalEntries } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { requireAdmin } from "@/lib/auth/admin";
 
@@ -30,6 +30,24 @@ async function markReviewed(formData: FormData) {
   revalidatePath("/admin/safety-log");
 }
 
+/**
+ * A questionnaire-sourced row means a *scored safety item* fired — PHQ-9 item 9
+ * asks about self-harm — not something the user wrote in their own words. It
+ * warrants a different response path, so it is styled to be unmistakable at a
+ * glance rather than blending in with journal rows.
+ */
+const SOURCE_LABELS: Record<string, string> = {
+  journal_entry: "Entry",
+  journal_edit: "Entry (edit)",
+  questionnaire: "Questionnaire",
+};
+
+const SOURCE_STYLES: Record<string, string> = {
+  journal_entry: "bg-stone-100 text-stone-600",
+  journal_edit: "bg-stone-100 text-stone-500",
+  questionnaire: "bg-blue-100 text-blue-700",
+};
+
 const TIER_COLORS: Record<number, string> = {
   0: "bg-stone-100 text-stone-500",
   1: "bg-yellow-100 text-yellow-700",
@@ -44,28 +62,36 @@ export default async function SafetyLogPage() {
   const rows = await db
     .select({
       id: safetyLog.id,
-      reflectionId: safetyLog.reflectionId,
+      source: safetyLog.source,
+      journalEntryId: safetyLog.journalEntryId,
+      questionnaireResponseId: safetyLog.questionnaireResponseId,
       tier: safetyLog.tier,
       classifierVersion: safetyLog.classifierVersion,
       createdAt: safetyLog.createdAt,
       reviewed: safetyLog.reviewed,
       reviewerNotes: safetyLog.reviewerNotes,
-      entryId: safetyLog.entryId,
-      encryptedContent: entries.encryptedContent,
+      encryptedBody: journalEntries.encryptedBody,
+      purgedAt: journalEntries.purgedAt,
     })
     .from(safetyLog)
-    .leftJoin(entries, eq(safetyLog.entryId, entries.id))
+    .leftJoin(journalEntries, eq(safetyLog.journalEntryId, journalEntries.id))
     .orderBy(desc(safetyLog.createdAt));
 
   const decoded = rows.map((row) => {
     let content: string | null = null;
-    if (row.encryptedContent) {
+
+    // A purged entry has no body by design — the safety record outlives the
+    // content it describes. Say so rather than rendering a blank cell that
+    // looks like a bug.
+    if (row.purgedAt) {
+      content = "[content permanently deleted]";
+    } else if (row.encryptedBody) {
       try {
-        content = decrypt(row.encryptedContent);
+        content = decrypt(row.encryptedBody);
       } catch (err) {
         content = "[decrypt error]";
         console.error(
-          `Safety-log entry decrypt failed for entry ${row.entryId}:`,
+          `Safety-log decrypt failed for journal entry ${row.journalEntryId}:`,
           err instanceof Error ? err.message : err
         );
       }
@@ -89,8 +115,9 @@ export default async function SafetyLogPage() {
             <thead>
               <tr className="text-left text-xs text-stone-400 border-b border-stone-100">
                 <th className="pb-2 pr-4 font-medium">Tier</th>
+                <th className="pb-2 pr-4 font-medium">Source</th>
                 <th className="pb-2 pr-4 font-medium">Timestamp</th>
-                <th className="pb-2 pr-4 font-medium">Reflection</th>
+                <th className="pb-2 pr-4 font-medium">Entry</th>
                 <th className="pb-2 pr-4 font-medium">Classifier</th>
                 <th className="pb-2 pr-4 font-medium">Chars</th>
                 <th className="pb-2 pr-4 font-medium">Reviewed</th>
@@ -109,13 +136,26 @@ export default async function SafetyLogPage() {
                       T{row.tier}
                     </span>
                   </td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                        SOURCE_STYLES[row.source] ?? "bg-stone-100 text-stone-500"
+                      }`}
+                    >
+                      {SOURCE_LABELS[row.source] ?? row.source}
+                    </span>
+                  </td>
                   <td className="py-3 pr-4 text-stone-500 whitespace-nowrap text-xs">
                     {row.createdAt
                       ? new Date(row.createdAt).toLocaleString()
                       : "—"}
                   </td>
                   <td className="py-3 pr-4 font-mono text-xs text-stone-400">
-                    {row.reflectionId.slice(0, 8)}…
+                    {(row.journalEntryId ?? row.questionnaireResponseId ?? "—").slice(
+                      0,
+                      8
+                    )}
+                    …
                   </td>
                   <td className="py-3 pr-4 text-xs text-stone-400">
                     {row.classifierVersion}

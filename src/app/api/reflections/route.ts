@@ -1,52 +1,52 @@
 import { randomUUID } from "crypto";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reflections, checkIns } from "@/lib/db/schema";
+import { journalEntries } from "@/lib/db/schema";
 
-export async function POST(req: Request) {
+/**
+ * Journal entries.
+ *
+ * Route stays at /api/reflections because "Reflections" is the user-facing word;
+ * the underlying table is `journal_entries`. Same split as Mirror/memory.
+ *
+ * POST creates a new empty draft and returns its id. There is no reflection
+ * type and no check-in step any more — those belonged to the chat model. The
+ * framework check-in workflow will be its own thing.
+ */
+export async function POST() {
   const session = await getSession();
   if (!session.userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Bad request" }, { status: 400 });
+  // Reuse an existing empty draft rather than accumulating abandoned blanks.
+  // Starting a new entry twice in a row otherwise leaves an orphan draft in the
+  // list every time.
+  const [existingDraft] = await db
+    .select({ id: journalEntries.id, encryptedBody: journalEntries.encryptedBody })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.userId, session.userId),
+        isNull(journalEntries.completedAt),
+        isNull(journalEntries.deletedAt)
+      )
+    )
+    .orderBy(desc(journalEntries.createdAt))
+    .limit(1);
+
+  if (existingDraft && !existingDraft.encryptedBody) {
+    return Response.json({ reflectionId: existingDraft.id, resumed: true });
   }
 
-  const parsed = body as {
-    type?: string;
-    checkin?: {
-      presentText?: string;
-      mood?: { rating: number };
-      intentionText?: string;
-    };
-  };
+  const id = randomUUID();
 
-  const { type, checkin = {} } = parsed;
-
-  if (type !== "as_needed" && type !== "scheduled") {
-    return Response.json({ error: "not_implemented" }, { status: 403 });
-  }
-
-  const reflectionId = randomUUID();
-
-  await db.insert(reflections).values({
-    id: reflectionId,
+  await db.insert(journalEntries).values({
+    id,
     userId: session.userId,
-    type,
     modality: "text",
   });
 
-  await db.insert(checkIns).values({
-    id: randomUUID(),
-    reflectionId,
-    mood: checkin.mood ?? {},
-    presentText: checkin.presentText ?? null,
-    intentionText: checkin.intentionText ?? null,
-  });
-
-  return Response.json({ reflectionId });
+  return Response.json({ reflectionId: id, resumed: false });
 }

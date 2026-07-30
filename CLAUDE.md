@@ -46,8 +46,10 @@ wrong for this product. Check any new name against this framing before applying.
   route: `/reflection/[id]`, list: `/reflections`)
 - **entry** — an individual message within a reflection (DB table: `entries`)
 - **Mirror** — user-facing name for the shared Memory + Insights surface (v1.5+).
-  Nav label: "Mirror". Route: `/memory` (stays as-is). Internal code, DB, APIs
-  use "memory" and eventual "insights" — Mirror is the container name only.
+  Nav label: "Mirror". Route: **`/mirror`** (renamed from `/memory` 2026-07-29 for
+  consistency with the label). Internal code, DB, and APIs keep "memory" —
+  `/api/user/memory`, the `user_memory` table — and eventual "insights". Mirror is
+  the user-facing container name only. Same split as Reflections/`journal_entries`.
   Metaphor: silver refined → mirror → holds a reflection. In v1 Mirror shows
   memory entries only; Insights becomes a second section when it ships in v1.5.
 - **session** — stays only in technical, non-user-facing contexts: auth sessions,

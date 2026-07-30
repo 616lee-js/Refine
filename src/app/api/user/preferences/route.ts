@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 
+// Voice is archived; the value is still accepted so an existing stored
+// preference round-trips rather than being rejected.
 const VOICE_CADENCE_VALUES = new Set([0, 10, 20, 30]);
 
 export async function PATCH(req: Request) {
@@ -18,13 +20,20 @@ export async function PATCH(req: Request) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const parsed = body as { voiceCadence?: unknown };
+  const parsed = body as { voiceCadence?: unknown; guidanceOpen?: unknown };
 
   if (
     "voiceCadence" in (parsed as object) &&
     !VOICE_CADENCE_VALUES.has(parsed.voiceCadence as number)
   ) {
     return new Response("Invalid voiceCadence value", { status: 422 });
+  }
+
+  if (
+    "guidanceOpen" in (parsed as object) &&
+    typeof parsed.guidanceOpen !== "boolean"
+  ) {
+    return new Response("Invalid guidanceOpen value", { status: 422 });
   }
 
   const [user] = await db
@@ -45,6 +54,9 @@ export async function PATCH(req: Request) {
   const merged: Record<string, unknown> = { ...existing };
   if ("voiceCadence" in (parsed as object)) {
     merged.voiceCadence = parsed.voiceCadence;
+  }
+  if ("guidanceOpen" in (parsed as object)) {
+    merged.guidanceOpen = parsed.guidanceOpen;
   }
 
   await db

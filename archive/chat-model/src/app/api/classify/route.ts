@@ -1,9 +1,9 @@
-import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reflections, safetyLog } from "@/lib/db/schema";
-import { classifyMessage, CLASSIFIER_VERSION } from "@/lib/orchestrator/classifier";
+import { reflections } from "@/lib/db/schema";
+import { classifyMessage } from "@/lib/orchestrator/classifier";
+import { logSafetyClassification } from "@/lib/safety/classify-and-log";
 
 export async function POST(req: Request) {
   const authSession = await getSession();
@@ -44,14 +44,15 @@ export async function POST(req: Request) {
     return new Response("Not found", { status: 404 });
   }
 
+  // Single-shot on purpose: an utterance is already one short piece of speech,
+  // which is what the classifier prompt is designed for. Chunking is for long
+  // written entries.
   const tier = await classifyMessage(text);
 
-  await db.insert(safetyLog).values({
-    id: randomUUID(),
+  await logSafetyClassification({
     reflectionId,
     entryId: null,
     tier,
-    classifierVersion: CLASSIFIER_VERSION,
     rawSignals: { source: "utterance", index: utteranceIndex },
   });
 

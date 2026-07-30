@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { TopNav } from "@/components/ui/top-nav";
 
 /**
  * Home.
  *
- * STEP 1 SCOPE: this is a minimal Dawn restyle to prove the token layer, the
- * fonts, PageBg and Sheet on a real page. The designed ScreenHome — continuity
- * line, tracker strip, Recent list, Mirror sparkline — is Step 5.
+ * Two ways in, both producing entries. The designed ScreenHome — continuity
+ * line, tracker strip, Recent list, Mirror sparkline — is Step 5, and several
+ * of those need Phase 6 data that does not exist yet.
  *
  * The type picker and check-in step from the chat model are gone: they existed
  * to configure a conversation. A journal entry needs neither; you open it and
@@ -19,11 +19,11 @@ import { Sheet, Eyebrow } from "@/components/ui/sheet";
  */
 export default function Page() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<"entry" | "framework" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function startEntry() {
-    setLoading(true);
+    setLoading("entry");
     setError(null);
     try {
       const res = await fetch("/api/reflections", { method: "POST" });
@@ -32,7 +32,25 @@ export default function Page() {
       router.push(`/reflection/${reflectionId}`);
     } catch {
       setError("Something went wrong. Please try again.");
-      setLoading(false);
+      setLoading(null);
+    }
+  }
+
+  async function startFramework(slug: string) {
+    setLoading("framework");
+    setError(null);
+    try {
+      const res = await fetch("/api/questionnaires", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { responseId } = (await res.json()) as { responseId: string };
+      router.push(`/framework/${responseId}`);
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setLoading(null);
     }
   }
 
@@ -88,7 +106,7 @@ export default function Page() {
                 <div>
                   <button
                     onClick={startEntry}
-                    disabled={loading}
+                    disabled={loading !== null}
                     className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
                     style={{
                       background: "var(--rf-text)",
@@ -97,15 +115,15 @@ export default function Page() {
                       fontWeight: 500,
                     }}
                   >
-                    {loading ? "Opening…" : "Begin"}
+                    {loading === "entry" ? "Opening…" : "Begin"}
                   </button>
                 </div>
               </div>
             </Sheet>
 
             <Sheet minHeight={168}>
-              <div className="flex flex-1 flex-col gap-[10px] p-5 opacity-50">
-                <Eyebrow size={9.5}>Framework</Eyebrow>
+              <div className="flex flex-1 flex-col gap-[10px] p-5">
+                <Eyebrow size={9.5}>Framework · GAD-7</Eyebrow>
                 <h2
                   style={{
                     fontFamily: "var(--font-display)",
@@ -116,7 +134,7 @@ export default function Page() {
                     color: "var(--rf-text)",
                   }}
                 >
-                  Answer a few questions
+                  Generalised anxiety
                 </h2>
                 <p
                   className="flex-1"
@@ -126,8 +144,23 @@ export default function Page() {
                     color: "var(--rf-text-3)",
                   }}
                 >
-                  Seven questions, then back to your own words. Coming next.
+                  Seven questions, then back to your own words.
                 </p>
+                <div>
+                  <button
+                    onClick={() => startFramework("gad7")}
+                    disabled={loading !== null}
+                    className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
+                    style={{
+                      background: "var(--rf-text)",
+                      color: "var(--rf-paper)",
+                      fontSize: "12.5px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {loading === "framework" ? "Opening…" : "Start"}
+                  </button>
+                </div>
               </div>
             </Sheet>
           </div>
@@ -143,66 +176,5 @@ export default function Page() {
         </div>
       </main>
     </PageBg>
-  );
-}
-
-/**
- * Shared top nav. Reflections · Mirror · Profile — the repo's vocabulary, not
- * the design's "Entries".
- */
-function TopNav({ active }: { active: "today" | "reflections" | "mirror" }) {
-  const link = (href: string, label: string, key: string) => (
-    <Link
-      href={href}
-      className="transition-colors"
-      style={{
-        fontSize: "13.5px",
-        color: active === key ? "var(--rf-text)" : "var(--rf-text-3)",
-        fontWeight: active === key ? 500 : 400,
-      }}
-    >
-      {label}
-    </Link>
-  );
-
-  return (
-    <header
-      className="flex shrink-0 items-center justify-between px-6 py-4 sm:px-10"
-      style={{ borderBottom: "1px solid var(--rf-border)" }}
-    >
-      <Link
-        href="/"
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: "19px",
-          fontWeight: 400,
-          letterSpacing: "-0.01em",
-          color: "var(--rf-text)",
-        }}
-      >
-        Refine
-        <span style={{ color: "var(--rf-accent)" }}>.</span>
-      </Link>
-
-      <nav className="flex items-center gap-6">
-        {link("/reflections", "Reflections", "reflections")}
-        {link("/mirror", "Mirror", "mirror")}
-        <Link
-          href="/settings/profile"
-          className="transition-colors"
-          style={{ fontSize: "13.5px", color: "var(--rf-text-3)" }}
-        >
-          Profile
-        </Link>
-        <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
-            style={{ fontSize: "13.5px", color: "var(--rf-text-3)" }}
-          >
-            Sign out
-          </button>
-        </form>
-      </nav>
-    </header>
   );
 }

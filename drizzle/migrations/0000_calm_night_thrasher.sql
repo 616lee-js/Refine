@@ -26,6 +26,7 @@ CREATE TABLE "journal_entries" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"encrypted_body" text,
+	"encrypted_title" text,
 	"modality" "entry_modality" DEFAULT 'text' NOT NULL,
 	"completed_at" timestamp with time zone,
 	"tier_classification" integer,

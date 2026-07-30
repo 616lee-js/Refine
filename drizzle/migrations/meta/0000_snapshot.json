@@ -1,5 +1,5 @@
 {
-  "id": "b5768785-2ca8-41b4-8973-ef0afa505e19",
+  "id": "7e9f25f6-2bbf-4d44-ac94-bf60e8ddc106",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -196,6 +196,12 @@
         },
         "encrypted_body": {
           "name": "encrypted_body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "encrypted_title": {
+          "name": "encrypted_title",
           "type": "text",
           "primaryKey": false,
           "notNull": false

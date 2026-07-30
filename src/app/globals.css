@@ -1,70 +1,171 @@
 @import "tailwindcss";
 
+/*
+ * ── Dawn ──────────────────────────────────────────────────────────────────────
+ * Warm paper, early light. The palette is defined once here as raw --rf-* custom
+ * properties, and the semantic layer below points at them. Two consequences:
+ *
+ *   1. Swapping palette (Dusk, Slate) or adding the dark ramp is a change to
+ *      this block alone — nothing downstream moves.
+ *   2. Every existing `text-text-secondary` / `bg-surface` style keeps working
+ *      while the whole app changes colour.
+ *
+ * LIGHT ONLY for this pass, by decision. The dark ramp exists in the design's
+ * theme file and drops in as a `@media (prefers-color-scheme: dark)` block
+ * against these same names when it is in scope — deliberately not half-shipped.
+ */
+:root {
+  --rf-bg: #efe9dd;
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #f8ecd8 0%, transparent 55%),
+    radial-gradient(80% 80% at 0% 100%, #e6e3d4 0%, transparent 60%),
+    linear-gradient(180deg, #f1ebe0 0%, #e8e2d5 100%);
+  --rf-surface: #fbf7ef;
+  --rf-paper: #fffdf7;
+  --rf-paper-edge: rgba(90, 70, 45, 0.1);
+  --rf-rule: rgba(90, 70, 45, 0.09);
+  --rf-border: rgba(80, 62, 40, 0.15);
+  --rf-border-strong: rgba(80, 62, 40, 0.3);
+  --rf-text: #1e1a14;
+  --rf-text-2: #514a3e;
+  --rf-text-3: #8b8377;
+  --rf-text-4: #b8b1a4;
+  --rf-accent: #b0603a;
+  --rf-accent-soft: rgba(176, 96, 58, 0.13);
+  --rf-accent-2: #5f7f68;
+  --rf-accent-2-soft: rgba(95, 127, 104, 0.14);
+  --rf-warn: #a2701f;
+  --rf-warn-soft: rgba(162, 112, 31, 0.14);
+  --rf-grain-opacity: 0.4;
+
+  /* Sheet shadow — one definition, used by every paper surface. */
+  --rf-sheet-shadow: 0 1px 2px rgba(40, 28, 12, 0.04),
+    0 14px 40px -18px rgba(40, 28, 12, 0.18);
+}
+
 @theme {
   /*
-   * Refine semantic color tokens
-   * Maps semantic roles to explicit values from the stone palette.
-   * Update here to retheme; never use raw Tailwind stone-* utilities
-   * for semantic purposes — use these tokens or document why not.
-   *
-   * Stone reference: 50=#fafaf9 100=#f5f5f4 200=#e7e5e4 300=#d6d3d1
-   *                  400=#a8a29e 500=#78716c 600=#57534e 700=#44403c
-   *                  800=#292524 900=#1c1917
+   * Refine semantic color tokens.
+   * Roles stay stable; values point at Dawn above. Never use raw stone-* or
+   * raw --rf-* utilities for semantic purposes — use these tokens, or add a
+   * token and document why.
    */
 
   /* ── Surfaces ── */
-  --color-surface: #ffffff;           /* primary page/card surface */
-  --color-surface-subtle: #fafaf9;    /* stone-50 — inputs, code blocks, secondary cards */
+  --color-surface: var(--rf-paper);          /* the sheet; all content-bearing surfaces */
+  --color-surface-subtle: var(--rf-surface); /* secondary panels, tracker strip, callouts */
 
   /* ── Borders ── */
-  --color-border-subtle: #f5f5f4;     /* stone-100 — page dividers, section separators */
-  --color-border-input: #e7e5e4;      /* stone-200 — input/card borders */
-  --color-border-hover: #d6d3d1;      /* stone-300 — hover state on bordered elements */
+  --color-border-subtle: var(--rf-rule);        /* hairlines inside a sheet */
+  --color-border-input: var(--rf-border);       /* structural dividers, nav borders */
+  --color-border-hover: var(--rf-border-strong);/* unselected radios, outlined buttons */
 
   /* ── Text ── */
-  --color-text-primary: #292524;      /* stone-800 — headings, primary body */
-  --color-text-body: #44403c;         /* stone-700 — message content, entry text */
-  --color-text-label: #57534e;        /* stone-600 — form labels, moderate secondary */
-  --color-text-secondary: #78716c;    /* stone-500 — timestamps, subdued metadata */
-  --color-text-muted: #a8a29e;        /* stone-400 — placeholders, wordmark, faint UI */
+  --color-text-primary: var(--rf-text);     /* headlines */
+  --color-text-body: var(--rf-text);        /* the entry body is primary, not secondary */
+  --color-text-label: var(--rf-text-2);     /* secondary prose, foothold text */
+  --color-text-secondary: var(--rf-text-3); /* guidance copy, inactive nav, eyebrows */
+  --color-text-muted: var(--rf-text-4);     /* norm line, metadata, axis labels */
 
-  /* ── Interactive — actions ── */
-  --color-action: #292524;            /* stone-800 — primary button bg */
-  --color-action-hover: #44403c;      /* stone-700 — primary button hover */
+  /* ── Interactive ── */
+  --color-action: var(--rf-text);
+  --color-action-hover: var(--rf-text-2);
+  --color-accent: var(--rf-accent);
+  --color-accent-soft: var(--rf-accent-soft);
+  --color-accent-2: var(--rf-accent-2);
+  --color-accent-2-soft: var(--rf-accent-2-soft);
+  --color-warn: var(--rf-warn);
+  --color-warn-soft: var(--rf-warn-soft);
+
+  /* ── Paper ── */
+  --color-paper: var(--rf-paper);
+  --color-paper-edge: var(--rf-paper-edge);
+  --color-rule: var(--rf-rule);
 
   /* ── Focus rings ── */
-  --color-ring-standard: #a8a29e;     /* stone-400 — default focus ring */
-  --color-ring-light: #d6d3d1;        /* stone-300 — softer focus ring (textarea) */
+  --color-ring-standard: var(--rf-accent);
+  --color-ring-light: var(--rf-border-strong);
 
   /* ── Semantic status ── */
-  --color-status-active-bg: #f0fdf4;  /* green-50 */
-  --color-status-active-text: #16a34a; /* green-600 */
-  --color-status-ended-bg: #f5f5f4;   /* stone-100 */
-  --color-status-ended-text: #a8a29e; /* stone-400 */
-  --color-error: #dc2626;             /* red-600 — error text (WCAG AA on white) */
+  --color-status-active-bg: var(--rf-accent-2-soft);
+  --color-status-active-text: var(--rf-accent-2);
+  --color-status-ended-bg: var(--rf-surface);
+  --color-status-ended-text: var(--rf-text-4);
+  --color-error: #a33a25;  /* terracotta-leaning red; AA on paper */
 
-  /* ── Claude / User source badges ── */
-  --color-source-claude-bg: #eff6ff;  /* blue-50 */
-  --color-source-claude-text: #3b82f6; /* blue-500 */
-  --color-source-user-bg: #f5f5f4;    /* stone-100 */
-  --color-source-user-text: #78716c;  /* stone-500 */
+  /*
+   * ── Tier classification badges ──
+   * Deliberately NOT Dawn-ified. admin/safety-log is an internal review tool,
+   * not product surface, and its tier badges need to be unambiguous at a glance
+   * rather than harmonious. Leave them.
+   */
+  --color-tier-0-bg: #f5f5f4;
+  --color-tier-0-text: #78716c;
+  --color-tier-1-bg: #fef9c3;
+  --color-tier-1-text: #a16207;
+  --color-tier-2-bg: #ffedd5;
+  --color-tier-2-text: #c2410c;
+  --color-tier-3-bg: #fee2e2;
+  --color-tier-3-text: #b91c1c;
 
-  /* ── Tier classification badges ── */
-  --color-tier-0-bg: #f5f5f4;         /* stone-100 */
-  --color-tier-0-text: #78716c;       /* stone-500 */
-  --color-tier-1-bg: #fef9c3;         /* yellow-100 */
-  --color-tier-1-text: #a16207;       /* yellow-700 */
-  --color-tier-2-bg: #ffedd5;         /* orange-100 */
-  --color-tier-2-text: #c2410c;       /* orange-700 */
-  --color-tier-3-bg: #fee2e2;         /* red-100 */
-  --color-tier-3-text: #b91c1c;       /* red-700 */
+  /* ── Typography ──
+   * The --font-* variables come from next/font in layout.tsx (self-hosted, so
+   * no runtime request to Google). Fallbacks matter here: Newsreader is the
+   * entry body, and a swap to a default sans would change the whole character
+   * of the page, so it falls back to another serif rather than to system-ui. */
+  --font-display: var(--font-newsreader), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--font-geist), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  /* ── Typography ── */
-  --leading-message: 1.8;             /* assistant message prose (tighter than leading-loose) */
+  --text-entry: 18.5px;      /* the entry body. Never shrunk, including on read-back */
+  --leading-entry: 1.62;
+  --tracking-entry: -0.003em;
+
+  /* ── Radius ── */
+  --radius-sheet: 3px;
+  --radius-panel: 4px;
+  --radius-cell: 2px;        /* dot-matrix cells */
+}
+
+/*
+ * `--color-source-claude-*` (blue) removed 2026-07-30. Nothing in the product is
+ * authored by Claude any more, so a "from Claude" badge has nothing to label.
+ * `--leading-message: 1.8` went with it — it styled assistant prose.
+ */
+
+/* Prose wraps evenly rather than leaving orphans. */
+body,
+p,
+h1,
+h2,
+h3 {
+  text-wrap: pretty;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse {
     animation: none;
   }
+
+  /* Dawn's ambient motion — caret blink, waveform bars, the dictation
+     breathing ring — goes static rather than merely slower. */
+  .rf-caret,
+  .rf-waveform-bar,
+  .rf-breathe {
+    animation: none !important;
+  }
+}
+
+/* Caret: a 1.5px accent bar that blinks on a step, not a fade. */
+@keyframes rf-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.rf-caret {
+  animation: rf-caret-blink 1.1s step-end infinite;
 }

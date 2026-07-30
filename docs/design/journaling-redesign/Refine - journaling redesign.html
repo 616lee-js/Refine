@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Refine — journaling redesign — design reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..700;1,6..72,200..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+:root{--rf-bg:#efe9dd;--rf-bg-gradient:linear-gradient(180deg,#f1ebe0 0%,#e8e2d5 100%);--rf-surface:#fbf7ef;--rf-paper:#fffdf7;--rf-paper-edge:rgba(90,70,45,.10);--rf-rule:rgba(90,70,45,.09);--rf-border:rgba(80,62,40,.15);--rf-border-strong:rgba(80,62,40,.30);--rf-text:#1e1a14;--rf-text-2:#514a3e;--rf-text-3:#8b8377;--rf-text-4:#b8b1a4;--rf-accent:#b0603a;--rf-accent-soft:rgba(176,96,58,.13);--rf-accent-2:#5f7f68;--rf-accent-2-soft:rgba(95,127,104,.14);--rf-warn:#a2701f;--rf-warn-soft:rgba(162,112,31,.14);--rf-grain-opacity:.4}
+html,body,#root{width:100%;height:100%;margin:0;padding:0}
+body{font-family:"Geist",system-ui,-apple-system,sans-serif;background:#eae4d8;color:var(--rf-text);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+button{font:inherit;color:inherit}
+input,textarea{font:inherit;color:inherit}
+input::placeholder,textarea::placeholder{color:var(--rf-text-4)}
+a{color:var(--rf-accent);text-decoration:none}
+a:hover{color:var(--rf-text)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:1px solid var(--rf-accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="browser-window.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="reference/theme.jsx"></script>
+<script type="text/babel" src="reference/atoms.jsx"></script>
+<script type="text/babel" src="reference/screens-entry.jsx"></script>
+<script type="text/babel" src="reference/screens-framework.jsx"></script>
+<script type="text/babel" src="reference/screens-home.jsx"></script>
+<script type="text/babel" src="reference/screens-mirror.jsx"></script>
+<script type="text/babel" src="reference/app.jsx"></script>
+</body>
+</html>

@@ -1,5 +1,13 @@
 import { type ReactNode } from "react";
 
+/**
+ * NOTE: this component is currently unreferenced. Kept because the tier
+ * variants pair with admin/safety-log, which may adopt it.
+ *
+ * The `source-claude` variant was removed 2026-07-30 along with its token —
+ * nothing in the product is authored by Claude any more, so there is no such
+ * source to label.
+ */
 type BadgeVariant =
   | "tier-0"
   | "tier-1"
@@ -7,7 +15,6 @@ type BadgeVariant =
   | "tier-3"
   | "status-active"
   | "status-ended"
-  | "source-claude"
   | "source-user"
   | "neutral";
 
@@ -18,7 +25,6 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   "tier-3": "bg-red-100 text-red-700",
   "status-active": "bg-green-50 text-green-600",
   "status-ended": "bg-stone-100 text-stone-400",
-  "source-claude": "bg-blue-50 text-blue-500",
   "source-user": "bg-stone-100 text-stone-500",
   neutral: "bg-stone-100 text-stone-500",
 };

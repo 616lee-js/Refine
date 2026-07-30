@@ -147,6 +147,20 @@ export const journalEntries = pgTable("journal_entries", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** AES-256-GCM ciphertext. NULL only after purge. */
   encryptedBody: text("encrypted_body"),
+  /**
+   * Optional, user-set. Encrypted — a title summarises the entry and is
+   * therefore journal content, not metadata.
+   *
+   * NULL means untitled; the archive falls back to the date. Deliberately NOT
+   * derived from the body: rendering excerpts for a list would mean decrypting
+   * every entry on every page view, and each of those is a deliberate
+   * decryption that content_access_log is supposed to record — which would
+   * bury the audit log in noise it was never meant to carry.
+   *
+   * When Phase 6 lands, AI-suggested titles populate this same column with the
+   * design's rename affordance intact. Nothing here changes.
+   */
+  encryptedTitle: text("encrypted_title"),
   modality: entryModalityEnum("modality").notNull().default("text"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   /** Highest tier across the entry's paragraphs at the last classification. */

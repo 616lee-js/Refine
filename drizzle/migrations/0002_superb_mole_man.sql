@@ -1,0 +1,1 @@
+ALTER TABLE "journal_entry_summaries" ADD COLUMN "encrypted_content" text NOT NULL;

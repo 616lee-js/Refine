@@ -170,6 +170,19 @@ export const journalEntries = pgTable("journal_entries", {
   purgedAt: timestamp("purged_at", { withTimezone: true }),
   /** Phase 6 memory-extraction lifecycle: null → pending → running → succeeded/failed. */
   extractionStatus: text("extraction_status"),
+  /**
+   * Consecutive failed summarisation attempts.
+   *
+   * The summariser's work queue is derived by joining against
+   * `journal_entry_summaries` — an entry is due when it has no summary, or one
+   * older than its own `updated_at`. That derivation is self-healing but has no
+   * natural stopping point, so an entry the model chokes on would be retried
+   * every single run forever. This caps it (see SUMMARY_MAX_ATTEMPTS).
+   *
+   * Reset to 0 on success and whenever the entry is edited, since new content
+   * deserves fresh attempts.
+   */
+  summaryAttempts: integer("summary_attempts").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -179,21 +192,46 @@ export const journalEntries = pgTable("journal_entries", {
 });
 
 /**
- * Cabinet 2: narrative summary generated after an entry is completed (Phase 6).
- * Not surfaced to the user in v1 — it accumulates for later longitudinal work.
- * Regenerable from Cabinet 1, which is why generation_version is recorded.
+ * Cabinet 2: a narrative summary generated after an entry is completed.
+ *
+ * Derived data, always regenerable from Cabinet 1 — which is why
+ * `generation_version` is recorded and why a stale row is simply overwritten
+ * rather than versioned.
+ *
+ * ── One encrypted blob, not a column per field ────────────────────────────────
+ * `encrypted_content` holds the whole summary object: prose, topics, people,
+ * quotes with offsets, and a `thin` flag. Same reasoning as
+ * `questionnaire_responses.encrypted_answers` — everything here is ciphertext,
+ * so per-field columns buy nothing SQL can filter or aggregate on, while a blob
+ * absorbs shape changes without a migration. Phase 6 will almost certainly want
+ * fields nobody has thought of yet.
+ *
+ * See src/lib/summaries/types.ts for the shape stored inside it.
+ *
+ * ── One row per entry ─────────────────────────────────────────────────────────
+ * `journal_entry_id` is UNIQUE. An entry that is edited after completion gets
+ * its summary regenerated and upserted onto the same row; without the
+ * constraint, regeneration would either duplicate rows or leave "which summary
+ * is current?" ambiguous.
  */
 export const journalEntrySummaries = pgTable("journal_entry_summaries", {
   id: text("id").primaryKey(),
   journalEntryId: text("journal_entry_id")
     .notNull()
+    .unique()
     .references(() => journalEntries.id, { onDelete: "cascade" }),
-  encryptedSummary: text("encrypted_summary").notNull(),
-  /** Encrypted JSON list of { quote, offset }. Named for what it is. */
-  encryptedNotableQuotes: text("encrypted_notable_quotes").notNull(),
+  /** AES-256-GCM ciphertext of the JSON summary object. */
+  encryptedContent: text("encrypted_content").notNull(),
+  /**
+   * When this summary was produced. The work queue compares it against the
+   * entry's `updated_at`: older means the entry has been edited since, and the
+   * summary is stale. That comparison IS the regeneration rule — there is no
+   * status column to set, and nothing can get stuck half-done.
+   */
   generatedAt: timestamp("generated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  /** Derived from the summariser prompt's header — see promptVersion(). */
   generationVersion: text("generation_version").notNull(),
 });
 

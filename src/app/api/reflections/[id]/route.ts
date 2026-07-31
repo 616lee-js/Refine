@@ -66,7 +66,13 @@ export async function PUT(req: Request, { params }: Params) {
       // Empty text stores NULL rather than the ciphertext of "" — it keeps
       // "never written" and "written then cleared" the same shape.
       ...(hasText
-        ? { encryptedBody: (text as string).length > 0 ? encrypt(text as string) : null }
+        ? {
+            encryptedBody: (text as string).length > 0 ? encrypt(text as string) : null,
+            // New content deserves fresh summarisation attempts. The summary
+            // itself is not invalidated here — the queue derives staleness from
+            // updated_at, so bumping that is enough.
+            summaryAttempts: 0,
+          }
         : {}),
       // A title summarises the entry, so it is content and encrypted like the
       // body. Absent means "leave as is"; empty string means "clear it".
@@ -113,6 +119,7 @@ export async function PATCH(req: Request, { params }: Params) {
     .update(journalEntries)
     .set({
       encryptedBody: encrypt(text),
+      summaryAttempts: 0,
       ...(typeof title === "string"
         ? { encryptedTitle: title.trim() ? encrypt(title.trim()) : null }
         : {}),

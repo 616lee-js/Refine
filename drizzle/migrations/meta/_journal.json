@@ -8,6 +8,20 @@
       "when": 1785442289854,
       "tag": "0000_calm_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785476579344,
+      "tag": "0001_ancient_timeslip",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785476600871,
+      "tag": "0002_superb_mole_man",
+      "breakpoints": true
     }
   ]
 }

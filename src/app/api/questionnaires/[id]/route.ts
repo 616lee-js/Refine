@@ -5,6 +5,7 @@ import { questionnaireResponses } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import {
   getQuestionnaire,
+  sanitiseAnswers,
   score,
   triggeredSafetyItems,
 } from "@/lib/questionnaires";
@@ -37,26 +38,6 @@ async function loadOwned(id: string, userId: string) {
   return row ?? null;
 }
 
-/** Accepts only keys the instrument defines, and only values it offers. */
-function sanitiseAnswers(
-  slug: string,
-  raw: unknown
-): Record<string, number> | null {
-  const q = getQuestionnaire(slug);
-  if (!q || typeof raw !== "object" || raw === null) return null;
-
-  const allowedValues = new Set(q.options.map((o) => o.value));
-  const out: Record<string, number> = {};
-
-  for (const item of q.items) {
-    const v = (raw as Record<string, unknown>)[item.key];
-    if (typeof v === "number" && allowedValues.has(v)) {
-      out[item.key] = v;
-    }
-  }
-  return out;
-}
-
 export async function PUT(req: Request, { params }: Params) {
   const { id } = await params;
   const session = await getSession();
@@ -73,9 +54,11 @@ export async function PUT(req: Request, { params }: Params) {
   if (!row) return new Response("Not found", { status: 404 });
   if (row.purgedAt) return new Response("Gone", { status: 410 });
 
+  const q = getQuestionnaire(row.questionnaireSlug);
+  if (!q) return new Response("Unknown instrument", { status: 409 });
+
   const { answers, note } = body as { answers?: unknown; note?: unknown };
-  const clean = sanitiseAnswers(row.questionnaireSlug, answers);
-  if (!clean) return new Response("Invalid answers", { status: 400 });
+  const clean = sanitiseAnswers(q, answers);
 
   await db
     .update(questionnaireResponses)
@@ -110,12 +93,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!q) return new Response("Unknown instrument", { status: 409 });
 
   const { answers, note } = body as { answers?: unknown; note?: unknown };
-  const clean = sanitiseAnswers(row.questionnaireSlug, answers);
-  if (!clean) return new Response("Invalid answers", { status: 400 });
+  const clean = sanitiseAnswers(q, answers);
 
   // No required-field blocking: a partly-answered instrument still records.
   // Scoring a partial total is honest as long as the raw items travel with it,
   // which they do.
+  // null for trackers — a check-in has no meaningful total, so nothing is
+  // written to encrypted_scoring rather than inventing a number.
   const scoring = score(q, clean);
   const now = new Date();
 
@@ -125,7 +109,7 @@ export async function PATCH(req: Request, { params }: Params) {
       encryptedAnswers: encrypt(
         JSON.stringify({ answers: clean, note: typeof note === "string" ? note : "" })
       ),
-      encryptedScoring: encrypt(JSON.stringify(scoring)),
+      ...(scoring ? { encryptedScoring: encrypt(JSON.stringify(scoring)) } : {}),
       completedAt: row.completedAt ?? now,
       updatedAt: now,
     })

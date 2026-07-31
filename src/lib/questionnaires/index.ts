@@ -1,6 +1,7 @@
 import type { Questionnaire } from "./types";
 import { gad7 } from "./gad7";
 import { phq9 } from "./phq9";
+import { dailyCheckin } from "./daily-checkin";
 
 export * from "./types";
 
@@ -10,7 +11,7 @@ export * from "./types";
  * Every instrument the codebase knows about, shipped or not. Adding one is a new
  * file plus a line here — no migration, no seeding.
  */
-const ALL: Questionnaire[] = [gad7, phq9];
+const ALL: Questionnaire[] = [gad7, phq9, dailyCheckin];
 
 const BY_SLUG = new Map(ALL.map((q) => [q.slug, q]));
 
@@ -39,3 +40,6 @@ export function getStartableQuestionnaire(slug: string): Questionnaire | null {
 export function listStartable(): Questionnaire[] {
   return ALL.filter((q) => q.shipped);
 }
+
+/** The daily tracker, which Home surfaces separately from framework instruments. */
+export { dailyCheckin };

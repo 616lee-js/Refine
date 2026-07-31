@@ -1,4 +1,4 @@
-import type { Questionnaire } from "./types";
+import type { LikertQuestionnaire } from "./types";
 
 /**
  * PHQ-9 — Patient Health Questionnaire, 9 items.
@@ -24,7 +24,8 @@ import type { Questionnaire } from "./types";
  * The tenth PHQ-9 question — the functional-impairment item — is deliberately
  * absent: it is not scored in the 0–27 total and needs its own presentation.
  */
-export const phq9: Questionnaire = {
+export const phq9: LikertQuestionnaire = {
+  kind: "likert",
   slug: "phq9",
   version: "v1-2026-07-30-draft",
   title: "Low mood",

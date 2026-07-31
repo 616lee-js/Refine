@@ -19,7 +19,9 @@ import { TopNav } from "@/components/ui/top-nav";
  */
 export default function Page() {
   const router = useRouter();
-  const [loading, setLoading] = useState<"entry" | "framework" | null>(null);
+  const [loading, setLoading] = useState<
+    "entry" | "framework" | "checkin" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
 
   async function startEntry() {
@@ -30,6 +32,24 @@ export default function Page() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { reflectionId } = (await res.json()) as { reflectionId: string };
       router.push(`/reflection/${reflectionId}`);
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setLoading(null);
+    }
+  }
+
+  async function startCheckin() {
+    setLoading("checkin");
+    setError(null);
+    try {
+      const res = await fetch("/api/questionnaires", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: "daily_checkin" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { responseId } = (await res.json()) as { responseId: string };
+      router.push(`/checkin/${responseId}`);
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(null);
@@ -163,6 +183,36 @@ export default function Page() {
                 </div>
               </div>
             </Sheet>
+          </div>
+
+          {/* The check-in is a 15-second strip, not a third launch card — it is
+              a different weight of action from writing or an instrument. */}
+          <div
+            className="mt-[18px] flex flex-wrap items-center justify-between gap-4 rounded-[4px] px-5 py-[15px]"
+            style={{ background: "var(--rf-surface)" }}
+          >
+            <div>
+              <Eyebrow size={9.5}>Check-in</Eyebrow>
+              <p
+                className="mt-1"
+                style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
+              >
+                Sleep, mood, energy, and what you kept up. Fifteen seconds.
+              </p>
+            </div>
+            <button
+              onClick={startCheckin}
+              disabled={loading !== null}
+              className="rounded-full transition-colors disabled:opacity-40"
+              style={{
+                boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                color: "var(--rf-text-2)",
+                fontSize: "12.5px",
+                padding: "8px 15px",
+              }}
+            >
+              {loading === "checkin" ? "Opening…" : "Log"}
+            </button>
           </div>
 
           {error && (

@@ -1,4 +1,4 @@
-import type { Questionnaire } from "./types";
+import type { LikertQuestionnaire } from "./types";
 
 /**
  * GAD-7 — Generalised Anxiety Disorder 7-item scale.
@@ -22,7 +22,8 @@ import type { Questionnaire } from "./types";
  * delivered the instant someone finishes is a diagnosis in all but name, and
  * this product does not diagnose.
  */
-export const gad7: Questionnaire = {
+export const gad7: LikertQuestionnaire = {
+  kind: "likert",
   slug: "gad7",
   version: "v1-2026-07-30",
   title: "Generalised anxiety",

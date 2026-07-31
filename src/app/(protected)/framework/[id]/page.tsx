@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -34,6 +34,10 @@ export default async function FrameworkPage({
   // answers they already gave.
   const questionnaire = getQuestionnaire(row.questionnaireSlug);
   if (!questionnaire) notFound();
+
+  // Trackers have their own renderer — a check-in response opened here would
+  // hit a form expecting uniform response options it does not have.
+  if (questionnaire.kind !== "likert") redirect(`/checkin/${row.id}`);
 
   let answers: Record<string, number> = {};
   let note = "";

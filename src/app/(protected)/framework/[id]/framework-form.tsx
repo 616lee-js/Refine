@@ -6,7 +6,7 @@ import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
 import { Toast } from "@/components/ui/toast";
-import type { Questionnaire } from "@/lib/questionnaires";
+import type { LikertQuestionnaire } from "@/lib/questionnaires";
 
 /**
  * Framework mode — one instrument on one page.
@@ -33,7 +33,7 @@ export function FrameworkForm({
   lastTakenAt,
 }: {
   responseId: string;
-  questionnaire: Questionnaire;
+  questionnaire: LikertQuestionnaire;
   initialAnswers: Record<string, number>;
   initialNote: string;
   lastTakenAt: string | null;

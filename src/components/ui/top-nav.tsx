@@ -28,9 +28,17 @@ export function Wordmark() {
 
 export function TopNav({
   active,
+  admin,
   children,
 }: {
   active?: NavKey;
+  /**
+   * The admin entry points, as a rendered server component — see
+   * components/ui/admin-nav.tsx. Omitted means no admin link, which is the safe
+   * direction: TopNav cannot check for itself because it renders inside client
+   * components on several screens.
+   */
+  admin?: React.ReactNode;
   /** Optional extra controls, rendered before the nav links. */
   children?: React.ReactNode;
 }) {
@@ -63,7 +71,8 @@ export function TopNav({
     >
       <Wordmark />
 
-      <nav className="flex items-center gap-5 sm:gap-6">
+      <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 sm:gap-x-6">
+        {admin}
         {children}
         {item("/reflections", "Reflections", "reflections")}
         {item("/mirror", "Mirror", "mirror")}

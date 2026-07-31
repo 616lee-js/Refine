@@ -1,12 +1,31 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { randomUUID } from "crypto";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { journalEntries } from "@/lib/db/schema";
+import { contentAccessLog, journalEntries } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { PageBg } from "@/components/ui/page-bg";
+import { Eyebrow } from "@/components/ui/sheet";
+import { TopNav } from "@/components/ui/top-nav";
+import { AdminNav } from "@/components/ui/admin-nav";
 import { TrashList, type TrashedEntry } from "./trash-list";
 import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
+
+/**
+ * Trash.
+ *
+ * ── Why this page previews content when the archive refuses to ────────────────
+ * The archive shows no excerpts, because decrypting a hundred entries to glance
+ * at a list buries content_access_log in noise. Here the calculation is
+ * different: the action on offer is permanent destruction, and recognising which
+ * entry you are about to destroy is the whole point. A preview is worth its
+ * decryption.
+ *
+ * It is still a decryption, so it is still logged — one row carrying the count,
+ * the same shape Trends uses. It previously logged nothing at all.
+ */
 
 export const dynamic = "force-dynamic";
 
@@ -54,44 +73,62 @@ export default async function TrashPage() {
     };
   });
 
+  if (entries.length > 0) {
+    await db.insert(contentAccessLog).values({
+      id: randomUUID(),
+      userId: authSession.userId,
+      context: `trash_view (${entries.length} previews decrypted)`,
+    });
+  }
+
   return (
-    <div className="min-h-screen bg-white text-stone-800">
-      <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Refine</h1>
-        <nav className="flex items-center gap-4">
-          <Link href="/reflections" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Reflections
-          </Link>
-          <Link href="/mirror" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Mirror
-          </Link>
-          <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Profile
-          </Link>
-          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
-            New reflection
-          </Link>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-              Sign out
-            </button>
-          </form>
-        </nav>
-      </header>
+    <PageBg>
+      <TopNav active="mirror" admin={<AdminNav />} />
 
-      <main className="px-6 py-8 max-w-2xl mx-auto">
-        <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-sm font-medium text-stone-700">Trash</h2>
-          <Link
-            href="/mirror"
-            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            ← Back to Mirror
-          </Link>
+      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
+        <div className="w-full pb-14" style={{ maxWidth: 700 }}>
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
+            <div>
+              <Eyebrow>
+                {entries.length} {entries.length === 1 ? "item" : "items"}
+              </Eyebrow>
+              <h1
+                className="mt-[9px]"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "30px",
+                  fontWeight: 380,
+                  letterSpacing: "-0.02em",
+                  color: "var(--rf-text)",
+                }}
+              >
+                Trash
+              </h1>
+              <p
+                className="mt-[8px] max-w-[440px]"
+                style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--rf-text-3)" }}
+              >
+                Kept for {TRASH_RETENTION_DAYS} days, then removed for good. You
+                can put anything back before then.
+              </p>
+            </div>
+
+            <Link
+              href="/mirror"
+              className="font-mono uppercase"
+              style={{
+                fontSize: "9.5px",
+                letterSpacing: "0.14em",
+                color: "var(--rf-text-4)",
+              }}
+            >
+              ← Mirror
+            </Link>
+          </div>
+
+          <TrashList entries={entries} />
         </div>
-
-        <TrashList entries={entries} />
-      </main>
-    </div>
+      </div>
+    </PageBg>
   );
 }

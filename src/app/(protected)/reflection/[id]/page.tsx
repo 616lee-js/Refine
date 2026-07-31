@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { journalEntries, users } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import JournalEntry from "../../journal-entry";
+import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
  * The writing surface for one journal entry — new, draft, or editing a
@@ -71,6 +72,7 @@ export default async function JournalEntryPage({
 
   return (
     <JournalEntry
+      admin={<AdminNav />}
       entryId={entry.id}
       initialText={initialText}
       initialCompletedAt={entry.completedAt?.toISOString() ?? null}

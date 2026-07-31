@@ -27,11 +27,14 @@ const LABEL_COL = 260;
 
 export function FrameworkForm({
   responseId,
+  admin,
   questionnaire: q,
   initialAnswers,
   initialNote,
   lastTakenAt,
 }: {
+  /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
+  admin: React.ReactNode;
   responseId: string;
   questionnaire: LikertQuestionnaire;
   initialAnswers: Record<string, number>;
@@ -81,7 +84,7 @@ export function FrameworkForm({
 
   return (
     <PageBg>
-      <TopNav active="today" />
+      <TopNav active="today" admin={admin} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[22px] sm:px-10">
         <div className="flex w-full flex-col" style={{ maxWidth: 720 }}>

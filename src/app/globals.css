@@ -35,6 +35,17 @@
   --rf-accent-2-soft: rgba(95, 127, 104, 0.14);
   --rf-warn: #a2701f;
   --rf-warn-soft: rgba(162, 112, 31, 0.14);
+
+  /*
+   * Admin chrome. Cool slate against Dawn's warm paper, and deliberately not
+   * the accent: an admin surface reads other people's journal content, and it
+   * must never look like part of the reflective surface. This is the only
+   * cool hue in the palette, which is the point.
+   */
+  --rf-admin: #4a5568;
+  --rf-admin-soft: rgba(74, 85, 104, 0.09);
+  --rf-admin-border: rgba(74, 85, 104, 0.26);
+
   --rf-grain-opacity: 0.4;
 
   /* Sheet shadow — one definition, used by every paper surface. */

@@ -6,6 +6,7 @@ import { questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { FrameworkForm } from "./framework-form";
+import { AdminNav } from "@/components/ui/admin-nav";
 
 export default async function FrameworkPage({
   params,
@@ -76,6 +77,7 @@ export default async function FrameworkPage({
 
   return (
     <FrameworkForm
+      admin={<AdminNav />}
       responseId={row.id}
       questionnaire={questionnaire}
       initialAnswers={answers}

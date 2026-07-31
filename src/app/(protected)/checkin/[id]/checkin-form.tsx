@@ -65,12 +65,17 @@ function FieldRow({
 
 export function CheckinForm({
   responseId,
+  admin,
+
   questionnaire: q,
   initialAnswers,
   loggedRecently,
   today,
 }: {
   responseId: string;
+  /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
+  admin: React.ReactNode;
+
   questionnaire: TrackerQuestionnaire;
   initialAnswers: Answers;
   /** Days logged out of the last 21, or null when there isn't enough history. */
@@ -115,7 +120,7 @@ export function CheckinForm({
 
   return (
     <PageBg>
-      <TopNav active="today" />
+      <TopNav active="today" admin={admin} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[22px] sm:px-10">
         <div className="flex w-full flex-col" style={{ maxWidth: 660 }}>

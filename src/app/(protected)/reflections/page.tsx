@@ -8,6 +8,7 @@ import { getQuestionnaire } from "@/lib/questionnaires";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
+import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
  * The archive — every record, both shapes, newest first.
@@ -148,7 +149,7 @@ export default async function ReflectionsPage({
 
   return (
     <PageBg>
-      <TopNav active="reflections" />
+      <TopNav active="reflections" admin={<AdminNav />} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-14" style={{ maxWidth: 700 }}>

@@ -6,6 +6,7 @@ import { questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import { CheckinForm } from "./checkin-form";
+import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
  * Below this many prior check-ins, the "N of the last 21 days" count is hidden.
@@ -76,6 +77,7 @@ export default async function CheckinPage({
 
   return (
     <CheckinForm
+      admin={<AdminNav />}
       responseId={row.id}
       questionnaire={questionnaire}
       initialAnswers={answers}

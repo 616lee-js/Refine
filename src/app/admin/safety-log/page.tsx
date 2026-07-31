@@ -111,7 +111,10 @@ export default async function SafetyLogPage() {
         {decoded.length === 0 ? (
           <p className="text-sm text-stone-400">No safety log entries yet.</p>
         ) : (
-          <table className="w-full text-sm border-collapse">
+          // The table is wide by nature and this is a laptop-first surface, so
+          // it scrolls inside its own container rather than widening the page.
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm border-collapse">
             <thead>
               <tr className="text-left text-xs text-stone-400 border-b border-stone-100">
                 <th className="pb-2 pr-4 font-medium">Tier</th>
@@ -204,6 +207,7 @@ export default async function SafetyLogPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </main>
     </div>

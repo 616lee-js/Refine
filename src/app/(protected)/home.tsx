@@ -38,6 +38,8 @@ export type RecentRow = {
 
 export function ScreenHome({
   greeting,
+  admin,
+
   lastWrote,
   unfinished,
   recent,
@@ -45,6 +47,9 @@ export function ScreenHome({
   totalRecords,
 }: {
   greeting: string;
+  /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
+  admin: React.ReactNode;
+
   /** Relative phrasing for the last completed entry, or null when there is none. */
   lastWrote: string | null;
   /** An entry with writing in it that was never finished. */
@@ -90,7 +95,7 @@ export function ScreenHome({
 
   return (
     <PageBg>
-      <TopNav active="today" />
+      <TopNav active="today" admin={admin} />
 
       <main className="flex-1 px-6 pb-14 pt-9 sm:px-10">
         <div className="mx-auto w-full" style={{ maxWidth: 780 }}>

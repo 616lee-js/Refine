@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
+import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
 
 export type TrashedEntry = {
   id: string;
@@ -27,101 +29,139 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
 
   async function restore(id: string) {
     setBusy(id);
-    await fetch(`/api/reflections/${id}/restore`, { method: "POST" });
+    const res = await fetch(`/api/reflections/${id}/restore`, { method: "POST" });
     setBusy(null);
-    setToast("Entry restored");
-    router.refresh();
+    setToast(res.ok ? "Put back" : "Couldn't put that back");
+    if (res.ok) router.refresh();
   }
 
   async function purge(id: string) {
     setBusy(id);
-    await fetch(`/api/reflections/${id}/purge`, { method: "DELETE" });
+    const res = await fetch(`/api/reflections/${id}/purge`, { method: "DELETE" });
     setBusy(null);
     setConfirming(null);
-    setToast("Entry permanently deleted");
-    router.refresh();
+    setToast(res.ok ? "Deleted for good" : "Couldn't delete that");
+    if (res.ok) router.refresh();
   }
+
+  const action = {
+    fontFamily: "var(--font-mono)",
+    fontSize: "9.5px",
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+  };
 
   if (entries.length === 0) {
     return (
-      <div className="pt-16 text-center">
-        <p className="text-sm text-stone-400 leading-loose">
-          Nothing in the trash.
+      <Sheet className="px-8 py-14 text-center">
+        <p
+          style={{ fontSize: "14px", lineHeight: 1.9, color: "var(--rf-text-3)" }}
+        >
+          Nothing here.
           <br />
-          Deleted entries wait here for 30 days before they&apos;re gone for good.
+          What you delete waits {TRASH_RETENTION_DAYS} days before it is gone for
+          good.
         </p>
-      </div>
+      </Sheet>
     );
   }
 
   return (
     <>
-      <p className="text-xs text-stone-400 mb-6 leading-relaxed">
-        Entries here are deleted permanently 30 days after you remove them. That
-        deletion is real — the text is destroyed, not hidden, and cannot be
-        recovered afterwards.
-      </p>
-
-      <ol className="divide-y divide-stone-100">
-        {entries.map((e) => (
-          <li key={e.id} className="py-4 space-y-2">
-            <p className="text-sm text-stone-700 leading-relaxed line-clamp-2">
-              {e.preview || <span className="text-stone-400">Empty entry</span>}
+      <Sheet className="px-7 pb-5 pt-1">
+        {entries.map((e, i) => (
+          <div
+            key={e.id}
+            className="py-[15px]"
+            style={{ borderTop: i === 0 ? "none" : "1px solid var(--rf-rule)" }}
+          >
+            <p
+              className="line-clamp-2"
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "16px",
+                lineHeight: 1.55,
+                color: e.preview ? "var(--rf-text)" : "var(--rf-text-4)",
+              }}
+            >
+              {e.preview || "Empty entry"}
             </p>
 
-            <div className="flex items-center gap-3 flex-wrap text-xs">
-              <span className="text-stone-400">
+            <div className="mt-[9px] flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Eyebrow size={9.5}>
                 {new Date(e.writtenAt).toLocaleDateString(undefined, {
-                  month: "short",
                   day: "numeric",
+                  month: "short",
                   year: "numeric",
                 })}
-              </span>
-              <span className="text-stone-200">·</span>
-              <span className={e.daysLeft <= 3 ? "text-amber-700" : "text-stone-400"}>
+              </Eyebrow>
+
+              {/* The only place a warmer colour is used, and only inside three
+                  days of destruction. It states a deadline; it does not scold. */}
+              <span
+                className="font-mono uppercase"
+                style={{
+                  ...action,
+                  color:
+                    e.daysLeft <= 3 ? "var(--rf-warn)" : "var(--rf-text-4)",
+                }}
+              >
                 {e.daysLeft <= 0
-                  ? "Deleting today"
+                  ? "Goes today"
                   : `${e.daysLeft} day${e.daysLeft === 1 ? "" : "s"} left`}
               </span>
-              <span className="text-stone-200">·</span>
 
-              <button
-                onClick={() => restore(e.id)}
-                disabled={busy === e.id}
-                className="text-stone-500 hover:text-stone-700 disabled:opacity-40 transition-colors"
-              >
-                Restore
-              </button>
-
-              {confirming === e.id ? (
-                <>
-                  <span className="text-stone-500">Delete forever?</span>
-                  <button
-                    onClick={() => purge(e.id)}
-                    disabled={busy === e.id}
-                    className="text-red-600 hover:text-red-700 disabled:opacity-40 transition-colors"
-                  >
-                    Yes, delete permanently
-                  </button>
-                  <button
-                    onClick={() => setConfirming(null)}
-                    className="text-stone-400 hover:text-stone-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button
-                  onClick={() => setConfirming(e.id)}
-                  className="text-stone-400 hover:text-red-600 transition-colors"
+                  onClick={() => restore(e.id)}
+                  disabled={busy === e.id}
+                  className="disabled:opacity-40"
+                  style={{ ...action, color: "var(--rf-text-2)" }}
                 >
-                  Delete permanently
+                  Put it back
                 </button>
-              )}
+
+                {confirming === e.id ? (
+                  <>
+                    <span style={{ ...action, color: "var(--rf-text-3)" }}>
+                      Gone for good?
+                    </span>
+                    <button
+                      onClick={() => purge(e.id)}
+                      disabled={busy === e.id}
+                      className="disabled:opacity-40"
+                      style={{ ...action, color: "var(--color-error)" }}
+                    >
+                      Yes, delete it
+                    </button>
+                    <button
+                      onClick={() => setConfirming(null)}
+                      style={{ ...action, color: "var(--rf-text-4)" }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirming(e.id)}
+                    style={{ ...action, color: "var(--rf-text-4)" }}
+                  >
+                    Delete now
+                  </button>
+                )}
+              </span>
             </div>
-          </li>
+          </div>
         ))}
-      </ol>
+      </Sheet>
+
+      <p
+        className="mt-[14px] max-w-[520px]"
+        style={{ fontSize: "11.5px", lineHeight: 1.6, color: "var(--rf-text-4)" }}
+      >
+        That deletion is real — the text is destroyed, not hidden, and cannot be
+        recovered afterwards.
+      </p>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
     </>

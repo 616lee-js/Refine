@@ -16,6 +16,7 @@ import {
 import { PageBg } from "@/components/ui/page-bg";
 import { Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
+import { AdminNav } from "@/components/ui/admin-nav";
 import { MemoryPanel } from "./memory-panel";
 import { TrendsPanel } from "./trends-panel";
 
@@ -87,7 +88,7 @@ export default async function MirrorPage({
 
   return (
     <PageBg>
-      <TopNav active="mirror" />
+      <TopNav active="mirror" admin={<AdminNav />} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-16" style={{ maxWidth: 900 }}>

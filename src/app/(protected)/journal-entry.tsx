@@ -38,10 +38,13 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function JournalEntry({
   entryId,
+  admin,
   initialText,
   initialCompletedAt,
   initialGuidanceOpen,
 }: {
+  /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
+  admin: React.ReactNode;
   entryId: string;
   initialText: string;
   initialCompletedAt: string | null;
@@ -174,7 +177,7 @@ export default function JournalEntry({
 
   return (
     <PageBg>
-      <TopNav active="today">
+      <TopNav active="today" admin={admin}>
         <GuidanceToggle
           open={guidanceOpen}
           onToggle={() => toggleGuidance(!guidanceOpen)}

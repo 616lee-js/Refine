@@ -9,6 +9,7 @@ import { decrypt } from "@/lib/crypto";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
+import { AdminNav } from "@/components/ui/admin-nav";
 import { EntryTitle } from "./entry-title";
 
 /**
@@ -91,7 +92,7 @@ export default async function ReflectionDetailPage({
 
   return (
     <PageBg>
-      <TopNav active="reflections" />
+      <TopNav active="reflections" admin={<AdminNav />} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-14" style={{ maxWidth: 700 }}>

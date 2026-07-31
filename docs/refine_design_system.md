@@ -456,6 +456,59 @@ fastest for the people least able to read it quickly.
 
 ---
 
+## Responsive conventions
+
+Added 2026-07-30, during the Step 7 responsive pass. Before this the document
+had no breakpoint conventions at all, and each screen invented its own.
+
+### Breakpoints
+
+Tailwind defaults, only three of which are used:
+
+| Prefix | Min width | What it means here |
+|---|---|---|
+| (none) | 0 | **Phone.** Single column, everything stacked. This is the base case, not the fallback. |
+| `sm:` | 640px | Large phone / small tablet. Row layouts that need two columns of their own (a label beside its control). |
+| `lg:` | 1024px | **Laptop.** Anything with a genuine sidebar or a second reading column. |
+
+`md:` and `xl:` are deliberately unused. Two decision points are enough for a
+product with this few layouts, and every extra breakpoint is another state to
+verify on every screen.
+
+### Rules
+
+1. **The page body never scrolls horizontally.** Anything intrinsically wide —
+   a table, a `<pre>`, a chart — scrolls inside its own `overflow-x-auto`
+   container. See `settings/system-prompt` and `admin/safety-log`.
+2. **Multi-column grids always carry a breakpoint prefix.** A bare
+   `grid-cols-2` is a bug: it forces two columns onto a 375px screen. Write
+   `sm:grid-cols-2` or `lg:grid-cols-2` and let the base case stack.
+3. **The writing surface keeps width priority.** The guidance sidebar is a fixed
+   column at `lg:` and an overlay below it — it never squeezes the entry. This
+   is the one rule that outranks visual consistency.
+4. **Charts scale, they do not fix.** `LineChart` draws into a fixed `viewBox`
+   and takes `width="100%"`, so it scales rather than clipping. Never give a
+   chart a pixel width.
+5. **Row layouts stack rather than shrink.** A label/control pair collapses to
+   two stacked rows below its breakpoint. Squeezing a 260px control column into
+   120px produces tap targets nobody can hit.
+6. **When a shared column header is hidden, its labels move into each row.**
+   The framework questionnaire hides its response-option header below `sm:` and
+   repeats the labels under each radio, so the answer scale is never unlabelled.
+7. **Type does not shrink at breakpoints.** `--text-entry` is 18.5px on a phone
+   and 18.5px on a laptop. Where a heading must adapt, use `clamp()` rather than
+   a breakpoint — see onboarding's `clamp(27px, 4.4vw, 40px)`.
+8. **Nav wraps, it does not truncate.** `TopNav` is `flex-wrap` with
+   `justify-end`; a second line is correct behaviour, a hidden link is not.
+
+### Verification
+
+Check every new screen at **375**, **768**, and **1440**. The failure that keeps
+recurring is a fixed-width grid column, so look for a horizontal scrollbar on
+the body first — it is the fastest tell.
+
+---
+
 ## Interaction patterns
 
 ### Focus states

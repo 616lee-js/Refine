@@ -5,6 +5,7 @@ import { journalEntries, questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { ScreenHome, type RecentRow } from "./home";
+import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
  * Home — the data behind ScreenHome.
@@ -188,6 +189,7 @@ export default async function HomePage() {
 
   return (
     <ScreenHome
+      admin={<AdminNav />}
       greeting={greetingFor(now.getHours())}
       lastWrote={lastCompleted ? relativeDay(lastCompleted, now) : null}
       unfinished={

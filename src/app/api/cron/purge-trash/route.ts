@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { journalEntries, journalEntrySummaries } from "@/lib/db/schema";
 import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
+import { requireCronSecret } from "@/lib/cron-auth";
 
 /**
  * Destroys the content of entries that have been in the trash past the
@@ -23,15 +24,10 @@ import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  // Vercel sends this automatically on cron invocations when CRON_SECRET is set.
-  // Without the check this is an endpoint that destroys data on request.
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${expected}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  }
+  // Fails closed: an unset CRON_SECRET refuses rather than bypasses.
+  // See src/lib/cron-auth.ts.
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
 
   const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 86_400_000);
 

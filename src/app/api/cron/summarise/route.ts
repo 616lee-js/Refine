@@ -1,4 +1,5 @@
 import { runSummaryQueue, SUMMARY_BATCH_SIZE } from "@/lib/summaries/queue";
+import { requireCronSecret } from "@/lib/cron-auth";
 
 /**
  * Generates Cabinet 2 summaries for completed entries that do not have a current
@@ -23,16 +24,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  // Vercel sends this automatically on cron invocations when CRON_SECRET is set.
-  // /api/cron/ is already in PUBLIC_PATHS, so without this check the endpoint is
-  // an unauthenticated way to make the app spend money on the Anthropic API.
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${expected}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  }
+  // Fails closed: an unset CRON_SECRET refuses rather than bypasses.
+  // See src/lib/cron-auth.ts.
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
 
   const started = Date.now();
   const result = await runSummaryQueue(SUMMARY_BATCH_SIZE);

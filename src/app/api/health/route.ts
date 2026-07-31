@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { requireCronSecret } from "@/lib/cron-auth";
 
 /**
  * Keep-alive and smoke test, hit daily by Vercel Cron (see vercel.json).
@@ -21,15 +22,10 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  // Vercel sends this header automatically on cron invocations when CRON_SECRET
-  // is set. Without the check the endpoint is an open database ping.
-  const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${expected}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  }
+  // Fails closed: an unset CRON_SECRET refuses rather than bypasses.
+  // See src/lib/cron-auth.ts.
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
 
   const checks: Record<string, string> = {};
 

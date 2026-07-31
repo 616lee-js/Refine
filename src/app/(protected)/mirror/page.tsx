@@ -1,598 +1,88 @@
-"use client";
-
-import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { randomUUID } from "crypto";
+import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
+import { decrypt } from "@/lib/crypto";
+import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
+import {
+  buildTrends,
+  MIN_LINE_READINGS,
+  MIN_MATRIX_DAYS,
+  type DecryptedResponse,
+  type Trends,
+} from "@/lib/trends";
 import { PageBg } from "@/components/ui/page-bg";
-import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
-import { Toast } from "@/components/ui/toast";
+import { MemoryPanel } from "./memory-panel";
+import { TrendsPanel } from "./trends-panel";
 
 /**
- * Mirror — what Refine has of you.
+ * Mirror — Memory, and Trends once there is anything to plot.
  *
- * ── Why the layout splits the way it does ─────────────────────────────────────
- * The design puts threads in the main column and facts in a narrow aside, and
- * that split is doing real work: a thread is a narrative sentence you read, a
- * fact is a short record you scan. Giving them the same weight makes both
- * harder to use.
+ * ── Why the tab is a URL parameter ────────────────────────────────────────────
+ * Trends decrypts every check-in in the window. If the tab were client state,
+ * every visit to Mirror would pay that cost and write an access-log row for a
+ * read the user never asked for. As a parameter, the decryption happens only
+ * when someone actually opens Trends.
  *
- * Our memory model has five kinds, not two, so the mapping is: `thread` runs
- * down the main column at reading size; everything else — facts, preferences,
- * diagnostic context, other — sits in the aside at scanning size, grouped.
- * Nothing is hidden behind a filter any more, which is what the old kind
- * dropdown was for.
+ * ── Why the tab bar can be absent entirely ────────────────────────────────────
+ * Trends does not appear until at least one card can be charted. An empty tab
+ * teaches people the room is empty: they look once, find nothing, and are not
+ * there when it fills. The tab arriving is itself the signal.
  *
- * ── Proposed vs active ────────────────────────────────────────────────────────
- * Proposed entries sit in place among their own kind rather than in a separate
- * pile, marked and with a Confirm on them. The count is called out once at the
- * top of the aside. Extraction lands in Phase 6, so today every entry here is
- * one the user added themselves and nothing is ever proposed.
+ * Availability is decided by COUNTS, which need no decryption. The cards then
+ * apply their real thresholds to the decrypted data — a user who logged five
+ * check-ins but skipped the sleep field on all of them gets the tab and a
+ * gathering-state card, which is honest.
  */
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+export const dynamic = "force-dynamic";
 
-type Kind = "fact" | "thread" | "preference" | "diagnostic_context" | "other";
+type Tab = "memory" | "trends";
 
-type MemoryEntry = {
-  id: string;
-  kind: Kind;
-  source: string;
-  content: string;
-  confirmed: boolean;
-  createdAt: string;
-};
-
-const ASIDE_KINDS: { value: Exclude<Kind, "thread">; label: string }[] = [
-  { value: "fact", label: "Facts" },
-  { value: "preference", label: "Preferences" },
-  { value: "diagnostic_context", label: "Diagnostic context" },
-  { value: "other", label: "Other" },
-];
-
-const ALL_KINDS: { value: Kind; label: string }[] = [
-  { value: "thread", label: "Open thread" },
-  ...ASIDE_KINDS.map((k) => ({ value: k.value as Kind, label: k.label })),
-];
-
-function sourceLabel(entry: MemoryEntry): string {
-  if (entry.source === "user_added") return "Added by you";
-  if (!entry.confirmed) return "Caught by Refine";
-  return "From your writing";
-}
-
-// ── Shared row affordances ────────────────────────────────────────────────────
-
-function RowActions({
-  entry,
-  onConfirm,
-  onStartEdit,
-  onDelete,
+export default async function MirrorPage({
+  searchParams,
 }: {
-  entry: MemoryEntry;
-  onConfirm: (id: string) => void;
-  onStartEdit: () => void;
-  onDelete: (id: string) => void;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { tab: rawTab } = await searchParams;
+  const authSession = await getSession();
+  const userId = authSession.userId!;
 
-  const action = {
-    fontFamily: "var(--font-mono)",
-    fontSize: "9.5px",
-    letterSpacing: "0.14em",
-    textTransform: "uppercase" as const,
-    color: "var(--rf-text-3)",
-  };
+  // Cheap: counts only, no ciphertext read.
+  const counts = await db
+    .select({
+      slug: questionnaireResponses.questionnaireSlug,
+      n: count(),
+    })
+    .from(questionnaireResponses)
+    .where(
+      and(
+        eq(questionnaireResponses.userId, userId),
+        isNotNull(questionnaireResponses.completedAt),
+        isNull(questionnaireResponses.deletedAt),
+        isNull(questionnaireResponses.purgedAt)
+      )
+    )
+    .groupBy(questionnaireResponses.questionnaireSlug);
 
-  return (
-    <div className="flex shrink-0 items-center gap-3 pt-[3px]">
-      {!entry.confirmed && (
-        <button
-          onClick={() => onConfirm(entry.id)}
-          style={{ ...action, color: "var(--rf-accent-2)" }}
-        >
-          Keep
-        </button>
-      )}
-      <button onClick={onStartEdit} style={action}>
-        Edit
-      </button>
-      {confirmDelete ? (
-        <>
-          <button
-            onClick={() => onDelete(entry.id)}
-            style={{ ...action, color: "var(--color-error)" }}
-          >
-            Remove
-          </button>
-          <button onClick={() => setConfirmDelete(false)} style={action}>
-            Cancel
-          </button>
-        </>
-      ) : (
-        <button onClick={() => setConfirmDelete(true)} style={action}>
-          Remove
-        </button>
-      )}
-    </div>
-  );
-}
+  const trendsAvailable = counts.some(({ slug, n }) => {
+    const q = getQuestionnaire(slug);
+    if (!q) return false;
+    // An unverified instrument is not chartable at all, so it cannot be the
+    // thing that brings the tab into existence.
+    if (q.kind === "likert" && !q.wordingVerified) return false;
+    return n >= Math.min(MIN_LINE_READINGS, MIN_MATRIX_DAYS);
+  });
 
-function EditBox({
-  value,
-  busy,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  value: string;
-  busy: boolean;
-  onChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={3}
-        autoFocus
-        className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
-        style={{
-          fontSize: "13.5px",
-          lineHeight: 1.6,
-          color: "var(--rf-text)",
-          background: "var(--rf-paper)",
-          boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-        }}
-      />
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onSave}
-          disabled={busy}
-          className="rounded-full disabled:opacity-40"
-          style={{
-            padding: "6px 13px",
-            fontSize: "12px",
-            background: "var(--rf-text)",
-            color: "var(--rf-paper)",
-          }}
-        >
-          {busy ? "Saving…" : "Save"}
-        </button>
-        <button
-          onClick={onCancel}
-          className="font-mono uppercase"
-          style={{
-            fontSize: "9.5px",
-            letterSpacing: "0.14em",
-            color: "var(--rf-text-3)",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
+  const tab: Tab = rawTab === "trends" && trendsAvailable ? "trends" : "memory";
 
-// ── Rows ──────────────────────────────────────────────────────────────────────
-
-function ThreadRow({
-  entry,
-  onConfirm,
-  onEdit,
-  onDelete,
-}: {
-  entry: MemoryEntry;
-  onConfirm: (id: string) => void;
-  onEdit: (id: string, content: string) => Promise<void>;
-  onDelete: (id: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(entry.content);
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    const next = draft.trim();
-    if (!next || next === entry.content) {
-      setEditing(false);
-      setDraft(entry.content);
-      return;
-    }
-    setBusy(true);
-    await onEdit(entry.id, next);
-    setBusy(false);
-    setEditing(false);
-  }
-
-  return (
-    <li
-      className="py-[13px]"
-      style={{ borderTop: "1px solid var(--rf-rule)" }}
-    >
-      {editing ? (
-        <EditBox
-          value={draft}
-          busy={busy}
-          onChange={setDraft}
-          onSave={save}
-          onCancel={() => {
-            setDraft(entry.content);
-            setEditing(false);
-          }}
-        />
-      ) : (
-        <>
-          <div className="flex items-start justify-between gap-4">
-            <p
-              className="whitespace-pre-wrap"
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "17px",
-                lineHeight: 1.55,
-                letterSpacing: "-0.012em",
-                color: "var(--rf-text)",
-                textWrap: "pretty",
-              }}
-            >
-              {entry.content}
-            </p>
-            <RowActions
-              entry={entry}
-              onConfirm={onConfirm}
-              onStartEdit={() => setEditing(true)}
-              onDelete={onDelete}
-            />
-          </div>
-          <div className="mt-[6px] flex items-center gap-[10px]">
-            <Eyebrow size={9.5}>{sourceLabel(entry)}</Eyebrow>
-            {!entry.confirmed && (
-              <span
-                className="rounded-full font-mono uppercase"
-                style={{
-                  padding: "2px 7px",
-                  fontSize: "9px",
-                  letterSpacing: "0.14em",
-                  color: "var(--rf-accent)",
-                  background: "var(--rf-accent-soft)",
-                }}
-              >
-                Waiting on you
-              </span>
-            )}
-          </div>
-        </>
-      )}
-    </li>
-  );
-}
-
-function FactRow({
-  entry,
-  onConfirm,
-  onEdit,
-  onDelete,
-}: {
-  entry: MemoryEntry;
-  onConfirm: (id: string) => void;
-  onEdit: (id: string, content: string) => Promise<void>;
-  onDelete: (id: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(entry.content);
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    const next = draft.trim();
-    if (!next || next === entry.content) {
-      setEditing(false);
-      setDraft(entry.content);
-      return;
-    }
-    setBusy(true);
-    await onEdit(entry.id, next);
-    setBusy(false);
-    setEditing(false);
-  }
-
-  return (
-    <li className="py-[10px]" style={{ borderTop: "1px solid var(--rf-rule)" }}>
-      {editing ? (
-        <EditBox
-          value={draft}
-          busy={busy}
-          onChange={setDraft}
-          onSave={save}
-          onCancel={() => {
-            setDraft(entry.content);
-            setEditing(false);
-          }}
-        />
-      ) : (
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <p
-              className="whitespace-pre-wrap"
-              style={{
-                fontSize: "13px",
-                lineHeight: 1.55,
-                color: "var(--rf-text)",
-              }}
-            >
-              {entry.content}
-            </p>
-            <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
-              <Eyebrow size={9.5}>{sourceLabel(entry)}</Eyebrow>
-              {!entry.confirmed && (
-                <span
-                  className="rounded-full font-mono uppercase"
-                  style={{
-                    padding: "2px 7px",
-                    fontSize: "9px",
-                    letterSpacing: "0.14em",
-                    color: "var(--rf-accent)",
-                    background: "var(--rf-accent-soft)",
-                  }}
-                >
-                  Waiting
-                </span>
-              )}
-            </div>
-          </div>
-          <RowActions
-            entry={entry}
-            onConfirm={onConfirm}
-            onStartEdit={() => setEditing(true)}
-            onDelete={onDelete}
-          />
-        </div>
-      )}
-    </li>
-  );
-}
-
-// ── Add ───────────────────────────────────────────────────────────────────────
-
-function AddEntry({
-  defaultKind,
-  label,
-  onAdd,
-}: {
-  defaultKind: Kind;
-  label: string;
-  onAdd: (kind: Kind, content: string) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<Kind>(defaultKind);
-  const [content, setContent] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function add() {
-    if (!content.trim()) return;
-    setBusy(true);
-    await onAdd(kind, content.trim());
-    setContent("");
-    setBusy(false);
-    setOpen(false);
-  }
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="mt-3 font-mono uppercase"
-        style={{
-          fontSize: "9.5px",
-          letterSpacing: "0.14em",
-          color: "var(--rf-text-3)",
-        }}
-      >
-        + {label}
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className="mt-3 flex flex-col gap-3 rounded-[4px] p-4"
-      style={{ background: "var(--rf-surface)" }}
-    >
-      <div className="flex items-center gap-3">
-        <label
-          htmlFor={`kind-${defaultKind}`}
-          className="shrink-0 font-mono uppercase"
-          style={{
-            fontSize: "9.5px",
-            letterSpacing: "0.14em",
-            color: "var(--rf-text-3)",
-          }}
-        >
-          Kind
-        </label>
-        <select
-          id={`kind-${defaultKind}`}
-          value={kind}
-          onChange={(e) => setKind(e.target.value as Kind)}
-          className="rounded-[4px] px-2 py-1 outline-none"
-          style={{
-            fontSize: "12px",
-            color: "var(--rf-text)",
-            background: "var(--rf-paper)",
-            boxShadow: "inset 0 0 0 1px var(--rf-border)",
-          }}
-        >
-          {ALL_KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={2}
-        autoFocus
-        placeholder="Something worth keeping"
-        className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
-        style={{
-          fontSize: "13.5px",
-          lineHeight: 1.6,
-          color: "var(--rf-text)",
-          background: "var(--rf-paper)",
-          boxShadow: "inset 0 0 0 1px var(--rf-border)",
-        }}
-      />
-      <div className="flex items-center gap-3">
-        <button
-          onClick={add}
-          disabled={busy || !content.trim()}
-          className="rounded-full disabled:opacity-40"
-          style={{
-            padding: "6px 13px",
-            fontSize: "12px",
-            background: "var(--rf-text)",
-            color: "var(--rf-paper)",
-          }}
-        >
-          {busy ? "Adding…" : "Add"}
-        </button>
-        <button
-          onClick={() => {
-            setOpen(false);
-            setContent("");
-          }}
-          className="font-mono uppercase"
-          style={{
-            fontSize: "9.5px",
-            letterSpacing: "0.14em",
-            color: "var(--rf-text-3)",
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-
-export default function MirrorPage() {
-  const [entries, setEntries] = useState<MemoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmClear, setConfirmClear] = useState<Kind | "all" | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetch("/api/user/memory");
-    if (res.ok) {
-      const data = (await res.json()) as MemoryEntry[];
-      data.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setEntries(data);
-    } else {
-      setToast("Couldn't load your memory");
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function confirmEntry(id: string) {
-    const res = await fetch(`/api/user/memory/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "confirm" }),
-    });
-    if (!res.ok) return setToast("Couldn't keep that one");
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, confirmed: true } : e))
-    );
-  }
-
-  async function editEntry(id: string, content: string) {
-    const res = await fetch(`/api/user/memory/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    if (!res.ok) return setToast("Couldn't save that change");
-    setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, content, confirmed: true } : e))
-    );
-  }
-
-  async function deleteEntry(id: string) {
-    const res = await fetch(`/api/user/memory/${id}`, { method: "DELETE" });
-    if (!res.ok) return setToast("Couldn't remove that one");
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  }
-
-  async function addEntry(kind: Kind, content: string) {
-    const res = await fetch("/api/user/memory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, content }),
-    });
-    if (!res.ok) return setToast("Couldn't add that");
-    await load();
-  }
-
-  async function clear(kind?: Kind) {
-    const res = await fetch("/api/user/memory/bulk", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(kind ? { kind } : {}),
-    });
-    if (!res.ok) {
-      setConfirmClear(null);
-      return setToast("Couldn't clear those");
-    }
-    setEntries((prev) => (kind ? prev.filter((e) => e.kind !== kind) : []));
-    setConfirmClear(null);
-  }
-
-  const threads = entries.filter((e) => e.kind === "thread");
-  const waiting = entries.filter((e) => !e.confirmed).length;
-
-  const clearAction = {
-    fontFamily: "var(--font-mono)",
-    fontSize: "9.5px",
-    letterSpacing: "0.14em",
-    textTransform: "uppercase" as const,
-    color: "var(--rf-text-4)",
-  };
-
-  // A plain function, not a nested component: declaring a component inside the
-  // render body gives it a new identity every render, which remounts its DOM on
-  // each keystroke elsewhere on the page.
-  function clearControl(kind: Kind | "all", label: string) {
-    if (confirmClear === kind) {
-      return (
-        <span className="flex items-center gap-3">
-          <button
-            onClick={() => clear(kind === "all" ? undefined : kind)}
-            style={{ ...clearAction, color: "var(--color-error)" }}
-          >
-            Confirm
-          </button>
-          <button onClick={() => setConfirmClear(null)} style={clearAction}>
-            Cancel
-          </button>
-        </span>
-      );
-    }
-    return (
-      <button onClick={() => setConfirmClear(kind)} style={clearAction}>
-        {label}
-      </button>
-    );
+  let trends: Trends | null = null;
+  if (tab === "trends") {
+    trends = await loadTrends(userId);
   }
 
   return (
@@ -601,7 +91,14 @@ export default function MirrorPage() {
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-16" style={{ maxWidth: 900 }}>
-          <div className="pb-5" style={{ borderBottom: "1px solid var(--rf-border)" }}>
+          <div
+            className={trendsAvailable ? "" : "pb-5"}
+            style={
+              trendsAvailable
+                ? undefined
+                : { borderBottom: "1px solid var(--rf-border)" }
+            }
+          >
             <Eyebrow accent>Mirror</Eyebrow>
             <h1
               className="mb-[6px] mt-2"
@@ -617,192 +114,133 @@ export default function MirrorPage() {
             </h1>
             <p
               className="max-w-[480px]"
-              style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--rf-text-3)" }}
+              style={{
+                fontSize: "13px",
+                lineHeight: 1.6,
+                color: "var(--rf-text-3)",
+              }}
             >
-              Everything here came from your own writing. Confirm it, correct it,
-              or take it out.
+              Everything here came from your own writing and check-ins. Confirm
+              it, correct it, or take it out.
             </p>
           </div>
 
-          {loading ? (
-            <p
-              className="pt-8"
-              style={{ fontSize: "13px", color: "var(--rf-text-4)" }}
+          {trendsAvailable && (
+            <nav
+              className="mt-[18px] flex gap-[26px]"
+              style={{ borderBottom: "1px solid var(--rf-border)" }}
             >
-              Loading…
-            </p>
-          ) : (
-            <div className="grid gap-x-10 gap-y-10 pt-[22px] lg:grid-cols-[1fr_320px]">
-              {/* Threads — the reading column */}
-              <div>
-                <div className="flex items-baseline justify-between gap-4">
-                  <Eyebrow>Threads · what keeps coming back</Eyebrow>
-                  {threads.length > 0 && (
-                    clearControl("thread", "Clear threads")
-                  )}
-                </div>
-
-                {threads.length === 0 ? (
-                  <Sheet className="mt-3 px-7 py-9">
-                    <p
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: "16.5px",
-                        lineHeight: 1.6,
-                        color: "var(--rf-text-2)",
-                        textWrap: "pretty",
-                      }}
-                    >
-                      Nothing yet. Threads are the things that keep surfacing
-                      across what you write — Refine will start proposing them
-                      once there is enough writing to find them in.
-                    </p>
-                    <p
-                      className="mt-[10px]"
-                      style={{
-                        fontSize: "12.5px",
-                        lineHeight: 1.55,
-                        color: "var(--rf-text-4)",
-                      }}
-                    >
-                      You can also name one yourself. Nothing is kept that you
-                      have not seen.
-                    </p>
-                  </Sheet>
-                ) : (
-                  <ol className="mt-2">
-                    {threads.map((e) => (
-                      <ThreadRow
-                        key={e.id}
-                        entry={e}
-                        onConfirm={confirmEntry}
-                        onEdit={editEntry}
-                        onDelete={deleteEntry}
-                      />
-                    ))}
-                  </ol>
-                )}
-
-                <AddEntry
-                  defaultKind="thread"
-                  label="Add a thread"
-                  onAdd={addEntry}
-                />
-              </div>
-
-              {/* Facts and the rest — the scanning column */}
-              <aside className="lg:border-l lg:pl-7" style={{ borderColor: "var(--rf-border)" }}>
-                {waiting > 0 && (
-                  <div
-                    className="rounded-[4px] px-4 py-[14px]"
+              {(
+                [
+                  ["memory", "Memory"],
+                  ["trends", "Trends"],
+                ] as const
+              ).map(([key, label]) => {
+                const on = tab === key;
+                return (
+                  <Link
+                    key={key}
+                    href={key === "memory" ? "/mirror" : "/mirror?tab=trends"}
+                    aria-current={on ? "page" : undefined}
                     style={{
-                      background: "var(--rf-accent-soft)",
-                      boxShadow: "inset 0 0 0 1px var(--rf-border)",
+                      paddingBottom: 11,
+                      marginBottom: -1,
+                      fontSize: "13.5px",
+                      fontWeight: on ? 500 : 400,
+                      color: on ? "var(--rf-text)" : "var(--rf-text-3)",
+                      borderBottom: `1px solid ${on ? "var(--rf-accent)" : "transparent"}`,
                     }}
                   >
-                    <Eyebrow accent size={9.5}>
-                      {waiting} waiting on you
-                    </Eyebrow>
-                    <p
-                      className="mt-2"
-                      style={{
-                        fontSize: "12.5px",
-                        lineHeight: 1.55,
-                        color: "var(--rf-text-2)",
-                      }}
-                    >
-                      Refine caught these but won&apos;t keep them until you say
-                      so.
-                    </p>
-                  </div>
-                )}
-
-                {ASIDE_KINDS.map(({ value, label }) => {
-                  const group = entries.filter((e) => e.kind === value);
-                  // Empty non-fact groups stay out of the way entirely — four
-                  // headers over four empty lists is noise, not structure.
-                  if (group.length === 0 && value !== "fact") return null;
-                  return (
-                    <div key={value} className="mt-6 first:mt-0" style={waiting > 0 ? { marginTop: 22 } : undefined}>
-                      <div className="flex items-baseline justify-between gap-4">
-                        <Eyebrow>{label}</Eyebrow>
-                        {group.length > 0 && (
-                          clearControl(value, "Clear")
-                        )}
-                      </div>
-                      {group.length === 0 ? (
-                        <p
-                          className="mt-2"
-                          style={{
-                            fontSize: "12.5px",
-                            lineHeight: 1.55,
-                            color: "var(--rf-text-4)",
-                          }}
-                        >
-                          Nothing kept yet.
-                        </p>
-                      ) : (
-                        <ol className="mt-2">
-                          {group.map((e) => (
-                            <FactRow
-                              key={e.id}
-                              entry={e}
-                              onConfirm={confirmEntry}
-                              onEdit={editEntry}
-                              onDelete={deleteEntry}
-                            />
-                          ))}
-                        </ol>
-                      )}
-                    </div>
-                  );
-                })}
-
-                <AddEntry
-                  defaultKind="fact"
-                  label="Add a fact"
-                  onAdd={addEntry}
-                />
-
-                <div
-                  className="mt-10 flex flex-col gap-3 pt-5"
-                  style={{ borderTop: "1px solid var(--rf-rule)" }}
-                >
-                  {entries.length > 0 && (
-                    clearControl("all", "Delete everything here")
-                  )}
-                  <div>
-                    <Link
-                      href="/trash"
-                      className="font-mono uppercase"
-                      style={{
-                        fontSize: "9.5px",
-                        letterSpacing: "0.14em",
-                        color: "var(--rf-text-3)",
-                      }}
-                    >
-                      Trash →
-                    </Link>
-                    <p
-                      className="mt-[6px]"
-                      style={{
-                        fontSize: "11.5px",
-                        lineHeight: 1.55,
-                        color: "var(--rf-text-4)",
-                      }}
-                    >
-                      What you&apos;ve deleted, kept for 30 days before it is
-                      removed for good.
-                    </p>
-                  </div>
-                </div>
-              </aside>
-            </div>
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
           )}
+
+          <div className="pt-[22px]">
+            {tab === "trends" && trends ? (
+              <TrendsPanel trends={trends} />
+            ) : (
+              <MemoryPanel />
+            )}
+          </div>
         </div>
       </div>
-
-      <Toast message={toast} onDismiss={() => setToast(null)} />
     </PageBg>
   );
+}
+
+/**
+ * Reads and decrypts the responses Trends is built from.
+ *
+ * ── One audit row, not N ──────────────────────────────────────────────────────
+ * Charting is reading, so this is a genuine decryption event and it is logged.
+ * But it is ONE deliberate act by the owner of the data, and writing a row per
+ * response would put twenty-one entries on the board for a single glance —
+ * burying the log in exactly the noise it exists to make visible. The row
+ * carries the count instead.
+ *
+ * `questionnaireResponseId` stays null for the same reason: this access is not
+ * about any one response.
+ */
+async function loadTrends(userId: string): Promise<Trends> {
+  const rows = await db
+    .select({
+      slug: questionnaireResponses.questionnaireSlug,
+      completedAt: questionnaireResponses.completedAt,
+      encryptedAnswers: questionnaireResponses.encryptedAnswers,
+      encryptedScoring: questionnaireResponses.encryptedScoring,
+    })
+    .from(questionnaireResponses)
+    .where(
+      and(
+        eq(questionnaireResponses.userId, userId),
+        isNotNull(questionnaireResponses.completedAt),
+        isNull(questionnaireResponses.deletedAt),
+        isNull(questionnaireResponses.purgedAt)
+      )
+    );
+
+  const decrypted: DecryptedResponse[] = [];
+  let failures = 0;
+
+  for (const row of rows) {
+    if (!row.completedAt) continue;
+    try {
+      const answers = row.encryptedAnswers
+        ? ((JSON.parse(decrypt(row.encryptedAnswers)) as { answers?: Answers })
+            .answers ?? {})
+        : {};
+      const total = row.encryptedScoring
+        ? ((JSON.parse(decrypt(row.encryptedScoring)) as { total?: number })
+            .total ?? null)
+        : null;
+      decrypted.push({
+        slug: row.slug,
+        completedAt: row.completedAt,
+        answers,
+        total,
+      });
+    } catch {
+      // One unreadable response must not take the whole chart down. It is
+      // dropped from the series and counted, so a systemic key problem shows up
+      // in the logs rather than as a quietly shorter line.
+      failures += 1;
+    }
+  }
+
+  if (failures > 0) {
+    console.error(
+      `Trends: ${failures} of ${rows.length} responses failed to decrypt for user ${userId}`
+    );
+  }
+
+  await db.insert(contentAccessLog).values({
+    id: randomUUID(),
+    userId,
+    context: `mirror_trends_view (${decrypted.length} responses read)`,
+  });
+
+  return buildTrends(decrypted);
 }

@@ -120,6 +120,17 @@ type Common = {
 
 export type LikertQuestionnaire = Common & {
   kind: "likert";
+  /**
+   * True once the item wording has been checked against a primary source.
+   *
+   * Separate from `shipped` on purpose: `shipped` decides whether an instrument
+   * can be *started*, this decides whether its scores can be *charted over
+   * time*. A trend line asserts that repeated measurements are comparable and
+   * that they measure the named construct — which is false if the items are
+   * paraphrased, however plausible the paraphrase. Mirror renders no card for
+   * an unverified instrument.
+   */
+  wordingVerified: boolean;
   /** e.g. "Over the last two weeks" — the recall window, shown once. */
   recallWindow: string;
   options: ResponseOption[];
@@ -148,6 +159,20 @@ export type QuestionnaireScoring = {
   /** Per-item values, so a response stays interpretable if scoring changes. */
   items: Record<string, number>;
 };
+
+/** Highest total the instrument can produce — items × the top response value. */
+export function maxTotal(q: LikertQuestionnaire): number {
+  const top = Math.max(...q.options.map((o) => o.value));
+  return q.items.length * top;
+}
+
+/** The band a total falls in, or null when the instrument has no bands. */
+export function bandFor(q: LikertQuestionnaire, total: number): string | null {
+  return (
+    [...q.bands].sort((a, b) => b.min - a.min).find((b) => total >= b.min)
+      ?.label ?? null
+  );
+}
 
 /**
  * Sums a likert instrument and resolves the band.

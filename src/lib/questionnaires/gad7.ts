@@ -35,6 +35,10 @@ export const gad7: LikertQuestionnaire = {
   allowsNote: true,
   shipped: true,
 
+  // Not yet checked against a primary source, so Mirror charts nothing for
+  // it. Flip to true in the same change that verifies the item text.
+  wordingVerified: false,
+
   options: [
     { value: 0, label: "Not at all" },
     { value: 1, label: "Several days" },

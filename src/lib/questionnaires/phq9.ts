@@ -39,6 +39,10 @@ export const phq9: LikertQuestionnaire = {
   /** Gated. See the note above — do not flip without the item 9 response path. */
   shipped: false,
 
+  // Not yet checked against a primary source, so Mirror charts nothing for
+  // it. Flip to true in the same change that verifies the item text.
+  wordingVerified: false,
+
   options: [
     { value: 0, label: "Not at all" },
     { value: 1, label: "Several days" },

@@ -183,6 +183,19 @@ export const journalEntries = pgTable("journal_entries", {
    * deserves fresh attempts.
    */
   summaryAttempts: integer("summary_attempts").notNull().default(0),
+  /**
+   * Which summariser prompt version those attempts were spent under.
+   *
+   * Without this, the cap and the reflow fight each other: an entry that failed
+   * five times under prompt v1 would be excluded forever, including from the
+   * v2 reflow that might well have summarised it fine. Attempts are therefore
+   * consecutive failures *under one prompt version*, not for all time — a new
+   * version is a new trial and earns fresh attempts, exactly as an edit does.
+   *
+   * The cap still bites: five failures under v2 stops v2 retrying. Poison-entry
+   * protection is preserved, it is just scoped to the prompt that was failing.
+   */
+  summaryAttemptVersion: text("summary_attempt_version"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

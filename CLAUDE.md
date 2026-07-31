@@ -192,6 +192,59 @@ Rules for anything under `src/app/admin/`:
   admin column, no first-user-is-admin, no default, and no code path that grants
   it. Fail closed when unset.
 
+## Silent data-loss footguns
+
+Two ways to destroy user data with no error message, no failed deploy, and no
+sign anything is wrong until someone goes looking for something that is gone.
+Both are permanent. Neither is caught by tests, types, or review.
+
+### Encryption keys never move
+
+`ENCRYPTION_KEY` and `EMAIL_HMAC_KEY` are fixed for the life of the data.
+
+- Change `ENCRYPTION_KEY` → every journal entry, title, profile, questionnaire
+  answer and summary becomes unrecoverable noise. There is no re-encryption path
+  because the old plaintext cannot be obtained without the old key.
+- Change `EMAIL_HMAC_KEY` → login looks up a hash that can no longer be
+  computed, so **every account silently appears not to exist**. The rows are
+  fine. Nobody can reach them.
+
+Consequences to hold to:
+- Never regenerate either value "to be safe" or because a new environment needs
+  one. A new environment pointed at existing data needs the *existing* keys.
+- Back them up separately from the database, in a password manager. A backup
+  file plus its key stored together is not a backup; it is a plaintext copy.
+- `src/lib/env.ts` logs a short fingerprint of both at startup. Compare it
+  across environments before assuming a decrypt failure is a code bug — it is
+  usually a key mismatch.
+- Key rotation, if it is ever wanted, is a migration that decrypts with the old
+  key and re-encrypts with the new one, run while both keys exist. It is not a
+  config change.
+
+### Instrument keys freeze once data exists
+
+Every questionnaire answer is stored against a **key**, not a position or a
+label: `{"sleep_hours": 7, "kept_up": {"alcohol": true}}`.
+
+**Labels are free to change. Keys are frozen the moment a single response has
+been recorded.**
+
+Renaming a key does not error. It does not fail a migration. Historical answers
+simply stop being found — trends go quiet, a field looks never-answered, and
+nothing anywhere reports a problem.
+
+So, when instrument wording changes (which the content pass will do):
+- Change `label`, `note`, `text`, `blurb` freely.
+- **Never** change `key` on a `TrackerField`, or `key` on a `LikertItem`.
+- Bump the instrument's `version` so responses stay interpretable against the
+  wording actually presented.
+- If a key genuinely must change, it is a data migration that rewrites the
+  stored JSON blobs — not an edit to the instrument file.
+
+This is what resolves the outstanding "Kept up" problem: the label disagrees
+with its `alcohol` and `late_screens` options, and the fix is to rewrite the
+label, never the option keys.
+
 ## Security non-negotiables
 
 - Anthropic API key lives only in `.env.local`. Never logged, echoed,
@@ -199,6 +252,8 @@ Rules for anything under `src/app/admin/`:
 - `.env.local` is in `.gitignore`. Verify before any commit.
 - Field-level encryption on all journal content. User data treated with
   PHI-grade rigor.
+- Back up before anything that touches stored data: `npm run backup`. Writes
+  `backups/` (gitignored). See `docs/refine_operations.md`.
 - User memory is editable; deletion means genuine deletion including
   derived structures.
 

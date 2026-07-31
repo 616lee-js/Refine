@@ -15,7 +15,8 @@
     "db:studio": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs studio",
     "db:reset": "node --env-file=.env --import tsx scripts/reset-db.ts",
     "setup:seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
-    "invites": "node --env-file=.env.local --import tsx scripts/invite-codes.ts"
+    "invites": "node --env-file=.env.local --import tsx scripts/invite-codes.ts",
+    "backup": "node --env-file=.env.local --import tsx scripts/backup.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",

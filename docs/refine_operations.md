@@ -223,6 +223,93 @@ https://supabase.com/dashboard first — if it says paused, click restore.
 
 ---
 
+## Backing up
+
+Your writing lives in one database, protected by a key that lives in one other
+place. Neither has a safety net unless you make one. Supabase's free plan does
+not include automated backups — check your project's Database → Backups page to
+confirm what yours has, but assume nothing.
+
+### Taking a backup
+
+```
+npm run backup
+```
+
+Writes a timestamped file into `backups/`. It prints a row count per table.
+That folder is ignored by git and must never be committed.
+
+Do this before anything that changes the database structure, and on whatever
+regular rhythm you'll actually keep to. Monthly beats "when I remember".
+
+### The part people get wrong
+
+**The backup file is encrypted, and the key is not in it.**
+
+Everything you have written is stored scrambled. The two values that unscramble
+it live in `.env.local` and in Vercel:
+
+- `ENCRYPTION_KEY` — unlocks entries, titles, profiles, questionnaire answers
+- `EMAIL_HMAC_KEY` — lets you log in at all
+
+Lose either and the backup is permanently unreadable. There is no recovery, no
+support ticket, no reset. **Copy both into a password manager now**, in a
+separate entry from the database file. Keeping the file and the keys together
+would defeat the point of encrypting anything.
+
+Neither value may ever be changed once you have written anything. See
+`CLAUDE.md`, "Silent data-loss footguns".
+
+### Checking a backup is good
+
+```
+npm run backup -- verify backups/refine-2026-07-31T06-16-29-548Z.json
+```
+
+Reads the file and reports what is in it. Touches nothing. A backup you have
+never opened is a guess, not a backup — do this occasionally.
+
+### Restoring
+
+Restoring is deliberately awkward, because it is not something to do by
+accident. It refuses to run against a database that already has rows.
+
+1. Create a new, empty Supabase project.
+2. Put its **session pooler** connection string (port 5432) in `.env.local` as
+   `DATABASE_URL_DIRECT`.
+3. Rebuild the structure:
+   ```
+   npm run db:migrate
+   ```
+4. Load the data:
+   ```
+   npm run backup -- restore backups/refine-<timestamp>.json
+   ```
+5. Put `ENCRYPTION_KEY` and `EMAIL_HMAC_KEY` back exactly as they were, along
+   with the other environment variables.
+6. Log in. If entries appear but are unreadable, the keys do not match — fix the
+   keys, not the data.
+
+Everything loads in a single transaction: either all of it lands or none does.
+There is no half-restored state to untangle.
+
+### What is and isn't in the file
+
+Everything: your account, invite codes, profile, every journal entry, every
+summary, every questionnaire response, memory, and both audit logs. Nine tables.
+The script refuses to run if it finds a table it doesn't know about, so it
+cannot quietly leave one out after a future change.
+
+Not included: the database structure itself. That comes from `npm run db:migrate`,
+which rebuilds it from what is in version control — a more reliable source than
+a copy of whatever the server happened to look like.
+
+This round trip has been tested end-to-end, not just assumed: schema rebuilt from
+the migrations, data loaded, and encrypted entries confirmed to still decrypt
+afterwards.
+
+---
+
 ## If the app stops working
 
 **"Something went wrong" on every page**
@@ -261,6 +348,13 @@ existing journal entries can't be read. They should never be edited.
 ---
 
 ## Quick reference
+
+| Task | Command |
+|---|---|
+| Back up | `npm run backup` |
+| Check a backup | `npm run backup -- verify <file>` |
+| Restore into an empty database | `npm run backup -- restore <file>` |
+
 
 | What | Command |
 |---|---|

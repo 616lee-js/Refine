@@ -1,0 +1,1 @@
+ALTER TABLE "journal_entries" ADD COLUMN "summary_attempt_version" text;

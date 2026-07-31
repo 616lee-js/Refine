@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, asc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { journalEntries, journalEntrySummaries } from "@/lib/db/schema";
 import { decrypt, encrypt } from "@/lib/crypto";
@@ -27,9 +27,27 @@ import { generateSummary, SUMMARISER_VERSION } from "./generate";
  * 3. Completing an entry must not depend on Anthropic twice. The PATCH already
  *    awaits classification because the tier drives the crisis panel; a second
  *    call in that path doubles the failure surface for something nobody sees.
+ *
+ * ── Prompt changes reflow automatically ───────────────────────────────────────
+ * An entry is also due when its summary was generated under a different prompt
+ * version. Editing `entry-summariser.md` therefore re-summarises the whole
+ * archive, 25 a day, with no script to remember and no rows to hand-edit.
+ *
+ * This is what makes the content pass non-destructive: the prompt can be
+ * rewritten against real accumulated entries without stranding weeks of
+ * summaries generated under wording that was rejected. Cabinet 2 is derived
+ * data, and derived data should follow its deriver.
  */
 
-/** Retries stop here. Reset to 0 on success or on any edit to the entry. */
+/**
+ * Retries stop here — but per prompt version, not for all time.
+ *
+ * Reset to 0 on success and on any edit. A version change does not reset the
+ * counter; it makes it irrelevant, because `summary_attempt_version` no longer
+ * matches and the entry is eligible again. The distinction matters: the count is
+ * preserved as a record of what happened under the old prompt, while no longer
+ * blocking the new one.
+ */
 export const SUMMARY_MAX_ATTEMPTS = 5;
 
 /** Bounded so one run fits comfortably inside the function's maxDuration. */
@@ -59,6 +77,7 @@ export async function findDue(limit = SUMMARY_BATCH_SIZE) {
       id: journalEntries.id,
       encryptedBody: journalEntries.encryptedBody,
       attempts: journalEntries.summaryAttempts,
+      attemptVersion: journalEntries.summaryAttemptVersion,
       summaryId: journalEntrySummaries.id,
     })
     .from(journalEntries)
@@ -72,10 +91,20 @@ export async function findDue(limit = SUMMARY_BATCH_SIZE) {
         isNotNull(journalEntries.encryptedBody),
         isNull(journalEntries.deletedAt),
         isNull(journalEntries.purgedAt),
-        lt(journalEntries.summaryAttempts, SUMMARY_MAX_ATTEMPTS),
+        // Exhausted attempts only block while they were spent on the CURRENT
+        // prompt. A new prompt version is a new trial.
         or(
+          lt(journalEntries.summaryAttempts, SUMMARY_MAX_ATTEMPTS),
+          isNull(journalEntries.summaryAttemptVersion),
+          ne(journalEntries.summaryAttemptVersion, SUMMARISER_VERSION)
+        ),
+        or(
+          // Never summarised.
           isNull(journalEntrySummaries.id),
-          lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt)
+          // Entry edited since it was summarised.
+          lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt),
+          // Summarised under a prompt that no longer exists — reflow.
+          ne(journalEntrySummaries.generationVersion, SUMMARISER_VERSION)
         )
       )
     )
@@ -96,6 +125,7 @@ async function summariseOne(entry: {
   id: string;
   encryptedBody: string | null;
   attempts: number;
+  attemptVersion: string | null;
 }): Promise<"succeeded" | "failed"> {
   try {
     if (!entry.encryptedBody) throw new Error("no body");
@@ -122,7 +152,7 @@ async function summariseOne(entry: {
 
     await db
       .update(journalEntries)
-      .set({ summaryAttempts: 0 })
+      .set({ summaryAttempts: 0, summaryAttemptVersion: null })
       .where(eq(journalEntries.id, entry.id));
 
     return "succeeded";
@@ -134,11 +164,19 @@ async function summariseOne(entry: {
       err instanceof Error ? err.message : "unknown error"
     );
 
-    // Incremented in SQL rather than from the value read at query time, so two
-    // overlapping runs cannot both write attempts = n + 1.
+    // Attempts belong to a prompt version. Failing under a version the counter
+    // was not counting starts the count over at 1; failing under the same one
+    // increments. Done in SQL rather than from the value read at query time, so
+    // two overlapping runs cannot both write attempts = n + 1.
+    const sameVersion = entry.attemptVersion === SUMMARISER_VERSION;
     await db
       .update(journalEntries)
-      .set({ summaryAttempts: sql`${journalEntries.summaryAttempts} + 1` })
+      .set({
+        summaryAttempts: sameVersion
+          ? sql`${journalEntries.summaryAttempts} + 1`
+          : 1,
+        summaryAttemptVersion: SUMMARISER_VERSION,
+      })
       .where(eq(journalEntries.id, entry.id));
 
     return "failed";
@@ -172,7 +210,9 @@ export async function runSummaryQueue(
       else {
         result.failed += 1;
         // This attempt was the last one it will get without an edit.
-        if (slice[j].attempts + 1 >= SUMMARY_MAX_ATTEMPTS) {
+        const wasSameVersion = slice[j].attemptVersion === SUMMARISER_VERSION;
+        const nowAt = wasSameVersion ? slice[j].attempts + 1 : 1;
+        if (nowAt >= SUMMARY_MAX_ATTEMPTS) {
           result.exhausted.push(slice[j].id);
         }
       }

@@ -33,7 +33,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: "/admin/safety-log", label: "Safety log" },
 ];
 
-export async function AdminNav() {
+export async function AdminNav({ active = false }: { active?: boolean } = {}) {
   const session = await getSession();
   if (!session.userId || !isAdminUserId(session.userId)) return null;
 
@@ -45,8 +45,8 @@ export async function AdminNav() {
         // Deliberately not the accent: admin context must not read as part of
         // the reflective surface. A cool grey against a warm paper page is the
         // clearest available "you are somewhere else".
-        background: "var(--rf-admin-soft)",
-        boxShadow: "inset 0 0 0 1px var(--rf-admin-border)",
+        background: active ? "var(--rf-admin)" : "var(--rf-admin-soft)",
+        boxShadow: active ? "none" : "inset 0 0 0 1px var(--rf-admin-border)",
       }}
     >
       <span
@@ -54,7 +54,8 @@ export async function AdminNav() {
         style={{
           fontSize: "9px",
           letterSpacing: "0.16em",
-          color: "var(--rf-admin)",
+          color: active ? "var(--rf-paper)" : "var(--rf-admin)",
+          opacity: active ? 0.75 : 1,
         }}
       >
         Admin
@@ -64,7 +65,10 @@ export async function AdminNav() {
           key={l.href}
           href={l.href}
           className="transition-opacity hover:opacity-70"
-          style={{ fontSize: "12.5px", color: "var(--rf-admin)" }}
+          style={{
+            fontSize: "12.5px",
+            color: active ? "var(--rf-paper)" : "var(--rf-admin)",
+          }}
         >
           {l.label}
         </Link>

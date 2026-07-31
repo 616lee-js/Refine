@@ -99,15 +99,28 @@ export default async function SafetyLogPage() {
     return { ...row, content };
   });
 
+  // The shell — top nav, background, admin context bar — comes from
+  // src/app/admin/layout.tsx. This page renders only its own content.
   return (
-    <div className="min-h-screen bg-white text-stone-800">
-      <header className="px-6 py-4 border-b border-stone-100">
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-          Refine — Safety Log
-        </h1>
-      </header>
+      <main className="mx-auto w-full max-w-5xl px-6 py-8 text-stone-800 sm:px-10">
+        <div className="mb-6">
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "27px",
+              fontWeight: 380,
+              letterSpacing: "-0.02em",
+              color: "var(--rf-text)",
+            }}
+          >
+            Safety log
+          </h1>
+          <p className="mt-1" style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}>
+            {decoded.length} {decoded.length === 1 ? "entry" : "entries"}, newest
+            first.
+          </p>
+        </div>
 
-      <main className="px-6 py-8 max-w-5xl mx-auto">
         {decoded.length === 0 ? (
           <p className="text-sm text-stone-400">No safety log entries yet.</p>
         ) : (
@@ -210,6 +223,5 @@ export default async function SafetyLogPage() {
           </div>
         )}
       </main>
-    </div>
   );
 }

@@ -8,8 +8,9 @@ import { classifyAndLog } from "@/lib/safety/classify-and-log";
 /**
  * A single journal entry.
  *
- * PUT   autosave the body. No classification — drafts are saved constantly and
- *       classifying on every keystroke pause would be pointless and expensive.
+ * PUT   autosave the body, and optionally the title. No classification — drafts
+ *       are saved constantly and classifying on every keystroke pause would be
+ *       pointless and expensive.
  * PATCH mark complete (or re-save an already-complete entry). Classification
  *       runs here, and the tier comes back so the client can surface resources.
  * DELETE move to trash.
@@ -41,9 +42,14 @@ export async function PUT(req: Request, { params }: Params) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const { text } = body as { text?: unknown };
-  if (typeof text !== "string") {
-    return new Response("text required", { status: 400 });
+  // Either field may travel alone. A title-only PUT is what the read view sends
+  // when someone names an entry after the fact — it must not have to round-trip
+  // the whole body back to the server to do that.
+  const { text, title } = body as { text?: unknown; title?: unknown };
+  const hasText = typeof text === "string";
+  const hasTitle = typeof title === "string";
+  if (!hasText && !hasTitle) {
+    return new Response("text or title required", { status: 400 });
   }
 
   const entry = await loadOwned(id, session.userId);
@@ -59,7 +65,18 @@ export async function PUT(req: Request, { params }: Params) {
     .set({
       // Empty text stores NULL rather than the ciphertext of "" — it keeps
       // "never written" and "written then cleared" the same shape.
-      encryptedBody: text.length > 0 ? encrypt(text) : null,
+      ...(hasText
+        ? { encryptedBody: (text as string).length > 0 ? encrypt(text as string) : null }
+        : {}),
+      // A title summarises the entry, so it is content and encrypted like the
+      // body. Absent means "leave as is"; empty string means "clear it".
+      ...(hasTitle
+        ? {
+            encryptedTitle: (title as string).trim()
+              ? encrypt((title as string).trim())
+              : null,
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(journalEntries.id, id));
@@ -79,7 +96,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const { text } = body as { text?: unknown };
+  const { text, title } = body as { text?: unknown; title?: unknown };
   if (typeof text !== "string" || !text.trim()) {
     return new Response("Cannot complete an empty entry", { status: 400 });
   }
@@ -96,6 +113,9 @@ export async function PATCH(req: Request, { params }: Params) {
     .update(journalEntries)
     .set({
       encryptedBody: encrypt(text),
+      ...(typeof title === "string"
+        ? { encryptedTitle: title.trim() ? encrypt(title.trim()) : null }
+        : {}),
       completedAt: entry.completedAt ?? now,
       updatedAt: now,
     })

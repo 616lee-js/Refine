@@ -6,12 +6,21 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries, contentAccessLog } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { PageBg } from "@/components/ui/page-bg";
+import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { TopNav } from "@/components/ui/top-nav";
+import { EntryTitle } from "./entry-title";
 
 /**
- * Read view for a completed journal entry.
+ * Reading back a completed entry.
  *
- * Deliberately not editable here — editing happens on the writing surface at
- * /reflection/[id]. This page is for re-reading what you wrote.
+ * Not editable here — editing happens on the writing surface at
+ * /reflection/[id]. This page is for re-reading, at the same size the text was
+ * written at, so that reading it back feels like the same object rather than a
+ * summary of one.
+ *
+ * The exception is the title, which is editable in place. See ./entry-title.tsx
+ * for why naming belongs to re-reading rather than to finishing.
  */
 export default async function ReflectionDetailPage({
   params,
@@ -63,74 +72,117 @@ export default async function ReflectionDetailPage({
     }
   }
 
+  let title: string | null = null;
+  if (entry.encryptedTitle) {
+    try {
+      title = decrypt(entry.encryptedTitle);
+    } catch {
+      title = null;
+    }
+  }
+
   const written = entry.completedAt ?? entry.createdAt;
+  const dateLong = written.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  const words = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="min-h-screen bg-white text-stone-800">
-      <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Refine</h1>
-        <nav className="flex items-center gap-4">
-          <Link href="/reflections" className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
-            Reflections
-          </Link>
-          <Link href="/mirror" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Mirror
-          </Link>
-          <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Profile
-          </Link>
-          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
-            New reflection
-          </Link>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-              Sign out
-            </button>
-          </form>
-        </nav>
-      </header>
+    <PageBg>
+      <TopNav active="reflections" />
 
-      <main className="px-6 py-8 max-w-2xl mx-auto">
-        <div className="flex items-baseline justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-sm font-medium text-stone-700">
-              {new Date(written).toLocaleDateString(undefined, {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </h2>
-            <p className="mt-0.5 text-xs text-stone-400">
-              {new Date(written).toLocaleTimeString(undefined, {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-              {!entry.completedAt && " · draft"}
-            </p>
+      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
+        <div className="w-full pb-14" style={{ maxWidth: 700 }}>
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
+            <div className="min-w-0">
+              <Eyebrow>
+                {dateLong}
+                {" · "}
+                {written.toLocaleTimeString(undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                {!entry.completedAt && " · unfinished"}
+              </Eyebrow>
+              <div className="mt-[9px]">
+                <EntryTitle
+                  entryId={entry.id}
+                  initialTitle={title}
+                  fallback={dateLong}
+                />
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-3">
+              {words > 0 && !decryptFailed && (
+                <Eyebrow size={9.5}>{words} words</Eyebrow>
+              )}
+              <Link
+                href={`/reflection/${entry.id}`}
+                className="rounded-full transition-colors"
+                style={{
+                  padding: "7px 14px",
+                  fontSize: "12.5px",
+                  color: "var(--rf-text-2)",
+                  boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                }}
+              >
+                Add to this
+              </Link>
+            </div>
           </div>
-          <Link
-            href={`/reflection/${entry.id}`}
-            className="shrink-0 text-xs text-stone-400 hover:text-stone-600 transition-colors underline underline-offset-2"
-          >
-            Edit
-          </Link>
-        </div>
 
-        {decryptFailed ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-xl px-5 py-4">
-            This entry could not be read. Its content is still stored, but the
-            encryption key does not match — nothing has been lost, and it should
-            not be edited or overwritten until that is resolved.
-          </p>
-        ) : body ? (
-          <article className="text-[15px] text-stone-700 leading-relaxed whitespace-pre-wrap">
-            {body}
-          </article>
-        ) : (
-          <p className="text-sm text-stone-400">This entry is empty.</p>
-        )}
-      </main>
-    </div>
+          <Sheet className="px-9 py-9 sm:px-12 sm:py-11">
+            {decryptFailed ? (
+              <p
+                className="rounded-[10px] px-5 py-4"
+                style={{
+                  fontSize: "13.5px",
+                  lineHeight: 1.7,
+                  color: "var(--color-error)",
+                  background: "rgba(163, 58, 37, 0.08)",
+                }}
+              >
+                This entry could not be read. Its content is still stored, but the
+                encryption key does not match — nothing has been lost, and it
+                should not be edited or overwritten until that is resolved.
+              </p>
+            ) : body ? (
+              <article
+                className="whitespace-pre-wrap"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "var(--text-entry)",
+                  lineHeight: 1.75,
+                  color: "var(--rf-text)",
+                }}
+              >
+                {body}
+              </article>
+            ) : (
+              <p style={{ fontSize: "14px", color: "var(--rf-text-4)" }}>
+                This one is empty.
+              </p>
+            )}
+          </Sheet>
+
+          <div className="pt-[14px]">
+            <Link
+              href="/reflections"
+              className="font-mono uppercase transition-colors"
+              style={{
+                fontSize: "9.5px",
+                letterSpacing: "0.14em",
+                color: "var(--rf-text-4)",
+              }}
+            >
+              ← Everything you&apos;ve written
+            </Link>
+          </div>
+        </div>
+      </div>
+    </PageBg>
   );
 }

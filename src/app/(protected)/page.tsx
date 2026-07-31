@@ -1,230 +1,207 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { PageBg } from "@/components/ui/page-bg";
-import { Sheet, Eyebrow } from "@/components/ui/sheet";
-import { TopNav } from "@/components/ui/top-nav";
+import { and, count, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { journalEntries, questionnaireResponses } from "@/lib/db/schema";
+import { decrypt } from "@/lib/crypto";
+import { getQuestionnaire } from "@/lib/questionnaires";
+import { ScreenHome, type RecentRow } from "./home";
 
 /**
- * Home.
+ * Home — the data behind ScreenHome.
  *
- * Two ways in, both producing entries. The designed ScreenHome — continuity
- * line, tracker strip, Recent list, Mirror sparkline — is Step 5, and several
- * of those need Phase 6 data that does not exist yet.
- *
- * The type picker and check-in step from the chat model are gone: they existed
- * to configure a conversation. A journal entry needs neither; you open it and
- * write.
+ * Only titles are decrypted, never bodies: the same rule the archive follows,
+ * for the same reason. See src/app/(protected)/reflections/page.tsx.
  */
-export default function Page() {
-  const router = useRouter();
-  const [loading, setLoading] = useState<
-    "entry" | "framework" | "checkin" | null
-  >(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function startEntry() {
-    setLoading("entry");
-    setError(null);
-    try {
-      const res = await fetch("/api/reflections", { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { reflectionId } = (await res.json()) as { reflectionId: string };
-      router.push(`/reflection/${reflectionId}`);
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setLoading(null);
-    }
-  }
+/** Rough relative phrasing. Precise enough for a sentence, no library needed. */
+function relativeDay(then: Date, now: Date): string {
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "last week";
+  if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+  return `in ${then.toLocaleDateString(undefined, { month: "long" })}`;
+}
 
-  async function startCheckin() {
-    setLoading("checkin");
-    setError(null);
-    try {
-      const res = await fetch("/api/questionnaires", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: "daily_checkin" }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { responseId } = (await res.json()) as { responseId: string };
-      router.push(`/checkin/${responseId}`);
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setLoading(null);
-    }
-  }
+function greetingFor(hour: number): string {
+  if (hour < 5) return "Late";
+  if (hour < 12) return "Morning";
+  if (hour < 18) return "Afternoon";
+  return "Evening";
+}
 
-  async function startFramework(slug: string) {
-    setLoading("framework");
-    setError(null);
-    try {
-      const res = await fetch("/api/questionnaires", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { responseId } = (await res.json()) as { responseId: string };
-      router.push(`/framework/${responseId}`);
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setLoading(null);
-    }
+function safeDecrypt(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return decrypt(value);
+  } catch {
+    return null;
   }
+}
+
+export default async function HomePage() {
+  const authSession = await getSession();
+  const userId = authSession.userId!;
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  const [entries, responses, checkinsToday, totals] = await Promise.all([
+    db
+      .select({
+        id: journalEntries.id,
+        createdAt: journalEntries.createdAt,
+        updatedAt: journalEntries.updatedAt,
+        completedAt: journalEntries.completedAt,
+        encryptedTitle: journalEntries.encryptedTitle,
+        hasBody: isNotNull(journalEntries.encryptedBody),
+      })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.userId, userId),
+          isNull(journalEntries.deletedAt),
+          isNull(journalEntries.purgedAt)
+        )
+      )
+      .orderBy(desc(journalEntries.updatedAt))
+      .limit(20),
+
+    db
+      .select({
+        id: questionnaireResponses.id,
+        slug: questionnaireResponses.questionnaireSlug,
+        completedAt: questionnaireResponses.completedAt,
+      })
+      .from(questionnaireResponses)
+      .where(
+        and(
+          eq(questionnaireResponses.userId, userId),
+          isNotNull(questionnaireResponses.completedAt),
+          isNull(questionnaireResponses.deletedAt),
+          isNull(questionnaireResponses.purgedAt)
+        )
+      )
+      .orderBy(desc(questionnaireResponses.completedAt))
+      .limit(20),
+
+    db
+      .select({ id: questionnaireResponses.id })
+      .from(questionnaireResponses)
+      .where(
+        and(
+          eq(questionnaireResponses.userId, userId),
+          eq(questionnaireResponses.questionnaireSlug, "daily_checkin"),
+          isNotNull(questionnaireResponses.completedAt),
+          gte(questionnaireResponses.completedAt, startOfToday),
+          isNull(questionnaireResponses.deletedAt)
+        )
+      )
+      .limit(1),
+
+    // Counted rather than derived from the lists above, which are capped — the
+    // continuity line states a total and must not quietly stop at 20.
+    Promise.all([
+      db
+        .select({ n: count() })
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.userId, userId),
+            isNotNull(journalEntries.completedAt),
+            isNull(journalEntries.deletedAt),
+            isNull(journalEntries.purgedAt)
+          )
+        ),
+      db
+        .select({ n: count() })
+        .from(questionnaireResponses)
+        .where(
+          and(
+            eq(questionnaireResponses.userId, userId),
+            isNotNull(questionnaireResponses.completedAt),
+            isNull(questionnaireResponses.deletedAt),
+            isNull(questionnaireResponses.purgedAt)
+          )
+        ),
+    ]),
+  ]);
+
+  const totalRecords = (totals[0][0]?.n ?? 0) + (totals[1][0]?.n ?? 0);
+
+  const completedEntries = entries.filter((e) => e.completedAt !== null);
+
+  // An unfinished entry only counts as one worth resuming if there is writing in
+  // it. An empty draft is reused silently by POST /api/reflections, so surfacing
+  // it here would be offering to resume a blank page.
+  const draft = entries.find((e) => e.completedAt === null && e.hasBody);
+
+  const recent: RecentRow[] = [
+    ...completedEntries.map((e): RecentRow & { sort: number } => {
+      const at = e.completedAt!;
+      return {
+        sort: at.getTime(),
+        id: `entry-${e.id}`,
+        href: `/reflections/${e.id}`,
+        at: relativeDay(at, now),
+        title: safeDecrypt(e.encryptedTitle),
+        fallback: at.toLocaleDateString(undefined, {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        }),
+        kindLabel: "Writing",
+        framework: false,
+      };
+    }),
+    ...responses.map((r): RecentRow & { sort: number } => {
+      const q = getQuestionnaire(r.slug);
+      const tracker = q?.kind === "tracker";
+      const at = r.completedAt!;
+      return {
+        sort: at.getTime(),
+        id: `q-${r.id}`,
+        href: tracker ? `/checkin/${r.id}` : `/framework/${r.id}`,
+        at: relativeDay(at, now),
+        title: q?.title ?? r.slug,
+        fallback: r.slug,
+        kindLabel: q?.shortName ?? r.slug,
+        framework: !tracker,
+      };
+    }),
+  ]
+    .sort((a, b) => b.sort - a.sort)
+    .slice(0, 4);
+
+  // Sorted by completion, not by `updated_at` — editing an old entry today does
+  // not mean you wrote today, and the line would be a small lie if it did.
+  const lastCompleted =
+    completedEntries
+      .map((e) => e.completedAt!)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   return (
-    <PageBg>
-      <TopNav active="today" />
-
-      <main className="flex-1 px-6 py-10 sm:px-10">
-        <div className="mx-auto w-full max-w-[780px]">
-          <h1
-            className="mb-8 max-w-[560px]"
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "27px",
-              lineHeight: 1.34,
-              fontWeight: 380,
-              letterSpacing: "-0.02em",
-              color: "var(--rf-text)",
-            }}
-          >
-            What would you like to do?
-          </h1>
-
-          <div className="grid gap-[18px] sm:grid-cols-2">
-            <Sheet minHeight={168} className="p-[20px_22px_18px]">
-              <div className="flex flex-1 flex-col gap-[10px] p-5">
-                <Eyebrow accent size={9.5}>
-                  Open reflection
-                </Eyebrow>
-                <h2
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "22px",
-                    lineHeight: 1.2,
-                    fontWeight: 380,
-                    letterSpacing: "-0.014em",
-                    color: "var(--rf-text)",
-                  }}
-                >
-                  Write what&apos;s there
-                </h2>
-                <p
-                  className="flex-1"
-                  style={{
-                    fontSize: "12.5px",
-                    lineHeight: 1.6,
-                    color: "var(--rf-text-3)",
-                  }}
-                >
-                  Nothing to answer. A few footholds wait in the margin if you
-                  want a way in.
-                </p>
-                <div>
-                  <button
-                    onClick={startEntry}
-                    disabled={loading !== null}
-                    className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
-                    style={{
-                      background: "var(--rf-text)",
-                      color: "var(--rf-paper)",
-                      fontSize: "12.5px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {loading === "entry" ? "Opening…" : "Begin"}
-                  </button>
-                </div>
-              </div>
-            </Sheet>
-
-            <Sheet minHeight={168}>
-              <div className="flex flex-1 flex-col gap-[10px] p-5">
-                <Eyebrow size={9.5}>Framework · GAD-7</Eyebrow>
-                <h2
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "22px",
-                    lineHeight: 1.2,
-                    fontWeight: 380,
-                    letterSpacing: "-0.014em",
-                    color: "var(--rf-text)",
-                  }}
-                >
-                  Generalised anxiety
-                </h2>
-                <p
-                  className="flex-1"
-                  style={{
-                    fontSize: "12.5px",
-                    lineHeight: 1.6,
-                    color: "var(--rf-text-3)",
-                  }}
-                >
-                  Seven questions, then back to your own words.
-                </p>
-                <div>
-                  <button
-                    onClick={() => startFramework("gad7")}
-                    disabled={loading !== null}
-                    className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
-                    style={{
-                      background: "var(--rf-text)",
-                      color: "var(--rf-paper)",
-                      fontSize: "12.5px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {loading === "framework" ? "Opening…" : "Start"}
-                  </button>
-                </div>
-              </div>
-            </Sheet>
-          </div>
-
-          {/* The check-in is a 15-second strip, not a third launch card — it is
-              a different weight of action from writing or an instrument. */}
-          <div
-            className="mt-[18px] flex flex-wrap items-center justify-between gap-4 rounded-[4px] px-5 py-[15px]"
-            style={{ background: "var(--rf-surface)" }}
-          >
-            <div>
-              <Eyebrow size={9.5}>Check-in</Eyebrow>
-              <p
-                className="mt-1"
-                style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
-              >
-                Sleep, mood, energy, and what you kept up. Fifteen seconds.
-              </p>
-            </div>
-            <button
-              onClick={startCheckin}
-              disabled={loading !== null}
-              className="rounded-full transition-colors disabled:opacity-40"
-              style={{
-                boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-                color: "var(--rf-text-2)",
-                fontSize: "12.5px",
-                padding: "8px 15px",
-              }}
-            >
-              {loading === "checkin" ? "Opening…" : "Log"}
-            </button>
-          </div>
-
-          {error && (
-            <p
-              className="mt-4 text-center"
-              style={{ fontSize: "12.5px", color: "var(--color-error)" }}
-            >
-              {error}
-            </p>
-          )}
-        </div>
-      </main>
-    </PageBg>
+    <ScreenHome
+      greeting={greetingFor(now.getHours())}
+      lastWrote={lastCompleted ? relativeDay(lastCompleted, now) : null}
+      unfinished={
+        draft
+          ? {
+              id: draft.id,
+              title: safeDecrypt(draft.encryptedTitle),
+              when: relativeDay(draft.updatedAt, now),
+            }
+          : null
+      }
+      recent={recent}
+      checkedInToday={checkinsToday.length > 0}
+      totalRecords={totalRecords}
+    />
   );
 }

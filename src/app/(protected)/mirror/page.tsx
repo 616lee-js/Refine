@@ -2,6 +2,32 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { PageBg } from "@/components/ui/page-bg";
+import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { TopNav } from "@/components/ui/top-nav";
+import { Toast } from "@/components/ui/toast";
+
+/**
+ * Mirror — what Refine has of you.
+ *
+ * ── Why the layout splits the way it does ─────────────────────────────────────
+ * The design puts threads in the main column and facts in a narrow aside, and
+ * that split is doing real work: a thread is a narrative sentence you read, a
+ * fact is a short record you scan. Giving them the same weight makes both
+ * harder to use.
+ *
+ * Our memory model has five kinds, not two, so the mapping is: `thread` runs
+ * down the main column at reading size; everything else — facts, preferences,
+ * diagnostic context, other — sits in the aside at scanning size, grouped.
+ * Nothing is hidden behind a filter any more, which is what the old kind
+ * dropdown was for.
+ *
+ * ── Proposed vs active ────────────────────────────────────────────────────────
+ * Proposed entries sit in place among their own kind rather than in a separate
+ * pile, marked and with a Confirm on them. The count is called out once at the
+ * top of the aside. Extraction lands in Phase 6, so today every entry here is
+ * one the user added themselves and nothing is ever proposed.
+ */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,208 +42,132 @@ type MemoryEntry = {
   createdAt: string;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const KINDS: { value: Kind; label: string; tag: string }[] = [
-  { value: "fact", label: "Facts", tag: "Fact" },
-  { value: "thread", label: "Open threads", tag: "Thread" },
-  { value: "preference", label: "Preferences", tag: "Preference" },
-  { value: "diagnostic_context", label: "Diagnostic context", tag: "Diagnostic" },
-  { value: "other", label: "Other", tag: "Other" },
+const ASIDE_KINDS: { value: Exclude<Kind, "thread">; label: string }[] = [
+  { value: "fact", label: "Facts" },
+  { value: "preference", label: "Preferences" },
+  { value: "diagnostic_context", label: "Diagnostic context" },
+  { value: "other", label: "Other" },
 ];
 
-function kindTag(kind: Kind) {
-  return KINDS.find((k) => k.value === kind)?.tag ?? kind;
+const ALL_KINDS: { value: Kind; label: string }[] = [
+  { value: "thread", label: "Open thread" },
+  ...ASIDE_KINDS.map((k) => ({ value: k.value as Kind, label: k.label })),
+];
+
+function sourceLabel(entry: MemoryEntry): string {
+  if (entry.source === "user_added") return "Added by you";
+  if (!entry.confirmed) return "Caught by Refine";
+  return "From your writing";
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Shared row affordances ────────────────────────────────────────────────────
 
-function EntryRow({
+function RowActions({
   entry,
   onConfirm,
-  onEdit,
+  onStartEdit,
   onDelete,
 }: {
   entry: MemoryEntry;
   onConfirm: (id: string) => void;
-  onEdit: (id: string, content: string) => void;
+  onStartEdit: () => void;
   onDelete: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(entry.content);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  async function handleSave() {
-    if (!draft.trim() || draft.trim() === entry.content) { setEditing(false); return; }
-    setSaving(true);
-    await onEdit(entry.id, draft.trim());
-    setSaving(false);
-    setEditing(false);
-  }
+  const action = {
+    fontFamily: "var(--font-mono)",
+    fontSize: "9.5px",
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    color: "var(--rf-text-3)",
+  };
 
   return (
-    <li className="py-4 space-y-2">
-      {editing ? (
-        <div className="space-y-2">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            className="w-full resize-none rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 focus:bg-white leading-relaxed transition-colors"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-3 py-1.5 rounded-lg bg-stone-800 text-white text-xs font-medium hover:bg-stone-700 disabled:opacity-40 transition-colors"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            <button
-              onClick={() => { setEditing(false); setDraft(entry.content); }}
-              className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-xs hover:bg-stone-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{entry.content}</p>
+    <div className="flex shrink-0 items-center gap-3 pt-[3px]">
+      {!entry.confirmed && (
+        <button
+          onClick={() => onConfirm(entry.id)}
+          style={{ ...action, color: "var(--rf-accent-2)" }}
+        >
+          Keep
+        </button>
       )}
-
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Kind tag */}
-        <span className="text-xs px-1.5 py-0.5 rounded bg-stone-100 text-stone-500 font-medium">
-          {kindTag(entry.kind)}
-        </span>
-
-        {/* Proposed badge */}
-        {!entry.confirmed && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">
-            Proposed
-          </span>
-        )}
-
-        <span className="text-stone-200">·</span>
-
-        {/* Actions */}
-        {!entry.confirmed && (
+      <button onClick={onStartEdit} style={action}>
+        Edit
+      </button>
+      {confirmDelete ? (
+        <>
           <button
-            onClick={() => onConfirm(entry.id)}
-            className="text-xs text-green-600 hover:text-green-700 transition-colors"
+            onClick={() => onDelete(entry.id)}
+            style={{ ...action, color: "var(--color-error)" }}
           >
-            Confirm
+            Remove
           </button>
-        )}
-        {!editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            Edit
+          <button onClick={() => setConfirmDelete(false)} style={action}>
+            Cancel
           </button>
-        )}
-        {confirmDelete ? (
-          <>
-            <span className="text-xs text-stone-500">Remove?</span>
-            <button
-              onClick={() => onDelete(entry.id)}
-              className="text-xs text-red-600 hover:text-red-700 transition-colors"
-            >
-              Remove
-            </button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-xs text-stone-400 hover:text-red-600 transition-colors"
-          >
-            Delete
-          </button>
-        )}
-
-        <span className="text-stone-200">·</span>
-        <span className="text-xs text-stone-400">
-          {entry.source === "user_added" ? "Added by you" : "From reflection"}
-        </span>
-      </div>
-    </li>
+        </>
+      ) : (
+        <button onClick={() => setConfirmDelete(true)} style={action}>
+          Remove
+        </button>
+      )}
+    </div>
   );
 }
 
-function AddEntryForm({
-  defaultKind,
-  onAdd,
+function EditBox({
+  value,
+  busy,
+  onChange,
+  onSave,
+  onCancel,
 }: {
-  defaultKind: Kind;
-  onAdd: (kind: Kind, content: string) => Promise<void>;
+  value: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<Kind>(defaultKind);
-  const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleAdd() {
-    if (!content.trim()) return;
-    setSaving(true);
-    await onAdd(kind, content.trim());
-    setContent("");
-    setSaving(false);
-    setOpen(false);
-  }
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs text-stone-400 hover:text-stone-600 transition-colors mt-4"
-      >
-        + Add entry
-      </button>
-    );
-  }
-
   return (
-    <div className="mt-4 space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
-      <div className="flex items-center gap-3">
-        <label htmlFor="add-kind" className="text-xs text-stone-500 shrink-0">Kind</label>
-        <select
-          id="add-kind"
-          value={kind}
-          onChange={(e) => setKind(e.target.value as Kind)}
-          className="text-xs text-stone-700 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-stone-300"
-        >
-          {KINDS.map((k) => (
-            <option key={k.value} value={k.value}>{k.label}</option>
-          ))}
-        </select>
-      </div>
+    <div className="flex flex-col gap-2">
       <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={2}
-        placeholder="Enter memory…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={3}
         autoFocus
-        className="w-full resize-none rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-300 leading-relaxed transition-colors"
+        className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
+        style={{
+          fontSize: "13.5px",
+          lineHeight: 1.6,
+          color: "var(--rf-text)",
+          background: "var(--rf-paper)",
+          boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+        }}
       />
-      <div className="flex gap-2">
+      <div className="flex items-center gap-3">
         <button
-          onClick={handleAdd}
-          disabled={saving || !content.trim()}
-          className="px-3 py-1.5 rounded-lg bg-stone-800 text-white text-xs font-medium hover:bg-stone-700 disabled:opacity-40 transition-colors"
+          onClick={onSave}
+          disabled={busy}
+          className="rounded-full disabled:opacity-40"
+          style={{
+            padding: "6px 13px",
+            fontSize: "12px",
+            background: "var(--rf-text)",
+            color: "var(--rf-paper)",
+          }}
         >
-          {saving ? "Adding…" : "Add"}
+          {busy ? "Saving…" : "Save"}
         </button>
         <button
-          onClick={() => { setOpen(false); setContent(""); }}
-          className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-xs hover:bg-stone-50 transition-colors"
+          onClick={onCancel}
+          className="font-mono uppercase"
+          style={{
+            fontSize: "9.5px",
+            letterSpacing: "0.14em",
+            color: "var(--rf-text-3)",
+          }}
         >
           Cancel
         </button>
@@ -226,247 +176,633 @@ function AddEntryForm({
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Rows ──────────────────────────────────────────────────────────────────────
 
-export default function MemoryPage() {
+function ThreadRow({
+  entry,
+  onConfirm,
+  onEdit,
+  onDelete,
+}: {
+  entry: MemoryEntry;
+  onConfirm: (id: string) => void;
+  onEdit: (id: string, content: string) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.content);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const next = draft.trim();
+    if (!next || next === entry.content) {
+      setEditing(false);
+      setDraft(entry.content);
+      return;
+    }
+    setBusy(true);
+    await onEdit(entry.id, next);
+    setBusy(false);
+    setEditing(false);
+  }
+
+  return (
+    <li
+      className="py-[13px]"
+      style={{ borderTop: "1px solid var(--rf-rule)" }}
+    >
+      {editing ? (
+        <EditBox
+          value={draft}
+          busy={busy}
+          onChange={setDraft}
+          onSave={save}
+          onCancel={() => {
+            setDraft(entry.content);
+            setEditing(false);
+          }}
+        />
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-4">
+            <p
+              className="whitespace-pre-wrap"
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "17px",
+                lineHeight: 1.55,
+                letterSpacing: "-0.012em",
+                color: "var(--rf-text)",
+                textWrap: "pretty",
+              }}
+            >
+              {entry.content}
+            </p>
+            <RowActions
+              entry={entry}
+              onConfirm={onConfirm}
+              onStartEdit={() => setEditing(true)}
+              onDelete={onDelete}
+            />
+          </div>
+          <div className="mt-[6px] flex items-center gap-[10px]">
+            <Eyebrow size={9.5}>{sourceLabel(entry)}</Eyebrow>
+            {!entry.confirmed && (
+              <span
+                className="rounded-full font-mono uppercase"
+                style={{
+                  padding: "2px 7px",
+                  fontSize: "9px",
+                  letterSpacing: "0.14em",
+                  color: "var(--rf-accent)",
+                  background: "var(--rf-accent-soft)",
+                }}
+              >
+                Waiting on you
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </li>
+  );
+}
+
+function FactRow({
+  entry,
+  onConfirm,
+  onEdit,
+  onDelete,
+}: {
+  entry: MemoryEntry;
+  onConfirm: (id: string) => void;
+  onEdit: (id: string, content: string) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.content);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    const next = draft.trim();
+    if (!next || next === entry.content) {
+      setEditing(false);
+      setDraft(entry.content);
+      return;
+    }
+    setBusy(true);
+    await onEdit(entry.id, next);
+    setBusy(false);
+    setEditing(false);
+  }
+
+  return (
+    <li className="py-[10px]" style={{ borderTop: "1px solid var(--rf-rule)" }}>
+      {editing ? (
+        <EditBox
+          value={draft}
+          busy={busy}
+          onChange={setDraft}
+          onSave={save}
+          onCancel={() => {
+            setDraft(entry.content);
+            setEditing(false);
+          }}
+        />
+      ) : (
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className="whitespace-pre-wrap"
+              style={{
+                fontSize: "13px",
+                lineHeight: 1.55,
+                color: "var(--rf-text)",
+              }}
+            >
+              {entry.content}
+            </p>
+            <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+              <Eyebrow size={9.5}>{sourceLabel(entry)}</Eyebrow>
+              {!entry.confirmed && (
+                <span
+                  className="rounded-full font-mono uppercase"
+                  style={{
+                    padding: "2px 7px",
+                    fontSize: "9px",
+                    letterSpacing: "0.14em",
+                    color: "var(--rf-accent)",
+                    background: "var(--rf-accent-soft)",
+                  }}
+                >
+                  Waiting
+                </span>
+              )}
+            </div>
+          </div>
+          <RowActions
+            entry={entry}
+            onConfirm={onConfirm}
+            onStartEdit={() => setEditing(true)}
+            onDelete={onDelete}
+          />
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ── Add ───────────────────────────────────────────────────────────────────────
+
+function AddEntry({
+  defaultKind,
+  label,
+  onAdd,
+}: {
+  defaultKind: Kind;
+  label: string;
+  onAdd: (kind: Kind, content: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<Kind>(defaultKind);
+  const [content, setContent] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!content.trim()) return;
+    setBusy(true);
+    await onAdd(kind, content.trim());
+    setContent("");
+    setBusy(false);
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-3 font-mono uppercase"
+        style={{
+          fontSize: "9.5px",
+          letterSpacing: "0.14em",
+          color: "var(--rf-text-3)",
+        }}
+      >
+        + {label}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="mt-3 flex flex-col gap-3 rounded-[4px] p-4"
+      style={{ background: "var(--rf-surface)" }}
+    >
+      <div className="flex items-center gap-3">
+        <label
+          htmlFor={`kind-${defaultKind}`}
+          className="shrink-0 font-mono uppercase"
+          style={{
+            fontSize: "9.5px",
+            letterSpacing: "0.14em",
+            color: "var(--rf-text-3)",
+          }}
+        >
+          Kind
+        </label>
+        <select
+          id={`kind-${defaultKind}`}
+          value={kind}
+          onChange={(e) => setKind(e.target.value as Kind)}
+          className="rounded-[4px] px-2 py-1 outline-none"
+          style={{
+            fontSize: "12px",
+            color: "var(--rf-text)",
+            background: "var(--rf-paper)",
+            boxShadow: "inset 0 0 0 1px var(--rf-border)",
+          }}
+        >
+          {ALL_KINDS.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        rows={2}
+        autoFocus
+        placeholder="Something worth keeping"
+        className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
+        style={{
+          fontSize: "13.5px",
+          lineHeight: 1.6,
+          color: "var(--rf-text)",
+          background: "var(--rf-paper)",
+          boxShadow: "inset 0 0 0 1px var(--rf-border)",
+        }}
+      />
+      <div className="flex items-center gap-3">
+        <button
+          onClick={add}
+          disabled={busy || !content.trim()}
+          className="rounded-full disabled:opacity-40"
+          style={{
+            padding: "6px 13px",
+            fontSize: "12px",
+            background: "var(--rf-text)",
+            color: "var(--rf-paper)",
+          }}
+        >
+          {busy ? "Adding…" : "Add"}
+        </button>
+        <button
+          onClick={() => {
+            setOpen(false);
+            setContent("");
+          }}
+          className="font-mono uppercase"
+          style={{
+            fontSize: "9.5px",
+            letterSpacing: "0.14em",
+            color: "var(--rf-text-3)",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function MirrorPage() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterKind, setFilterKind] = useState<Kind | "all">("all");
-  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [confirmClear, setConfirmClear] = useState<Kind | "all" | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const fetchMemory = useCallback(async () => {
+  const load = useCallback(async () => {
     const res = await fetch("/api/user/memory");
     if (res.ok) {
       const data = (await res.json()) as MemoryEntry[];
-      // Sort most recent first
-      data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      data.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       setEntries(data);
+    } else {
+      setToast("Couldn't load your memory");
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchMemory(); }, [fetchMemory]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function handleConfirm(id: string) {
-    await fetch(`/api/user/memory/${id}`, {
+  async function confirmEntry(id: string) {
+    const res = await fetch(`/api/user/memory/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "confirm" }),
     });
+    if (!res.ok) return setToast("Couldn't keep that one");
     setEntries((prev) =>
       prev.map((e) => (e.id === id ? { ...e, confirmed: true } : e))
     );
   }
 
-  async function handleEdit(id: string, content: string) {
-    await fetch(`/api/user/memory/${id}`, {
+  async function editEntry(id: string, content: string) {
+    const res = await fetch(`/api/user/memory/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
+    if (!res.ok) return setToast("Couldn't save that change");
     setEntries((prev) =>
       prev.map((e) => (e.id === id ? { ...e, content, confirmed: true } : e))
     );
   }
 
-  async function handleDelete(id: string) {
-    await fetch(`/api/user/memory/${id}`, { method: "DELETE" });
+  async function deleteEntry(id: string) {
+    const res = await fetch(`/api/user/memory/${id}`, { method: "DELETE" });
+    if (!res.ok) return setToast("Couldn't remove that one");
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
-  async function handleAdd(kind: Kind, content: string) {
-    await fetch("/api/user/memory", {
+  async function addEntry(kind: Kind, content: string) {
+    const res = await fetch("/api/user/memory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind, content }),
     });
-    await fetchMemory();
+    if (!res.ok) return setToast("Couldn't add that");
+    await load();
   }
 
-  async function handleBulkDelete(kind?: Kind) {
-    await fetch("/api/user/memory/bulk", {
+  async function clear(kind?: Kind) {
+    const res = await fetch("/api/user/memory/bulk", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(kind ? { kind } : {}),
     });
-    if (kind) {
-      setEntries((prev) => prev.filter((e) => e.kind !== kind));
-    } else {
-      setEntries([]);
+    if (!res.ok) {
+      setConfirmClear(null);
+      return setToast("Couldn't clear those");
     }
-    setConfirmBulkDelete(false);
-    setConfirmDeleteAll(false);
+    setEntries((prev) => (kind ? prev.filter((e) => e.kind !== kind) : []));
+    setConfirmClear(null);
   }
 
-  const filtered = filterKind === "all"
-    ? entries
-    : entries.filter((e) => e.kind === filterKind);
-  const proposed = filtered.filter((e) => !e.confirmed);
-  const active = filtered.filter((e) => e.confirmed);
-  const activeFilterLabel = filterKind !== "all"
-    ? KINDS.find((k) => k.value === filterKind)?.label.toLowerCase()
-    : null;
+  const threads = entries.filter((e) => e.kind === "thread");
+  const waiting = entries.filter((e) => !e.confirmed).length;
+
+  const clearAction = {
+    fontFamily: "var(--font-mono)",
+    fontSize: "9.5px",
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    color: "var(--rf-text-4)",
+  };
+
+  // A plain function, not a nested component: declaring a component inside the
+  // render body gives it a new identity every render, which remounts its DOM on
+  // each keystroke elsewhere on the page.
+  function clearControl(kind: Kind | "all", label: string) {
+    if (confirmClear === kind) {
+      return (
+        <span className="flex items-center gap-3">
+          <button
+            onClick={() => clear(kind === "all" ? undefined : kind)}
+            style={{ ...clearAction, color: "var(--color-error)" }}
+          >
+            Confirm
+          </button>
+          <button onClick={() => setConfirmClear(null)} style={clearAction}>
+            Cancel
+          </button>
+        </span>
+      );
+    }
+    return (
+      <button onClick={() => setConfirmClear(kind)} style={clearAction}>
+        {label}
+      </button>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-white text-stone-800">
-      <header className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-        <h1 className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Refine</h1>
-        <nav className="flex items-center gap-4">
-          <Link href="/reflections" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Reflections
-          </Link>
-          <span className="text-xs text-stone-700 font-medium underline underline-offset-4 decoration-stone-300">
-            Mirror
-          </span>
-          <Link href="/settings/profile" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-            Profile
-          </Link>
-          <Link href="/" className="px-3 py-1 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 transition-colors">
-            New reflection
-          </Link>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="text-xs text-stone-400 hover:text-stone-600 transition-colors">
-              Sign out
-            </button>
-          </form>
-        </nav>
-      </header>
+    <PageBg>
+      <TopNav active="mirror" />
 
-      <main className="px-6 py-8 max-w-2xl mx-auto">
-        {loading ? (
-          <p className="text-sm text-stone-400">Loading…</p>
-        ) : (
-          <>
-            {/* Filter control */}
-            <div className="flex items-center gap-3 mb-6">
-              <label htmlFor="kind-filter" className="text-xs text-stone-400 shrink-0">Filter</label>
-              <select
-                id="kind-filter"
-                value={filterKind}
-                onChange={(e) => setFilterKind(e.target.value as Kind | "all")}
-                className="text-xs text-stone-700 bg-white border border-stone-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-stone-300"
-              >
-                <option value="all">All ({entries.length})</option>
-                {KINDS.map((k) => {
-                  const count = entries.filter((e) => e.kind === k.value).length;
+      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
+        <div className="w-full pb-16" style={{ maxWidth: 900 }}>
+          <div className="pb-5" style={{ borderBottom: "1px solid var(--rf-border)" }}>
+            <Eyebrow accent>Mirror</Eyebrow>
+            <h1
+              className="mb-[6px] mt-2"
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "27px",
+                fontWeight: 380,
+                letterSpacing: "-0.02em",
+                color: "var(--rf-text)",
+              }}
+            >
+              What Refine has of you
+            </h1>
+            <p
+              className="max-w-[480px]"
+              style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--rf-text-3)" }}
+            >
+              Everything here came from your own writing. Confirm it, correct it,
+              or take it out.
+            </p>
+          </div>
+
+          {loading ? (
+            <p
+              className="pt-8"
+              style={{ fontSize: "13px", color: "var(--rf-text-4)" }}
+            >
+              Loading…
+            </p>
+          ) : (
+            <div className="grid gap-x-10 gap-y-10 pt-[22px] lg:grid-cols-[1fr_320px]">
+              {/* Threads — the reading column */}
+              <div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <Eyebrow>Threads · what keeps coming back</Eyebrow>
+                  {threads.length > 0 && (
+                    clearControl("thread", "Clear threads")
+                  )}
+                </div>
+
+                {threads.length === 0 ? (
+                  <Sheet className="mt-3 px-7 py-9">
+                    <p
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: "16.5px",
+                        lineHeight: 1.6,
+                        color: "var(--rf-text-2)",
+                        textWrap: "pretty",
+                      }}
+                    >
+                      Nothing yet. Threads are the things that keep surfacing
+                      across what you write — Refine will start proposing them
+                      once there is enough writing to find them in.
+                    </p>
+                    <p
+                      className="mt-[10px]"
+                      style={{
+                        fontSize: "12.5px",
+                        lineHeight: 1.55,
+                        color: "var(--rf-text-4)",
+                      }}
+                    >
+                      You can also name one yourself. Nothing is kept that you
+                      have not seen.
+                    </p>
+                  </Sheet>
+                ) : (
+                  <ol className="mt-2">
+                    {threads.map((e) => (
+                      <ThreadRow
+                        key={e.id}
+                        entry={e}
+                        onConfirm={confirmEntry}
+                        onEdit={editEntry}
+                        onDelete={deleteEntry}
+                      />
+                    ))}
+                  </ol>
+                )}
+
+                <AddEntry
+                  defaultKind="thread"
+                  label="Add a thread"
+                  onAdd={addEntry}
+                />
+              </div>
+
+              {/* Facts and the rest — the scanning column */}
+              <aside className="lg:border-l lg:pl-7" style={{ borderColor: "var(--rf-border)" }}>
+                {waiting > 0 && (
+                  <div
+                    className="rounded-[4px] px-4 py-[14px]"
+                    style={{
+                      background: "var(--rf-accent-soft)",
+                      boxShadow: "inset 0 0 0 1px var(--rf-border)",
+                    }}
+                  >
+                    <Eyebrow accent size={9.5}>
+                      {waiting} waiting on you
+                    </Eyebrow>
+                    <p
+                      className="mt-2"
+                      style={{
+                        fontSize: "12.5px",
+                        lineHeight: 1.55,
+                        color: "var(--rf-text-2)",
+                      }}
+                    >
+                      Refine caught these but won&apos;t keep them until you say
+                      so.
+                    </p>
+                  </div>
+                )}
+
+                {ASIDE_KINDS.map(({ value, label }) => {
+                  const group = entries.filter((e) => e.kind === value);
+                  // Empty non-fact groups stay out of the way entirely — four
+                  // headers over four empty lists is noise, not structure.
+                  if (group.length === 0 && value !== "fact") return null;
                   return (
-                    <option key={k.value} value={k.value}>
-                      {k.label} ({count})
-                    </option>
+                    <div key={value} className="mt-6 first:mt-0" style={waiting > 0 ? { marginTop: 22 } : undefined}>
+                      <div className="flex items-baseline justify-between gap-4">
+                        <Eyebrow>{label}</Eyebrow>
+                        {group.length > 0 && (
+                          clearControl(value, "Clear")
+                        )}
+                      </div>
+                      {group.length === 0 ? (
+                        <p
+                          className="mt-2"
+                          style={{
+                            fontSize: "12.5px",
+                            lineHeight: 1.55,
+                            color: "var(--rf-text-4)",
+                          }}
+                        >
+                          Nothing kept yet.
+                        </p>
+                      ) : (
+                        <ol className="mt-2">
+                          {group.map((e) => (
+                            <FactRow
+                              key={e.id}
+                              entry={e}
+                              onConfirm={confirmEntry}
+                              onEdit={editEntry}
+                              onDelete={deleteEntry}
+                            />
+                          ))}
+                        </ol>
+                      )}
+                    </div>
                   );
                 })}
-              </select>
-            </div>
 
-            {/* Proposed — needs review */}
-            {proposed.length > 0 && (
-              <section className="mb-8">
-                <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-3">
-                  Proposed — awaiting your review
-                </h2>
-                <ol className="divide-y divide-stone-100">
-                  {proposed.map((e) => (
-                    <EntryRow
-                      key={e.id}
-                      entry={e}
-                      onConfirm={handleConfirm}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </ol>
-              </section>
-            )}
+                <AddEntry
+                  defaultKind="fact"
+                  label="Add a fact"
+                  onAdd={addEntry}
+                />
 
-            {/* Active entries */}
-            <section>
-              {proposed.length > 0 && (
-                <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-3">
-                  Active
-                </h2>
-              )}
-              {active.length === 0 ? (
-                <p className="text-sm text-stone-400">
-                  {entries.length === 0
-                    ? "Your reflections will start showing here as you build a practice."
-                    : `No ${activeFilterLabel ?? "entries"} yet.`}
-                </p>
-              ) : (
-                <ol className="divide-y divide-stone-100">
-                  {active.map((e) => (
-                    <EntryRow
-                      key={e.id}
-                      entry={e}
-                      onConfirm={handleConfirm}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </ol>
-              )}
-              <AddEntryForm
-                defaultKind={filterKind !== "all" ? filterKind : "fact"}
-                onAdd={handleAdd}
-              />
-            </section>
-
-            {/* Bulk actions */}
-            <section className="mt-10 pt-6 border-t border-stone-100 space-y-3">
-              <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-2">
-                Bulk actions
-              </h2>
-              {filterKind !== "all" && (
-                confirmBulkDelete ? (
-                  <p className="text-xs text-stone-500">
-                    Delete all {activeFilterLabel}?{" "}
-                    <button onClick={() => handleBulkDelete(filterKind as Kind)} className="text-red-600 hover:text-red-700 transition-colors">Delete</button>
-                    {" · "}
-                    <button onClick={() => setConfirmBulkDelete(false)} className="text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
-                  </p>
-                ) : (
-                  <button
-                    onClick={() => setConfirmBulkDelete(true)}
-                    className="text-xs text-stone-400 hover:text-red-600 transition-colors"
-                  >
-                    Delete all {activeFilterLabel}
-                  </button>
-                )
-              )}
-              {confirmDeleteAll ? (
-                <p className="text-xs text-stone-500">
-                  Delete all memory? This cannot be undone.{" "}
-                  <button onClick={() => handleBulkDelete()} className="text-red-600 hover:text-red-700 transition-colors">Delete all</button>
-                  {" · "}
-                  <button onClick={() => setConfirmDeleteAll(false)} className="text-stone-400 hover:text-stone-600 transition-colors">Cancel</button>
-                </p>
-              ) : (
-                <button
-                  onClick={() => setConfirmDeleteAll(true)}
-                  className="block text-xs text-stone-400 hover:text-red-600 transition-colors"
+                <div
+                  className="mt-10 flex flex-col gap-3 pt-5"
+                  style={{ borderTop: "1px solid var(--rf-rule)" }}
                 >
-                  Delete all memory
-                </button>
-              )}
-            </section>
-          </>
-        )}
-
-        {/* Trash is a recovery affordance, not a destination — findable without
-            adding a deletion concept to the main nav on every screen. */}
-        <div className="mt-12 pt-6 border-t border-stone-100">
-          <Link
-            href="/trash"
-            className="text-xs text-stone-400 hover:text-stone-600 transition-colors underline underline-offset-2"
-          >
-            Trash
-          </Link>
-          <p className="mt-1 text-xs text-stone-400 leading-relaxed">
-            Deleted reflections, kept for 30 days before they&apos;re permanently
-            removed.
-          </p>
+                  {entries.length > 0 && (
+                    clearControl("all", "Delete everything here")
+                  )}
+                  <div>
+                    <Link
+                      href="/trash"
+                      className="font-mono uppercase"
+                      style={{
+                        fontSize: "9.5px",
+                        letterSpacing: "0.14em",
+                        color: "var(--rf-text-3)",
+                      }}
+                    >
+                      Trash →
+                    </Link>
+                    <p
+                      className="mt-[6px]"
+                      style={{
+                        fontSize: "11.5px",
+                        lineHeight: 1.55,
+                        color: "var(--rf-text-4)",
+                      }}
+                    >
+                      What you&apos;ve deleted, kept for 30 days before it is
+                      removed for good.
+                    </p>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
+    </PageBg>
   );
 }

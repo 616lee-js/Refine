@@ -54,6 +54,13 @@ export const memorySourceEnum = pgEnum("memory_source", [
   "entry_derived",
 ]);
 
+export const feedbackTypeEnum = pgEnum("feedback_type", ["bug", "request"]);
+
+export const feedbackStatusEnum = pgEnum("feedback_status", [
+  "new",
+  "completed",
+]);
+
 // ── Identity ─────────────────────────────────────────────────────────────────
 
 /**
@@ -413,4 +420,48 @@ export const contentAccessLog = pgTable("content_access_log", {
     .defaultNow(),
   /** Human-readable label for the access point. */
   context: text("context").notNull(),
+});
+
+// ── Product feedback ─────────────────────────────────────────────────────────
+
+/**
+ * Bug reports and requests submitted from the in-app widget.
+ *
+ * ── There is deliberately no user_id ──────────────────────────────────────────
+ * Not an oversight, and not a column waiting to be added. Submissions are
+ * unattributed on purpose so that saying "this is confusing" costs nothing.
+ * `POST /api/feedback` authenticates the caller — otherwise the endpoint is an
+ * open spam target — and then discards the identity rather than storing it.
+ *
+ * ── "Anonymous" here means unattributed, NOT unlinkable ───────────────────────
+ * A timestamp is enough to attribute a submission completely while there is one
+ * user, and to narrow it hard across a handful of testers. Server logs and the
+ * session that authorised the POST narrow it further. This must never be
+ * described to a user as a privacy guarantee — it is an internal choice not to
+ * record who said what, not a technical anonymity property.
+ *
+ * If real anonymity is ever needed, it is a different design: no authentication,
+ * or submission through something the app cannot correlate.
+ *
+ * ── No FK means no cascade ────────────────────────────────────────────────────
+ * Deleting an account leaves its feedback behind, because nothing links the two.
+ * That is inherent to not storing the identifier, not a deletion bug to fix
+ * later. Feedback carries no journal content, so nothing PHI-grade survives.
+ *
+ * ── Body is plaintext ─────────────────────────────────────────────────────────
+ * Deliberate (2026-08-04): feedback is product commentary rather than journal
+ * content, and plaintext keeps it searchable in SQL. The submission form asks
+ * people not to include personal detail, which is the honest mitigation for a
+ * free-text box — a box like this attracts it regardless, so anything sensitive
+ * that lands here is sitting unencrypted and readable in the admin view.
+ */
+export const feedback = pgTable("feedback", {
+  id: text("id").primaryKey(),
+  type: feedbackTypeEnum("type").notNull(),
+  body: text("body").notNull(),
+  /** Moves between the two sections of the admin review page. */
+  status: feedbackStatusEnum("status").notNull().default("new"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });

@@ -501,6 +501,35 @@ verify on every screen.
 8. **Nav wraps, it does not truncate.** `TopNav` is `flex-wrap` with
    `justify-end`; a second line is correct behaviour, a hidden link is not.
 
+### Z-index scale
+
+Added 2026-08-04, when the feedback widget became the third fixed layer. Before
+this the doc had no scale at all and `z-50` appeared only incidentally inside a
+toast example.
+
+Three layers. There is no `z-10`, no `z-20`, and nothing above `50`.
+
+| Layer | Value | What lives here |
+|---|---|---|
+| Floating affordance | `z-30` | Feedback widget. Anything anchored to a screen corner that is *not* modal. |
+| Modal overlay | `z-40` | Footholds sidebar below `lg`. Anything that dims the page and takes focus. |
+| Transient message | `z-50` | Toast. Must be readable over everything, including a modal. |
+
+Rules:
+
+1. **A floating affordance never covers a modal.** This is why the widget is
+   `z-30` and not `z-50`: a button that sits on top of an open dialog is the
+   standard failure of the pattern. The overlay covering it is correct.
+2. **Corner-anchored elements must not collide with each other.** The toast is
+   bottom-centre and the widget bottom-right, which is fine on a wide screen and
+   overlaps at 375px — so the toast carries `bottom-24 sm:bottom-6`. Check any
+   new corner element against the two that already exist.
+3. **A new value needs a row in this table.** If something does not fit these
+   three, the scale is wrong and should be changed here first, not worked around
+   with a one-off number.
+
+---
+
 ### Verification
 
 Check every new screen at **375**, **768**, and **1440**. The failure that keeps

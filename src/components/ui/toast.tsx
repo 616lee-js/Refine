@@ -33,7 +33,10 @@ export function Toast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-stone-800 text-white text-sm px-4 py-2.5 shadow-lg"
+      // bottom-24 below `sm`: the feedback widget is anchored bottom-right, and a
+      // centred toast is wide enough at 375px to run underneath it. Above `sm`
+      // there is horizontal room and it sits where it always did.
+      className="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-stone-800 text-white text-sm px-4 py-2.5 shadow-lg max-w-[calc(100vw-2rem)]"
     >
       {message}
     </div>

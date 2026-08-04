@@ -2,21 +2,35 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries } from "@/lib/db/schema";
-import { encrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 import { classifyAndLog } from "@/lib/safety/classify-and-log";
+import { persistAfterResponse } from "@/lib/after-response";
+import { summariseEntryById } from "@/lib/summaries/queue";
 
 /**
  * A single journal entry.
  *
  * PUT   autosave the body, and optionally the title. No classification — drafts
  *       are saved constantly and classifying on every keystroke pause would be
- *       pointless and expensive.
+ *       pointless and expensive. No summarisation either, for the same reason:
+ *       the entry is left due and the cron catches it.
  * PATCH mark complete (or re-save an already-complete entry). Classification
  *       runs here, and the tier comes back so the client can surface resources.
+ *       Summarisation is kicked off after the response.
  * DELETE move to trash.
  *
  * Every handler re-checks ownership. `id` comes from the URL, so it is untrusted.
  */
+
+/**
+ * Covers the awaited classification call plus the summarisation that runs after
+ * the response under `after()`.
+ *
+ * Not cosmetic. Without it the route inherits the 10s default, and post-response
+ * work counts against the function's lifetime — a Haiku summary following an
+ * already-awaited classification can exceed that and be killed mid-write.
+ */
+export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -83,7 +97,12 @@ export async function PUT(req: Request, { params }: Params) {
               : null,
           }
         : {}),
-      updatedAt: new Date(),
+      // Bumped for a body change only. `updated_at` is what the summary queue
+      // derives staleness from, and `generateSummary()` is given the body alone
+      // — so bumping it for a title-only PUT would mark the summary stale and
+      // buy a regeneration that cannot possibly differ. Naming an entry from the
+      // read-back page sends exactly that request.
+      ...(hasText ? { updatedAt: new Date() } : {}),
     })
     .where(eq(journalEntries.id, id));
 
@@ -115,16 +134,33 @@ export async function PATCH(req: Request, { params }: Params) {
   const wasAlreadyComplete = entry.completedAt !== null;
   const now = new Date();
 
+  // Encryption uses a fresh IV each time, so identical text produces different
+  // ciphertext — the comparison has to be on plaintext. A decrypt failure counts
+  // as changed: the wrong answer here should cost a redundant summary, never a
+  // missing one.
+  let bodyChanged = true;
+  if (wasAlreadyComplete && entry.encryptedBody) {
+    try {
+      bodyChanged = decrypt(entry.encryptedBody) !== text;
+    } catch {
+      bodyChanged = true;
+    }
+  }
+
   await db
     .update(journalEntries)
     .set({
-      encryptedBody: encrypt(text),
-      summaryAttempts: 0,
+      // Skipped entirely when nothing changed. `updated_at` would mark the
+      // summary stale and buy a regeneration of identical text, and resetting
+      // `summary_attempts` would hand fresh retries to an entry that had
+      // genuinely exhausted them, without a word of new content to justify it.
+      ...(bodyChanged
+        ? { encryptedBody: encrypt(text), summaryAttempts: 0, updatedAt: now }
+        : {}),
       ...(typeof title === "string"
         ? { encryptedTitle: title.trim() ? encrypt(title.trim()) : null }
         : {}),
       completedAt: entry.completedAt ?? now,
-      updatedAt: now,
     })
     .where(eq(journalEntries.id, id));
 
@@ -145,6 +181,24 @@ export async function PATCH(req: Request, { params }: Params) {
     .update(journalEntries)
     .set({ tierClassification: tier, classifiedAt: now })
     .where(eq(journalEntries.id, id));
+
+  // Cabinet 2, off the response path. `after()` keeps the function alive on
+  // Vercel long enough for the Haiku call to land — an un-awaited promise here
+  // would be killed when the response closes, intermittently. See
+  // src/lib/after-response.ts.
+  //
+  // Not awaited: finishing an entry must not depend on Anthropic twice, and
+  // nobody is waiting on the summary. A failure leaves the entry due and the
+  // cron retries it — see src/lib/summaries/queue.ts.
+  //
+  // Called from the handler body, never a callback: after() needs an active
+  // request context. Constructed here rather than at the top of the handler so
+  // no early-return path has to remember to abort() it.
+  if (bodyChanged) {
+    persistAfterResponse(`entry summary ${id}`).run(() =>
+      summariseEntryById(id)
+    );
+  }
 
   return Response.json({ tier, completedAt: (entry.completedAt ?? now).toISOString() });
 }

@@ -5,13 +5,21 @@ import { requireCronSecret } from "@/lib/cron-auth";
  * Generates Cabinet 2 summaries for completed entries that do not have a current
  * one. Runs daily via Vercel Cron (see vercel.json).
  *
- * ── Why daily is acceptable ───────────────────────────────────────────────────
- * Vercel's Hobby plan caps cron FREQUENCY at once per day. Nothing reads
- * summaries yet — Phase 6 memory extraction consumes them in bulk — so a summary
- * landing up to 24 hours after the entry costs nothing today. If it ever needs
- * to be minutes, that is a plan change and a one-line schedule edit, not a
- * redesign: the queue is derived, so running it more often is simply running it
- * more often.
+ * ── This is the backstop, not the main path ───────────────────────────────────
+ * Since 2026-08-04 a summary is generated when the entry is marked done, from
+ * the PATCH in src/app/api/reflections/[id]/route.ts. This run exists for what
+ * that misses:
+ *
+ * - entries whose on-submit attempt failed (transient Anthropic error, or the
+ *   function torn down before the write landed)
+ * - completed entries edited by autosave, which goes through PUT and is
+ *   deliberately not summarised per keystroke pause
+ * - prompt-version reflow across the whole archive, which nothing else walks
+ *
+ * Daily is enough for all three, which is as well: Vercel's Hobby plan caps cron
+ * FREQUENCY at once per day. Raising it is a one-line schedule edit if the
+ * backlog ever justifies one — the queue is derived, so running it more often is
+ * simply running it more often.
  *
  * ── Batch bound ───────────────────────────────────────────────────────────────
  * SUMMARY_BATCH_SIZE entries per run at concurrency 3. Leftovers stay due and

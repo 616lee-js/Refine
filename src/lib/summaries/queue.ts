@@ -19,14 +19,29 @@ import { generateSummary, SUMMARISER_VERSION } from "./generate";
  * dies halfway simply leaves work due, rather than leaving rows stuck in a
  * "running" state that something has to clean up.
  *
- * ── Why a cron worker and not after() ─────────────────────────────────────────
- * 1. Edit coalescing. Five saves to a completed entry would be five AI calls
- *    under after(); here the entry is due once and summarised once.
- * 2. Retries. A transient API failure under after() means the entry silently
- *    never gets a summary. Here the next run picks it up.
- * 3. Completing an entry must not depend on Anthropic twice. The PATCH already
- *    awaits classification because the tier drives the crisis panel; a second
- *    call in that path doubles the failure surface for something nobody sees.
+ * ── Why cron AS WELL AS on-submit ─────────────────────────────────────────────
+ * Summarisation is triggered when an entry is marked done, from the PATCH in
+ * src/app/api/reflections/[id]/route.ts via `summariseEntryById()` below. The
+ * cron did that job alone until 2026-08-04; it is now the backstop.
+ *
+ * What the cron still covers, and why it cannot be deleted:
+ * 1. Retries. A transient Anthropic failure under after() means the entry
+ *    silently never gets a summary. The failed attempt leaves it due, and the
+ *    next run picks it up.
+ * 2. Autosave edits. A debounced PUT to a completed entry bumps `updated_at`
+ *    without going through PATCH, so it is caught here rather than costing an
+ *    AI call per keystroke pause.
+ * 3. Prompt-version reflow — see below. Nothing else walks the whole archive.
+ *
+ * What was traded away, deliberately: edit coalescing. Five saves to a completed
+ * entry are now five AI calls where the cron would have summarised once. The
+ * PATCH short-circuits when the body is byte-identical, which removes the
+ * accidental half of that; the rest is the price of the summary being there when
+ * the entry is still fresh in mind.
+ *
+ * Note that the PATCH does NOT await this. It already awaits classification
+ * because the tier drives the crisis panel; adding a second blocking Anthropic
+ * call would double the failure surface of finishing an entry.
  *
  * ── Prompt changes reflow automatically ───────────────────────────────────────
  * An entry is also due when its summary was generated under a different prompt
@@ -65,51 +80,97 @@ export type SummaryRunResult = {
 };
 
 /**
- * Entries needing a summary, oldest first.
+ * What makes an entry due, in one place.
+ *
+ * Shared by the batch query and the single-entry path below so the two cannot
+ * drift. Drift here would be quiet and one-directional: a PATCH applying looser
+ * rules than the cron would re-summarise entries the cron considers settled, and
+ * pay for it every save.
  *
  * Purged entries are excluded because their body is gone; trashed ones because
  * summarising something on its way to destruction is wasted spend. A restored
  * entry becomes due again automatically — restore bumps `updated_at`.
  */
+function dueConditions() {
+  return [
+    isNotNull(journalEntries.completedAt),
+    isNotNull(journalEntries.encryptedBody),
+    isNull(journalEntries.deletedAt),
+    isNull(journalEntries.purgedAt),
+    // Exhausted attempts only block while they were spent on the CURRENT
+    // prompt. A new prompt version is a new trial.
+    or(
+      lt(journalEntries.summaryAttempts, SUMMARY_MAX_ATTEMPTS),
+      isNull(journalEntries.summaryAttemptVersion),
+      ne(journalEntries.summaryAttemptVersion, SUMMARISER_VERSION)
+    ),
+    or(
+      // Never summarised.
+      isNull(journalEntrySummaries.id),
+      // Entry edited since it was summarised.
+      lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt),
+      // Summarised under a prompt that no longer exists — reflow.
+      ne(journalEntrySummaries.generationVersion, SUMMARISER_VERSION)
+    ),
+  ];
+}
+
+/** The columns `summariseOne` needs, selected identically by both callers. */
+const dueColumns = {
+  id: journalEntries.id,
+  encryptedBody: journalEntries.encryptedBody,
+  attempts: journalEntries.summaryAttempts,
+  attemptVersion: journalEntries.summaryAttemptVersion,
+};
+
+/** Entries needing a summary, oldest first. */
 export async function findDue(limit = SUMMARY_BATCH_SIZE) {
   return db
-    .select({
-      id: journalEntries.id,
-      encryptedBody: journalEntries.encryptedBody,
-      attempts: journalEntries.summaryAttempts,
-      attemptVersion: journalEntries.summaryAttemptVersion,
-      summaryId: journalEntrySummaries.id,
-    })
+    .select(dueColumns)
     .from(journalEntries)
     .leftJoin(
       journalEntrySummaries,
       eq(journalEntrySummaries.journalEntryId, journalEntries.id)
     )
-    .where(
-      and(
-        isNotNull(journalEntries.completedAt),
-        isNotNull(journalEntries.encryptedBody),
-        isNull(journalEntries.deletedAt),
-        isNull(journalEntries.purgedAt),
-        // Exhausted attempts only block while they were spent on the CURRENT
-        // prompt. A new prompt version is a new trial.
-        or(
-          lt(journalEntries.summaryAttempts, SUMMARY_MAX_ATTEMPTS),
-          isNull(journalEntries.summaryAttemptVersion),
-          ne(journalEntries.summaryAttemptVersion, SUMMARISER_VERSION)
-        ),
-        or(
-          // Never summarised.
-          isNull(journalEntrySummaries.id),
-          // Entry edited since it was summarised.
-          lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt),
-          // Summarised under a prompt that no longer exists — reflow.
-          ne(journalEntrySummaries.generationVersion, SUMMARISER_VERSION)
-        )
-      )
-    )
+    .where(and(...dueConditions()))
     .orderBy(asc(journalEntries.completedAt))
     .limit(limit);
+}
+
+/**
+ * Summarises one entry immediately, if it is due.
+ *
+ * Called from the PATCH that marks an entry done, inside `after()` — see
+ * src/app/api/reflections/[id]/route.ts. Deliberately re-checks eligibility
+ * rather than trusting the caller: the entry may have been trashed between the
+ * update and this running, or already be current because the body did not
+ * actually change.
+ *
+ * "skipped" is the normal outcome for an entry that needs nothing, not an error.
+ *
+ * Takes no `userId` and performs no ownership check — like the cron, it operates
+ * on entries by id alone. Callers must have established ownership first; the
+ * PATCH does, via `loadOwned()`.
+ *
+ * A failure needs no handling here. `summariseOne` increments
+ * `summary_attempts` in SQL, which leaves the entry due, and the cron retries it
+ * on its next run up to SUMMARY_MAX_ATTEMPTS.
+ */
+export async function summariseEntryById(
+  id: string
+): Promise<"succeeded" | "failed" | "skipped"> {
+  const [row] = await db
+    .select(dueColumns)
+    .from(journalEntries)
+    .leftJoin(
+      journalEntrySummaries,
+      eq(journalEntrySummaries.journalEntryId, journalEntries.id)
+    )
+    .where(and(eq(journalEntries.id, id), ...dueConditions()))
+    .limit(1);
+
+  if (!row) return "skipped";
+  return summariseOne(row);
 }
 
 /**

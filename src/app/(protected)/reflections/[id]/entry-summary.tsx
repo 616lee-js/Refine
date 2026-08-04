@@ -113,7 +113,7 @@ export function EntrySummaryPanel({
   if (!summary && !unreadable) {
     return (
       <p className="pt-[18px]" style={{ ...mono, color: "var(--rf-text-4)" }}>
-        Not summarised yet — this happens overnight
+        Summarising — check back in a moment
       </p>
     );
   }
@@ -175,7 +175,7 @@ export function EntrySummaryPanel({
               }}
             >
               This describes an earlier version of the entry. Refine will
-              re-summarise it overnight
+              re-summarise it shortly
               {source === "user" && "; your correction is kept either way"}.
             </p>
           )}

@@ -36,6 +36,20 @@
       "when": 1785844349117,
       "tag": "0004_fresh_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785845266909,
+      "tag": "0005_curly_shotgun",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785845412701,
+      "tag": "0006_vengeful_molten_man",
+      "breakpoints": true
     }
   ]
 }

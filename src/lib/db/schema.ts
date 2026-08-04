@@ -240,8 +240,35 @@ export const journalEntrySummaries = pgTable("journal_entry_summaries", {
     .notNull()
     .unique()
     .references(() => journalEntries.id, { onDelete: "cascade" }),
-  /** AES-256-GCM ciphertext of the JSON summary object. */
+  /**
+   * The AI's summary. AES-256-GCM ciphertext of the JSON summary object.
+   *
+   * Always the machine's latest generation. The queue overwrites this freely on
+   * every regeneration — a body edit, or a summariser prompt change.
+   */
   encryptedContent: text("encrypted_content").notNull(),
+  /**
+   * The user's corrected summary, when they have written one. NULL means they
+   * have not.
+   *
+   * ── Why this is a separate column ─────────────────────────────────────────
+   * Summaries regenerate: editing an entry makes its summary stale, and editing
+   * `entry-summariser.md` reflows the whole archive. If a correction lived in
+   * `encrypted_content`, the next regeneration would silently destroy it — no
+   * error, no warning, the user's words simply gone.
+   *
+   * Keeping it in a column the queue never writes to means regeneration needs no
+   * special case and cannot get one wrong. The AI original is preserved by
+   * construction rather than by remembering to preserve it.
+   *
+   * ── This is what downstream reads ─────────────────────────────────────────
+   * The user's version wins where it exists. Never read either column directly —
+   * use `authoritativeSummary()` in src/lib/summaries/read.ts, which is the one
+   * place that resolution lives. Phase 6 memory extraction must read through it.
+   */
+  encryptedUserContent: text("encrypted_user_content"),
+  /** When the user last corrected it. NULL alongside a NULL user version. */
+  userEditedAt: timestamp("user_edited_at", { withTimezone: true }),
   /**
    * When this summary was produced. The work queue compares it against the
    * entry's `updated_at`: older means the entry has been edited since, and the
@@ -459,6 +486,19 @@ export const feedback = pgTable("feedback", {
   id: text("id").primaryKey(),
   type: feedbackTypeEnum("type").notNull(),
   body: text("body").notNull(),
+  /**
+   * Which screen it was sent from, as a route PATTERN — "/reflection/[id]",
+   * never "/reflection/9f3c...".
+   *
+   * The concrete id is deliberately stripped. A raw pathname would tie an
+   * unattributed submission to one specific journal entry, and from there to
+   * whoever wrote it — quietly undoing the reason there is no user_id. The
+   * pattern says which surface was involved, which is the part worth knowing.
+   *
+   * Nullable: submissions predating this column have no page, and an
+   * unrecognised route records NULL rather than guessing.
+   */
+  page: text("page"),
   /** Moves between the two sections of the admin review page. */
   status: feedbackStatusEnum("status").notNull().default("new"),
   createdAt: timestamp("created_at", { withTimezone: true })

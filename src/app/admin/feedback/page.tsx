@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { feedback } from "@/lib/db/schema";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { pageLabel } from "@/lib/feedback/pages";
 
 /**
  * Bug reports and requests, newest first.
@@ -57,6 +58,7 @@ function Row({
     body: string;
     status: string;
     createdAt: Date;
+    page: string | null;
   };
 }) {
   const done = row.status === "completed";
@@ -88,6 +90,19 @@ function Row({
               minute: "2-digit",
             })}
           </Eyebrow>
+          {/* Where it was sent from. A route pattern, never a concrete path —
+              see src/lib/feedback/pages.ts for why the id is stripped. */}
+          <span
+            className="rounded-full"
+            style={{
+              padding: "3px 8px",
+              fontSize: "10.5px",
+              color: row.page ? "var(--rf-text-2)" : "var(--rf-text-4)",
+              boxShadow: "inset 0 0 0 1px var(--rf-border)",
+            }}
+          >
+            {pageLabel(row.page)}
+          </span>
         </div>
 
         <form action={toggleStatus}>

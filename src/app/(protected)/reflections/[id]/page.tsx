@@ -4,13 +4,19 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { journalEntries, contentAccessLog } from "@/lib/db/schema";
+import { journalEntries, journalEntrySummaries, contentAccessLog } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
+import {
+  authoritativeSummary,
+  isStale,
+  type ResolvedSummary,
+} from "@/lib/summaries/read";
 import { EntryTitle } from "./entry-title";
+import { EntrySummaryPanel } from "./entry-summary";
 
 /**
  * Reading back a completed entry.
@@ -51,12 +57,41 @@ export default async function ReflectionDetailPage({
   // log keeps its reference.
   if (entry.purgedAt) notFound();
 
-  // Audit: this is a deliberate decryption event.
+  const [summaryRow] = await db
+    .select()
+    .from(journalEntrySummaries)
+    .where(eq(journalEntrySummaries.journalEntryId, id))
+    .limit(1);
+
+  let resolved: ResolvedSummary | null = null;
+  let summaryUnreadable = false;
+  if (summaryRow) {
+    try {
+      resolved = authoritativeSummary(summaryRow);
+    } catch (err) {
+      // A summary that will not decrypt must never take down the entry it
+      // describes. The entry is the irreplaceable thing; the summary is derived.
+      summaryUnreadable = true;
+      console.error(
+        `Summary decrypt failed for entry ${id}:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  // Audit: one row, not two. Reading the summary is part of the same deliberate
+  // act on the same entry — a second row would double the log's volume while
+  // recording nothing the first does not already say. Same reasoning as the
+  // single row Trends writes. The log records decryptions, not eyeballs: this is
+  // written whether or not the disclosure below is expanded, because the
+  // decryption genuinely happened server-side.
   await db.insert(contentAccessLog).values({
     id: randomUUID(),
     userId: authSession.userId,
     journalEntryId: id,
-    context: "journal_entry_detail_view",
+    context: summaryRow
+      ? "journal_entry_detail_view (+summary)"
+      : "journal_entry_detail_view",
   });
 
   let body = "";
@@ -168,6 +203,19 @@ export default async function ReflectionDetailPage({
               </p>
             )}
           </Sheet>
+
+          <EntrySummaryPanel
+            entryId={entry.id}
+            summary={resolved?.summary ?? null}
+            aiOriginal={resolved?.aiOriginal ?? null}
+            source={resolved?.source ?? null}
+            generationVersion={summaryRow?.generationVersion ?? null}
+            generatedAt={summaryRow?.generatedAt.toISOString() ?? null}
+            stale={
+              summaryRow ? isStale(summaryRow, entry.updatedAt) : false
+            }
+            unreadable={summaryUnreadable}
+          />
 
           <div className="pt-[14px]">
             <Link

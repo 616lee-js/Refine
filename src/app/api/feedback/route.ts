@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { feedback } from "@/lib/db/schema";
+import { normalisePath } from "@/lib/feedback/pages";
 
 /**
  * Product feedback submission.
@@ -38,7 +39,11 @@ export async function POST(req: Request) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const { type, body } = payload as { type?: unknown; body?: unknown };
+  const { type, body, page } = payload as {
+    type?: unknown;
+    body?: unknown;
+    page?: unknown;
+  };
 
   if (!isType(type)) {
     return new Response("type must be \"bug\" or \"request\"", { status: 400 });
@@ -53,6 +58,11 @@ export async function POST(req: Request) {
     // Trimmed and capped rather than rejected on length: someone who wrote a
     // very long report should not lose it to a validation error.
     body: body.trim().slice(0, MAX_BODY),
+    // Resolved here, against an allowlist — the posted string is never stored.
+    // A raw pathname would carry an entry id, tying an unattributed submission
+    // to a specific piece of writing and through it to its author. An
+    // unrecognised route records NULL. See src/lib/feedback/pages.ts.
+    page: normalisePath(page),
   });
 
   return new Response(null, { status: 204 });

@@ -48,6 +48,8 @@ const TABLES = [
   "user_memory",
   "safety_log",
   "content_access_log",
+  // No foreign keys, so position is free — it is last because it is the newest.
+  "feedback",
 ] as const;
 
 type Dump = {

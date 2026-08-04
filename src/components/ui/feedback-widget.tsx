@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
 
@@ -38,6 +39,9 @@ export function FeedbackWidget() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Sent raw; the server resolves it to a route pattern against an allowlist and
+  // stores that, never this string. See src/lib/feedback/pages.ts.
+  const pathname = usePathname();
 
   useEffect(() => {
     if (open) textareaRef.current?.focus();
@@ -70,7 +74,7 @@ export function FeedbackWidget() {
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, body }),
+        body: JSON.stringify({ type, body, page: pathname }),
       });
       // Checked before closing. A failed submit that closed the panel would
       // throw away what the person wrote while looking like it worked — the

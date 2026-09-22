@@ -1,40 +1,117 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries, journalEntrySummaries, contentAccessLog } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { PageBg } from "@/components/ui/page-bg";
-import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
+import { CrisisResourcePanel } from "@/components/ui/crisis-resource-panel";
 import {
   authoritativeSummary,
   isStale,
   type ResolvedSummary,
 } from "@/lib/summaries/read";
 import { EntryTitle } from "./entry-title";
-import { EntrySummaryPanel } from "./entry-summary";
+import { ReadBack } from "./read-back";
+import { CompletionNotice } from "./completion-notice";
 
 /**
  * Reading back a completed entry.
  *
- * Not editable here — editing happens on the writing surface at
- * /reflection/[id]. This page is for re-reading, at the same size the text was
- * written at, so that reading it back feels like the same object rather than a
- * summary of one.
+ * ── The completed state ───────────────────────────────────────────────────────
+ * Completing an entry lands here. It is not editable here — editing is the
+ * explicit "edit" action, which reopens the writing surface at /reflection/[id]
+ * and returns here on save or cancel. An entry is therefore either being
+ * written or being read, never both at once.
  *
  * The exception is the title, which is editable in place. See ./entry-title.tsx
  * for why naming belongs to re-reading rather than to finishing.
+ *
+ * ── Summary first ─────────────────────────────────────────────────────────────
+ * "What Refine took from this" sits above the entry (moved 2026-09-21). It is
+ * still collapsed by default; whether it should open by default now that it
+ * leads the page is the owner's call.
+ *
+ * ── Resources on arrival ──────────────────────────────────────────────────────
+ * The crisis panel renders when arriving from completion (`?completed=1` or
+ * `?saved=1`) and the stored tier is 2 or 3 — the same moment it showed on the
+ * old in-editor flow. Whether a Tier 2/3 entry should carry its resources on
+ * *every* read is a safety-design decision that has not been made; nothing
+ * here assumes it.
  */
+
+// COPY REVIEW: placeholders pending final wording.
+const COPY = {
+  edit: "[COPY] Edit entry",
+  unfinished: "unfinished",
+  backToArchive: "← Everything you've written",
+  earlier: "[COPY] ← Earlier",
+  later: "[COPY] Later →",
+  earliest: "[COPY] Earliest entry",
+  latest: "[COPY] Latest entry",
+} as const;
+
+/**
+ * The entries either side of this one, by date.
+ *
+ * ── Chronological, not filtered ───────────────────────────────────────────────
+ * Deliberately NOT scoped to whatever filter the archive had applied. Reading
+ * back is reading a journal: the page before this one is the entry written
+ * before it, and a journal does not skip pages because of a search. The archive
+ * link keeps the filter; the page turns do not.
+ *
+ * Two indexed queries rather than loading the list and finding an index. The
+ * alternative would decrypt every summary to honour a topic filter, on a page
+ * whose job is to show one entry.
+ *
+ * `completed_at` is the ordering key, so drafts are excluded — an unfinished
+ * entry is not a page in the journal yet.
+ */
+async function neighbours(userId: string, completedAt: Date | null) {
+  if (!completedAt) return { earlier: null, later: null };
+
+  const base = [
+    eq(journalEntries.userId, userId),
+    isNotNull(journalEntries.completedAt),
+    isNull(journalEntries.deletedAt),
+    isNull(journalEntries.purgedAt),
+  ];
+
+  const [earlier, later] = await Promise.all([
+    db
+      .select({ id: journalEntries.id })
+      .from(journalEntries)
+      .where(and(...base, lt(journalEntries.completedAt, completedAt)))
+      .orderBy(desc(journalEntries.completedAt))
+      .limit(1),
+    db
+      .select({ id: journalEntries.id })
+      .from(journalEntries)
+      .where(and(...base, gt(journalEntries.completedAt, completedAt)))
+      .orderBy(asc(journalEntries.completedAt))
+      .limit(1),
+  ]);
+
+  return { earlier: earlier[0]?.id ?? null, later: later[0]?.id ?? null };
+}
+
 export default async function ReflectionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ completed?: string; saved?: string }>;
 }) {
   const { id } = await params;
+  const { completed, saved } = await searchParams;
+  const arrival: "completed" | "saved" | null =
+    completed === "1" ? "completed" : saved === "1" ? "saved" : null;
+
   const authSession = await getSession();
   if (!authSession.userId) notFound();
 
@@ -117,13 +194,18 @@ export default async function ReflectionDetailPage({
     }
   }
 
+  const { earlier, later } = await neighbours(
+    authSession.userId,
+    entry.completedAt
+  );
+
   const written = entry.completedAt ?? entry.createdAt;
   const dateLong = written.toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
-  const words = body.trim() ? body.trim().split(/\s+/).length : 0;
+  // No word count (removed 2026-09-21): a count is a target in disguise.
 
   return (
     <PageBg>
@@ -131,6 +213,8 @@ export default async function ReflectionDetailPage({
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-14" style={{ maxWidth: 700 }}>
+          {arrival && <CompletionNotice kind={arrival} />}
+
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
             <div className="min-w-0">
               <Eyebrow>
@@ -140,7 +224,7 @@ export default async function ReflectionDetailPage({
                   hour: "numeric",
                   minute: "2-digit",
                 })}
-                {!entry.completedAt && " · unfinished"}
+                {!entry.completedAt && ` · ${COPY.unfinished}`}
               </Eyebrow>
               <div className="mt-[9px]">
                 <EntryTitle
@@ -152,9 +236,6 @@ export default async function ReflectionDetailPage({
             </div>
 
             <div className="flex shrink-0 items-center gap-3">
-              {words > 0 && !decryptFailed && (
-                <Eyebrow size={9.5}>{words} words</Eyebrow>
-              )}
               <Link
                 href={`/reflection/${entry.id}`}
                 className="rounded-full transition-colors"
@@ -165,57 +246,80 @@ export default async function ReflectionDetailPage({
                   boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
                 }}
               >
-                Add to this
+                {COPY.edit}
               </Link>
             </div>
           </div>
 
-          <Sheet className="px-9 py-9 sm:px-12 sm:py-11">
-            {decryptFailed ? (
-              <p
-                className="rounded-[10px] px-5 py-4"
-                style={{
-                  fontSize: "13.5px",
-                  lineHeight: 1.7,
-                  color: "var(--color-error)",
-                  background: "rgba(163, 58, 37, 0.08)",
-                }}
-              >
-                This entry could not be read. Its content is still stored, but the
-                encryption key does not match — nothing has been lost, and it
-                should not be edited or overwritten until that is resolved.
-              </p>
-            ) : body ? (
-              <article
-                className="whitespace-pre-wrap"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "var(--text-entry)",
-                  lineHeight: 1.75,
-                  color: "var(--rf-text)",
-                }}
-              >
-                {body}
-              </article>
-            ) : (
-              <p style={{ fontSize: "14px", color: "var(--rf-text-4)" }}>
-                This one is empty.
-              </p>
-            )}
-          </Sheet>
-
-          <EntrySummaryPanel
-            entryId={entry.id}
-            summary={resolved?.summary ?? null}
-            aiOriginal={resolved?.aiOriginal ?? null}
-            source={resolved?.source ?? null}
-            generationVersion={summaryRow?.generationVersion ?? null}
-            generatedAt={summaryRow?.generatedAt.toISOString() ?? null}
-            stale={
-              summaryRow ? isStale(summaryRow, entry.updatedAt) : false
-            }
-            unreadable={summaryUnreadable}
+          {/* Summary above the entry, then the entry. One client component so
+              text selected in the entry can become a quote in the summary —
+              see ./read-back.tsx. `topics` / `people` are flagged for a
+              consistency review: the vocabulary drifts entry to entry. */}
+          <ReadBack
+            body={body}
+            decryptFailed={decryptFailed}
+            summary={{
+              entryId: entry.id,
+              summary: resolved?.summary ?? null,
+              aiOriginal: resolved?.aiOriginal ?? null,
+              source: resolved?.source ?? null,
+              generationVersion: summaryRow?.generationVersion ?? null,
+              generatedAt: summaryRow?.generatedAt.toISOString() ?? null,
+              stale: summaryRow ? isStale(summaryRow, entry.updatedAt) : false,
+              unreadable: summaryUnreadable,
+            }}
           />
+
+          {arrival && entry.tierClassification !== null && (
+            <CrisisResourcePanel tier={entry.tierClassification} />
+          )}
+
+          {/* Page turns. Only where the entry is part of the sequence — a draft
+              is not yet. Both ends are stated rather than hidden, so reaching
+              the first entry reads as arriving somewhere. */}
+          {entry.completedAt && (earlier || later) && (
+            <nav
+              aria-label="Entries either side of this one"
+              className="mt-[18px] flex items-center justify-between gap-4 pt-4"
+              style={{ borderTop: "1px solid var(--rf-rule)" }}
+            >
+              {earlier ? (
+                <Link
+                  href={`/reflections/${earlier}`}
+                  rel="prev"
+                  className="rounded-full transition-colors"
+                  style={{
+                    padding: "7px 14px",
+                    fontSize: "12.5px",
+                    color: "var(--rf-text-2)",
+                    boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                  }}
+                >
+                  {COPY.earlier}
+                </Link>
+              ) : (
+                <Eyebrow size={9.5}>{COPY.earliest}</Eyebrow>
+              )}
+
+              {later ? (
+                <Link
+                  href={`/reflections/${later}`}
+                  rel="next"
+                  className="rounded-full transition-colors"
+                  style={{
+                    padding: "7px 14px",
+                    fontSize: "12.5px",
+                    color: "var(--rf-text-2)",
+                    boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                  }}
+                >
+                  {COPY.later}
+                </Link>
+              ) : (
+                <Eyebrow size={9.5}>{COPY.latest}</Eyebrow>
+              )}
+            </nav>
+          )}
 
           <div className="pt-[14px]">
             <Link
@@ -227,7 +331,7 @@ export default async function ReflectionDetailPage({
                 color: "var(--rf-text-4)",
               }}
             >
-              ← Everything you&apos;ve written
+              {COPY.backToArchive}
             </Link>
           </div>
         </div>

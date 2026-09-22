@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
-import type { EntrySummary } from "@/lib/summaries/types";
+import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/summaries/types";
 
 /**
  * What Refine took from an entry, shown on the read-back page so it can be
@@ -17,22 +17,63 @@ import type { EntrySummary } from "@/lib/summaries/types";
  * The corrected version is what downstream memory extraction reads; see
  * `authoritativeSummary()` in src/lib/summaries/read.ts.
  *
+ * ── Quotes are curated from the text ──────────────────────────────────────────
+ * In edit mode the model's quotes can be removed, and new ones arrive through
+ * `pendingQuote` — text the person selected in the entry (see ./entry-body.tsx).
+ * There is no field to type a quote into. The server verifies every quote is
+ * found in the body and rejects the save otherwise.
+ *
  * ── Collapsed by default ──────────────────────────────────────────────────────
- * Native <details>, so keyboard and screen-reader behaviour come free. Collapsed
- * because someone re-reading their own writing has not asked to be told what it
- * said — the summary is available, not imposed.
+ * Native <details>, controlled so a quote arriving from the text can open it.
+ * Collapsed because someone re-reading their own writing has not asked to be
+ * told what it said — the summary is available, not imposed. It now sits above
+ * the entry (2026-09-21); whether it should open by default there is the
+ * owner's call.
+ *
+ * ── Categories under review ───────────────────────────────────────────────────
+ * `topics` and `people` are flagged for a consistency review: the summariser's
+ * vocabulary drifts entry to entry ("Dad" one day, "my father" the next), and
+ * nothing here yet normalises it. Rendered as-is until that review lands.
  */
 
-export function EntrySummaryPanel({
-  entryId,
-  summary,
-  aiOriginal,
-  source,
-  generationVersion,
-  generatedAt,
-  stale,
-  unreadable,
-}: {
+// COPY REVIEW: shipped wording hoisted; `[COPY]` items are placeholders.
+const COPY = {
+  heading: "What Refine took from this",
+  yourVersion: "Your version",
+  summarising: "Summarising — check back in a moment",
+  unreadable:
+    "The summary of this entry could not be read. Your writing above is unaffected.",
+  stale: "This describes an earlier version of the entry. Refine will re-summarise it shortly",
+  staleKept: "; your correction is kept either way",
+  thin: "Short entry — deliberately minimal",
+  summaryLabel: "Summary",
+  topicsLabel: "Topics",
+  peopleLabel: "People",
+  commaHint: "— separated by commas",
+  quotesLabel: "[COPY] Quotes",
+  quotesHint: "[COPY] Select text in the entry to add a quote",
+  quotesFull: "[COPY] That's the most quotes an entry can keep",
+  removeQuote: "[COPY] Remove",
+  noSummaryForQuote: "[COPY] No summary yet to attach a quote to",
+  emptyError: "A summary cannot be empty.",
+  saveError: "That didn't save. Your text is still here — try again.",
+  quoteRejected: "[COPY] One of the quotes wasn't found in the entry",
+  revertError: "Couldn't undo that.",
+  savedToast: "Saved — this is what Refine will use",
+  revertedToast: "Back to Refine's version",
+  save: "Save",
+  saving: "Saving…",
+  cancel: "Cancel",
+  correct: "Correct this",
+  editYours: "Edit yours",
+  backToYours: "Back to yours",
+  seeOriginal: "See Refine's version",
+  discardMine: "Discard mine",
+  original: "Refine's original",
+  generated: (date: string) => `Generated ${date}`,
+} as const;
+
+export type EntrySummaryPanelProps = {
   entryId: string;
   /** The authoritative version — the correction where one exists. */
   summary: EntrySummary | null;
@@ -44,16 +85,58 @@ export function EntrySummaryPanel({
   /** The entry has been edited since this was generated. */
   stale: boolean;
   unreadable: boolean;
-}) {
+  /** Text selected in the entry, waiting to become a quote. */
+  pendingQuote: string | null;
+  onQuoteConsumed: () => void;
+};
+
+export function EntrySummaryPanel({
+  entryId,
+  summary,
+  aiOriginal,
+  source,
+  generationVersion,
+  generatedAt,
+  stale,
+  unreadable,
+  pendingQuote,
+  onQuoteConsumed,
+}: EntrySummaryPanelProps) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(summary?.summary ?? "");
   const [topics, setTopics] = useState((summary?.topics ?? []).join(", "));
   const [people, setPeople] = useState((summary?.people ?? []).join(", "));
+  const [quotes, setQuotes] = useState<SummaryQuote[]>(summary?.quotes ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+
+  // A selection made in the entry lands here. Opens the panel and enters edit
+  // mode so the person sees where it went and can save or discard it.
+  useEffect(() => {
+    if (pendingQuote === null) return;
+    onQuoteConsumed();
+    if (!summary) {
+      setToast(COPY.noSummaryForQuote);
+      return;
+    }
+    setOpen(true);
+    setShowOriginal(false);
+    setEditing(true);
+    setError(null);
+
+    const flat = (s: string) => s.replace(/\s+/g, " ").trim();
+    if (quotes.some((q) => flat(q.text) === flat(pendingQuote))) return;
+    if (quotes.length >= MAX_QUOTES_CURATED) {
+      setError(COPY.quotesFull);
+      return;
+    }
+    // Offset is resolved server-side on save; it is not needed to display.
+    setQuotes([...quotes, { text: pendingQuote, offset: null }]);
+  }, [pendingQuote, summary, quotes, onQuoteConsumed]);
 
   const mono = {
     fontFamily: "var(--font-mono)",
@@ -62,9 +145,17 @@ export function EntrySummaryPanel({
     textTransform: "uppercase" as const,
   };
 
+  function resetDraft() {
+    setDraft(summary?.summary ?? "");
+    setTopics((summary?.topics ?? []).join(", "));
+    setPeople((summary?.people ?? []).join(", "));
+    setQuotes(summary?.quotes ?? []);
+    setError(null);
+  }
+
   async function save() {
     if (!draft.trim()) {
-      setError("A summary cannot be empty.");
+      setError(COPY.emptyError);
       return;
     }
     setBusy(true);
@@ -77,14 +168,20 @@ export function EntrySummaryPanel({
           summary: draft,
           topics: topics.split(",").map((t) => t.trim()).filter(Boolean),
           people: people.split(",").map((p) => p.trim()).filter(Boolean),
+          quotes: quotes.map((q) => q.text),
         }),
       });
+      if (res.status === 400) throw new Error("rejected");
       if (!res.ok) throw new Error(String(res.status));
       setEditing(false);
-      setToast("Saved — this is what Refine will use");
+      setToast(COPY.savedToast);
       router.refresh();
-    } catch {
-      setError("That didn't save. Your text is still here — try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "rejected"
+          ? COPY.quoteRejected
+          : COPY.saveError
+      );
     } finally {
       setBusy(false);
     }
@@ -100,10 +197,10 @@ export function EntrySummaryPanel({
       if (!res.ok) throw new Error(String(res.status));
       setEditing(false);
       setShowOriginal(false);
-      setToast("Back to Refine's version");
+      setToast(COPY.revertedToast);
       router.refresh();
     } catch {
-      setError("Couldn't undo that.");
+      setError(COPY.revertError);
     } finally {
       setBusy(false);
     }
@@ -112,9 +209,12 @@ export function EntrySummaryPanel({
   // ── No summary yet ─────────────────────────────────────────────────────────
   if (!summary && !unreadable) {
     return (
-      <p className="pt-[18px]" style={{ ...mono, color: "var(--rf-text-4)" }}>
-        Summarising — check back in a moment
-      </p>
+      <>
+        <p className="pt-[18px]" style={{ ...mono, color: "var(--rf-text-4)" }}>
+          {COPY.summarising}
+        </p>
+        <Toast message={toast} onDismiss={() => setToast(null)} />
+      </>
     );
   }
 
@@ -124,8 +224,7 @@ export function EntrySummaryPanel({
         className="pt-[18px]"
         style={{ fontSize: "12.5px", color: "var(--color-error)" }}
       >
-        The summary of this entry could not be read. Your writing above is
-        unaffected.
+        {COPY.unreadable}
       </p>
     );
   }
@@ -134,12 +233,16 @@ export function EntrySummaryPanel({
 
   return (
     <>
-      <details className="pt-[18px]">
+      <details
+        className="pt-[18px]"
+        open={open}
+        onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+      >
         <summary
           className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1"
           style={{ color: "var(--rf-text-3)" }}
         >
-          <span style={{ fontSize: "13px" }}>What Refine took from this</span>
+          <span style={{ fontSize: "13px" }}>{COPY.heading}</span>
           {source === "user" && (
             <span
               className="rounded-full"
@@ -153,7 +256,7 @@ export function EntrySummaryPanel({
                 background: "var(--rf-accent-2-soft)",
               }}
             >
-              Your version
+              {COPY.yourVersion}
             </span>
           )}
           {generationVersion && (
@@ -174,9 +277,8 @@ export function EntrySummaryPanel({
                 background: "var(--rf-warn-soft)",
               }}
             >
-              This describes an earlier version of the entry. Refine will
-              re-summarise it shortly
-              {source === "user" && "; your correction is kept either way"}.
+              {COPY.stale}
+              {source === "user" && COPY.staleKept}.
             </p>
           )}
 
@@ -185,7 +287,7 @@ export function EntrySummaryPanel({
               className="mb-2"
               style={{ ...mono, color: "var(--rf-text-4)" }}
             >
-              Short entry — deliberately minimal
+              {COPY.thin}
             </p>
           )}
 
@@ -197,7 +299,7 @@ export function EntrySummaryPanel({
                   className="mb-[6px] block"
                   style={{ fontSize: "12.5px", color: "var(--rf-text-2)" }}
                 >
-                  Summary
+                  {COPY.summaryLabel}
                 </label>
                 <textarea
                   id="summary-body"
@@ -218,8 +320,8 @@ export function EntrySummaryPanel({
               </div>
 
               {[
-                ["Topics", topics, setTopics, "summary-topics"] as const,
-                ["People", people, setPeople, "summary-people"] as const,
+                [COPY.topicsLabel, topics, setTopics, "summary-topics"] as const,
+                [COPY.peopleLabel, people, setPeople, "summary-people"] as const,
               ].map(([label, value, setter, htmlId]) => (
                 <div key={htmlId}>
                   <label
@@ -229,7 +331,7 @@ export function EntrySummaryPanel({
                   >
                     {label}{" "}
                     <span style={{ color: "var(--rf-text-4)" }}>
-                      — separated by commas
+                      {COPY.commaHint}
                     </span>
                   </label>
                   <input
@@ -246,6 +348,53 @@ export function EntrySummaryPanel({
                   />
                 </div>
               ))}
+
+              {/* Quotes: remove here, add by selecting in the entry. */}
+              <div>
+                <p
+                  className="mb-[6px]"
+                  style={{ fontSize: "12.5px", color: "var(--rf-text-2)" }}
+                >
+                  {COPY.quotesLabel}{" "}
+                  <span style={{ color: "var(--rf-text-4)" }}>
+                    {COPY.quotesHint}
+                  </span>
+                </p>
+                {quotes.length > 0 && (
+                  <ul className="flex flex-col gap-2">
+                    {quotes.map((q, i) => (
+                      <li
+                        key={`${i}-${q.text.slice(0, 24)}`}
+                        className="flex items-start justify-between gap-3"
+                      >
+                        <p
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            fontSize: "14px",
+                            lineHeight: 1.55,
+                            fontStyle: "italic",
+                            color: "var(--rf-text-2)",
+                            borderLeft: "2px solid var(--rf-border)",
+                            paddingLeft: 11,
+                          }}
+                        >
+                          {q.text}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuotes((prev) => prev.filter((_, j) => j !== i))
+                          }
+                          className="shrink-0 pt-[3px]"
+                          style={{ ...mono, color: "var(--rf-text-3)" }}
+                        >
+                          {COPY.removeQuote}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
               {error && (
                 <p
@@ -269,19 +418,16 @@ export function EntrySummaryPanel({
                     color: "var(--rf-paper)",
                   }}
                 >
-                  {busy ? "Saving…" : "Save"}
+                  {busy ? COPY.saving : COPY.save}
                 </button>
                 <button
                   onClick={() => {
                     setEditing(false);
-                    setDraft(summary!.summary);
-                    setTopics(summary!.topics.join(", "));
-                    setPeople(summary!.people.join(", "));
-                    setError(null);
+                    resetDraft();
                   }}
                   style={{ ...mono, color: "var(--rf-text-3)" }}
                 >
-                  Cancel
+                  {COPY.cancel}
                 </button>
               </div>
             </div>
@@ -304,8 +450,8 @@ export function EntrySummaryPanel({
                 <div className="mt-4 flex flex-col gap-2">
                   {(
                     [
-                      ["Topics", shown.topics],
-                      ["People", shown.people],
+                      [COPY.topicsLabel, shown.topics],
+                      [COPY.peopleLabel, shown.people],
                     ] as const
                   ).map(([label, items]) =>
                     items.length === 0 ? null : (
@@ -352,10 +498,13 @@ export function EntrySummaryPanel({
               >
                 {!showOriginal && (
                   <button
-                    onClick={() => setEditing(true)}
+                    onClick={() => {
+                      resetDraft();
+                      setEditing(true);
+                    }}
                     style={{ ...mono, color: "var(--rf-text-2)" }}
                   >
-                    {source === "user" ? "Edit yours" : "Correct this"}
+                    {source === "user" ? COPY.editYours : COPY.correct}
                   </button>
                 )}
 
@@ -365,26 +514,28 @@ export function EntrySummaryPanel({
                       onClick={() => setShowOriginal((v) => !v)}
                       style={{ ...mono, color: "var(--rf-text-3)" }}
                     >
-                      {showOriginal ? "Back to yours" : "See Refine's version"}
+                      {showOriginal ? COPY.backToYours : COPY.seeOriginal}
                     </button>
                     <button
                       onClick={revert}
                       disabled={busy}
                       style={{ ...mono, color: "var(--rf-text-4)" }}
                     >
-                      Discard mine
+                      {COPY.discardMine}
                     </button>
                   </>
                 )}
 
                 <span style={{ ...mono, color: "var(--rf-text-4)" }}>
                   {showOriginal
-                    ? "Refine's original"
+                    ? COPY.original
                     : generatedAt
-                      ? `Generated ${new Date(generatedAt).toLocaleDateString(
-                          undefined,
-                          { day: "numeric", month: "short" }
-                        )}`
+                      ? COPY.generated(
+                          new Date(generatedAt).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                          })
+                        )
                       : ""}
                 </span>
               </div>

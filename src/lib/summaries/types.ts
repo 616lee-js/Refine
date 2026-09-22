@@ -47,5 +47,11 @@ export type RawSummary = {
 
 export const MAX_TOPICS = 5;
 export const MAX_PEOPLE = 5;
+/** What the model may pick. */
 export const MAX_QUOTES = 3;
+/**
+ * What the writer may keep when curating. Higher than the model's cap: the
+ * model is guessing what matters, the writer knows.
+ */
+export const MAX_QUOTES_CURATED = 5;
 export const MAX_SUMMARY_CHARS = 600;

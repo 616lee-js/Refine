@@ -31,6 +31,18 @@ const TYPES: { value: FeedbackType; label: string }[] = [
   { value: "request", label: "Request" },
 ];
 
+// COPY REVIEW: placeholder pending final wording from the product owner.
+const COPY = {
+  sentToast: "[COPY] Feedback sent",
+};
+
+/**
+ * Shorter than the 4s default. A "sent" confirmation carries nothing to read —
+ * the panel closing is already the feedback — so it should clear before it is
+ * in the way of the next thing.
+ */
+const SENT_TOAST_MS = 3000;
+
 export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<FeedbackType>("bug");
@@ -81,7 +93,7 @@ export function FeedbackWidget() {
       // same bug class already fixed in Mirror, onboarding, profile and trash.
       if (!res.ok) throw new Error(String(res.status));
       close();
-      setToast("Thanks — that's been logged");
+      setToast(COPY.sentToast);
     } catch {
       setError("That didn't send. Your text is still here — try again.");
     } finally {
@@ -271,7 +283,11 @@ export function FeedbackWidget() {
         )}
       </div>
 
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+      <Toast
+        message={toast}
+        onDismiss={() => setToast(null)}
+        durationMs={SENT_TOAST_MS}
+      />
     </>
   );
 }

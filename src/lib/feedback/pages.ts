@@ -18,8 +18,9 @@
  */
 
 /**
- * Every route that can render the feedback widget — i.e. everything under the
- * `(protected)` group. Segments in brackets match one path segment.
+ * Every route that can render the feedback widget — everything under the
+ * `(protected)` group, plus the admin pages, which mount it separately. Segments
+ * in brackets match one path segment.
  *
  * Add a route here when adding a page. Missing one costs a NULL, not a leak.
  */
@@ -35,6 +36,8 @@ const KNOWN_ROUTES = [
   "/settings/profile",
   "/settings/system-prompt",
   "/trash",
+  "/admin/safety-log",
+  "/admin/feedback",
 ] as const;
 
 export type KnownRoute = (typeof KNOWN_ROUTES)[number];
@@ -52,6 +55,8 @@ export const PAGE_LABELS: Record<string, string> = {
   "/settings/profile": "Profile settings",
   "/settings/system-prompt": "System prompt",
   "/trash": "Trash",
+  "/admin/safety-log": "Admin · Safety log",
+  "/admin/feedback": "Admin · Feedback",
 };
 
 /**

@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/admin";
 import { PageBg } from "@/components/ui/page-bg";
 import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
+import { FeedbackWidget } from "@/components/ui/feedback-widget";
 
 /**
  * Shell for everything under /admin.
@@ -73,6 +74,11 @@ export default async function AdminLayout({
       </div>
 
       {children}
+
+      {/* Admin pages are reviewed by the same people who report on them. The
+          route patterns it records (/admin/safety-log, /admin/feedback) carry no
+          identifier, so nothing about the submission changes here. */}
+      <FeedbackWidget />
     </PageBg>
   );
 }

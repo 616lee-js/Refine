@@ -1,16 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CrisisResourcePanel } from "@/components/ui/crisis-resource-panel";
-import {
-  JournalGuidanceSidebar,
-  GuidanceToggle,
-} from "@/components/ui/journal-guidance-sidebar";
+import { JournalGuidanceSidebar } from "@/components/ui/journal-guidance-sidebar";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
-import { Toast } from "@/components/ui/toast";
 import { getGuidanceSections } from "@/lib/journal/guidance";
 
 /**
@@ -22,17 +17,94 @@ import { getGuidanceSections } from "@/lib/journal/guidance";
  * without something shaping the articulation as it happens.
  *
  * The only thing that touches the text is the safety classifier, and only when
- * the entry is set down — never during writing, and it produces nothing visible
- * unless it detects Tier 2/3, in which case resources appear below.
+ * the entry is completed — never during writing. Completing navigates to the
+ * read view, which shows resources if the classifier returned Tier 2/3.
  *
  * ── The anti-essay layer ──────────────────────────────────────────────────────
  * The sheet is bounded: it opens at 330px with a visible bottom edge so the page
- * looks fillable rather than infinite, and grows only as the writing does. Under
- * the text, above that edge, sits a descriptive norm — not a target. There is no
- * word count, no progress bar, no minimum, and finishing costs one button.
+ * looks fillable rather than infinite, and grows only as the writing does. There
+ * is no word count, no progress bar, no minimum, and finishing costs one button.
+ * The descriptive norm line that used to sit under the text ("Most entries here
+ * run three or four sentences…") was removed 2026-09-21 at the owner's request.
  */
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
+
+/**
+ * ── Growing the textarea without a jump ───────────────────────────────────────
+ * The previous auto-grow set `height = "auto"` and then `height = scrollHeight`
+ * on every change. That momentary collapse shrinks the document, the browser
+ * clamps the scroll position, and the restored height then lands somewhere
+ * else — a visible jump, worst on iOS where double-space (→ ". ") and deletes
+ * fire it mid-word.
+ *
+ * Now the textarea sits in a grid cell with a hidden mirror `<div>` that carries
+ * the same text and the same type metrics. The mirror sizes the cell; the
+ * textarea stretches to fill it. Height is never reset, so nothing can jump.
+ * The two MUST share `BODY_TYPE` exactly — any drift in font, line height,
+ * padding or wrapping and the textarea clips or over-grows.
+ */
+const BODY_TYPE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontSize: "18.5px",
+  lineHeight: 1.62,
+  letterSpacing: "-0.003em",
+  padding: 0,
+  border: 0,
+  whiteSpace: "pre-wrap",
+  overflowWrap: "break-word",
+  wordBreak: "normal",
+};
+
+/** Opening height of the writing area. On the mirror, since the mirror sizes the cell. */
+const BODY_MIN_HEIGHT = "6.5rem";
+
+/**
+ * ── Keeping the caret off the bottom edge ─────────────────────────────────────
+ * Browsers scroll a textarea's caret into view by the minimum amount, which on
+ * a growing page pins the line being written to the very bottom of the screen.
+ * After each change the caret line is measured (via a second, absolutely
+ * positioned mirror) and the window scrolled so it keeps this much clearance.
+ * `pb` below reserves room to scroll into once the sheet has grown.
+ */
+const CARET_CLEARANCE_PX = 160;
+const CARET_TOP_CLEARANCE_PX = 96;
+
+/**
+ * COPY REVIEW — every user-facing string on the writing surface, in one place.
+ *
+ * Strings marked `[COPY]` are placeholders: the owner is supplying final wording
+ * separately and nothing here should be read as a proposal. The rest is the
+ * wording that shipped before this pass, hoisted so the review can see all of it
+ * at once. The foothold rail's strings live in
+ * src/components/ui/journal-guidance-sidebar.tsx and src/lib/journal/guidance.ts.
+ */
+const COPY = {
+  eyebrow: "Open reflection",
+  bodyLabel: "Your reflection", // screen-reader only
+  placeholder: "Start anywhere. A sentence is a whole entry.",
+
+  // Status line under the sheet
+  saving: "Saving…",
+  savedAt: (time: string) => `Saved ${time}`,
+  saved: "Saved",
+  draftSaved: "Draft saved",
+  draft: "Draft",
+  saveError: "Couldn't save — your text is still here, check your connection",
+
+  // Delete flow
+  delete: "Delete",
+  confirmDelete: "Move to trash?",
+  confirmDeleteYes: "Move to trash",
+  cancel: "Cancel",
+
+  // Finishing. The confirmation itself is shown on the read view — see
+  // src/app/(protected)/reflections/[id]/page.tsx.
+  completing: "Saving…",
+  complete: "[COPY] Complete entry",
+  saveChanges: "[COPY] Save changes",
+  cancelEdit: "[COPY] Cancel", // completed entries only: discard the edit
+} as const;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -52,16 +124,22 @@ export default function JournalEntry({
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
-  const [completedAt, setCompletedAt] = useState<string | null>(initialCompletedAt);
+  // Fixed for the life of this surface: completing navigates away, so there is
+  // no transition from draft to completed to render here.
+  const completedAt = initialCompletedAt;
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [tier, setTier] = useState<number | null>(null);
   const [completing, setCompleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [guidanceOpen, setGuidanceOpen] = useState(initialGuidanceOpen);
-  const [toast, setToast] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** Sizes the grid cell the textarea stretches into. See BODY_TYPE. */
+  const sizeMirrorRef = useRef<HTMLDivElement>(null);
+  /** Off-layout copy used only to find the caret's line. */
+  const caretMirrorRef = useRef<HTMLDivElement>(null);
+  /** True once the sheet has grown past its opening height — unlocks bottom room. */
+  const [grown, setGrown] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The text most recently persisted, so an unchanged body is never re-saved. */
   const savedTextRef = useRef(initialText);
@@ -71,28 +149,40 @@ export default function JournalEntry({
     0
   );
 
+  /**
+   * The autosave currently on the wire, if any. Finishing and cancelling both
+   * wait for it: a PUT that lands after the PATCH (or after the revert) would
+   * silently overwrite the body with an older draft.
+   */
+  const inFlightRef = useRef<Promise<void> | null>(null);
+
   const save = useCallback(
     async (value: string) => {
       if (value === savedTextRef.current) return;
       setSaveState("saving");
-      try {
-        const res = await fetch(`/api/reflections/${entryId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: value }),
-        });
-        if (!res.ok) throw new Error(String(res.status));
-        savedTextRef.current = value;
-        setSaveState("saved");
-        setSavedAt(
-          new Date().toLocaleTimeString(undefined, {
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        );
-      } catch {
-        setSaveState("error");
-      }
+      const request = (async () => {
+        try {
+          const res = await fetch(`/api/reflections/${entryId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: value }),
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          savedTextRef.current = value;
+          setSaveState("saved");
+          setSavedAt(
+            new Date().toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          );
+        } catch {
+          setSaveState("error");
+        }
+      })();
+      inFlightRef.current = request;
+      await request;
+      if (inFlightRef.current === request) inFlightRef.current = null;
     },
     [entryId]
   );
@@ -121,14 +211,46 @@ export default function JournalEntry({
     return () => window.removeEventListener("beforeunload", flush);
   }, [text, entryId]);
 
-  // The textarea grows with its content so the sheet's bottom edge moves down
-  // rather than the text scrolling inside a fixed box. Bounded start, unbounded
-  // growth — the sheet must never become an internal scroll region.
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+  // Growth itself is CSS now (see BODY_TYPE). What remains in JS is keeping the
+  // caret clear of the viewport edge, and noticing when the sheet has grown.
+  //
+  // Layout effect, not effect: the scroll must land in the same frame as the
+  // new text, or the caret is painted at the edge for one frame and then moves.
+  useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    const size = sizeMirrorRef.current;
+    const caret = caretMirrorRef.current;
+    if (!ta || !size || !caret) return;
+
+    const minPx = parseFloat(getComputedStyle(size).minHeight) || 0;
+    setGrown(size.offsetHeight > minPx + 1);
+
+    // Only while writing. Restoring a draft, or the page settling after
+    // navigation, must not scroll anything.
+    if (document.activeElement !== ta) return;
+
+    // Text up to the caret, then a marker whose box is the caret's line. The
+    // marker is a zero-width character so it cannot wrap onto a line of its own.
+    const end = ta.selectionEnd ?? text.length;
+    caret.textContent = text.slice(0, end);
+    const marker = document.createElement("span");
+    marker.textContent = "​";
+    caret.appendChild(marker);
+    const line = marker.getBoundingClientRect();
+    caret.textContent = "";
+
+    // The visual viewport, not the layout one: on iPad the keyboard shrinks the
+    // former and leaves the latter alone, and the clearance has to be measured
+    // against what is actually visible.
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+
+    if (line.bottom > viewBottom - CARET_CLEARANCE_PX) {
+      window.scrollBy({ top: line.bottom - (viewBottom - CARET_CLEARANCE_PX) });
+    } else if (line.top < viewTop + CARET_TOP_CLEARANCE_PX) {
+      window.scrollBy({ top: line.top - (viewTop + CARET_TOP_CLEARANCE_PX) });
+    }
   }, [text]);
 
   function toggleGuidance(next: boolean) {
@@ -142,27 +264,67 @@ export default function JournalEntry({
     }).catch(() => {});
   }
 
+  /**
+   * Finishing leaves this surface. A completed entry is read at
+   * /reflections/[id] and re-opened for editing deliberately from there — it is
+   * never left sitting in an editor that happens to also be "done". The read
+   * view shows the confirmation and, for a Tier 2/3 result, the resources; the
+   * tier itself is stored on the row, so nothing has to travel in the URL.
+   */
   async function handleDone() {
     if (!text.trim() || completing) return;
     setCompleting(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     try {
+      await inFlightRef.current;
       const res = await fetch(`/api/reflections/${entryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { tier: number; completedAt: string };
       savedTextRef.current = text;
-      setCompletedAt(data.completedAt);
-      setTier(data.tier);
       setSaveState("saved");
-      setToast(completedAt ? "Changes saved" : "Set down");
+      router.push(
+        `/reflections/${entryId}?${completedAt ? "saved" : "completed"}=1`
+      );
+      // `completing` stays true: the button must not re-enable while the
+      // navigation is in flight.
     } catch {
       setSaveState("error");
-    } finally {
+      setCompleting(false);
+    }
+  }
+
+  /**
+   * Abandons an edit of a completed entry. If an autosave already landed, the
+   * pre-edit text is written back first — otherwise "cancel" would keep changes
+   * the user just said they did not want. That write bumps `updated_at`, so the
+   * queue re-summarises identical text once; the price of never losing a body.
+   */
+  async function handleCancelEdit() {
+    if (completing) return;
+    setCompleting(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    try {
+      await inFlightRef.current;
+      if (savedTextRef.current !== initialText) {
+        const res = await fetch(`/api/reflections/${entryId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: initialText }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        savedTextRef.current = initialText;
+      }
+      // Nothing left unsaved to flush on unload: the ref now matches what is
+      // stored, and the in-memory draft is being discarded on purpose.
+      setText(initialText);
+      router.push(`/reflections/${entryId}`);
+    } catch {
+      setSaveState("error");
       setCompleting(false);
     }
   }
@@ -177,15 +339,18 @@ export default function JournalEntry({
 
   return (
     <PageBg>
-      <TopNav active="today" admin={admin}>
-        <GuidanceToggle
-          open={guidanceOpen}
-          onToggle={() => toggleGuidance(!guidanceOpen)}
-        />
-      </TopNav>
+      {/* No foothold toggle in the nav (removed 2026-09-21). The rail is
+          reached only from its own right-hand edge, at every width. */}
+      <TopNav active="today" admin={admin} />
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col items-center px-6 pb-[30px] pt-[38px] sm:px-10">
+        {/* Bottom room appears only once the sheet has grown past its opening
+            height. A fresh page keeps its visible bottom edge and no scrollbar;
+            a long entry gets somewhere for the caret to scroll into. */}
+        <div
+          className="flex min-w-0 flex-1 flex-col items-center px-6 pt-[38px] sm:px-10"
+          style={{ paddingBottom: grown ? "35vh" : 30 }}
+        >
           <div className="w-full" style={{ maxWidth: 620 }}>
             <Sheet minHeight={330} className="px-[34px] pb-[22px] pt-[26px]">
               {/* Header */}
@@ -194,7 +359,7 @@ export default function JournalEntry({
                 style={{ borderBottom: "1px solid var(--rf-rule)" }}
               >
                 <Eyebrow accent size={10}>
-                  Open reflection
+                  {COPY.eyebrow}
                 </Eyebrow>
                 <span
                   className="font-mono uppercase"
@@ -215,44 +380,57 @@ export default function JournalEntry({
               {/* The writing */}
               <div className="flex flex-1 flex-col pt-5">
                 <label htmlFor="entry-body" className="sr-only">
-                  Your reflection
+                  {COPY.bodyLabel}
                 </label>
-                <textarea
-                  id="entry-body"
-                  ref={textareaRef}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  autoFocus
-                  rows={1}
-                  placeholder="Start anywhere. A sentence is a whole entry."
-                  className="w-full resize-none overflow-hidden bg-transparent focus:outline-none"
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "18.5px",
-                    lineHeight: 1.62,
-                    letterSpacing: "-0.003em",
-                    color: "var(--rf-text)",
-                    minHeight: "6.5rem",
-                  }}
-                />
-              </div>
 
-              {/* The norm — descriptive, never a target. */}
-              <div
-                className="pt-[18px]"
-                style={{ borderTop: "1px solid var(--rf-rule)" }}
-              >
-                <p
-                  style={{
-                    fontSize: "12px",
-                    lineHeight: 1.5,
-                    color: "var(--rf-text-4)",
-                    maxWidth: 420,
-                  }}
+                {/* One grid cell, two occupants: the mirror sets the height,
+                    the textarea stretches to it. minmax(0, 1fr) so a long
+                    unbroken word cannot widen the cell past the sheet. */}
+                <div
+                  className="relative grid"
+                  style={{ gridTemplateColumns: "minmax(0, 1fr)" }}
                 >
-                  Most entries here run three or four sentences. Stop when
-                  you&apos;ve said the true thing.
-                </p>
+                  <div
+                    ref={sizeMirrorRef}
+                    aria-hidden="true"
+                    className="invisible"
+                    style={{
+                      ...BODY_TYPE,
+                      gridArea: "1 / 1 / 2 / 2",
+                      minHeight: BODY_MIN_HEIGHT,
+                    }}
+                  >
+                    {/* Trailing space so a newline at the end still counts
+                        as a line — an empty last line has no height. */}
+                    {text + " "}
+                  </div>
+
+                  <textarea
+                    id="entry-body"
+                    ref={textareaRef}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    autoFocus
+                    rows={1}
+                    placeholder={COPY.placeholder}
+                    className="w-full resize-none overflow-hidden bg-transparent focus:outline-none"
+                    style={{
+                      ...BODY_TYPE,
+                      gridArea: "1 / 1 / 2 / 2",
+                      color: "var(--rf-text)",
+                    }}
+                  />
+
+                  {/* Caret-measurement mirror. Absolute, so it never affects
+                      layout; its content is written and cleared imperatively
+                      in the layout effect above. */}
+                  <div
+                    ref={caretMirrorRef}
+                    aria-hidden="true"
+                    className="pointer-events-none invisible absolute inset-x-0 top-0"
+                    style={BODY_TYPE}
+                  />
+                </div>
               </div>
             </Sheet>
 
@@ -267,17 +445,20 @@ export default function JournalEntry({
                   color: "var(--rf-text-4)",
                 }}
               >
-                {saveState === "saving" && "Saving…"}
+                {saveState === "saving" && COPY.saving}
                 {saveState === "saved" &&
                   !dirty &&
-                  (savedAt ? `Saved ${savedAt}` : completedAt ? "Saved" : "Draft saved")}
+                  (savedAt
+                    ? COPY.savedAt(savedAt)
+                    : completedAt
+                      ? COPY.saved
+                      : COPY.draftSaved)}
                 {saveState === "error" && (
                   <span style={{ color: "var(--color-error)" }}>
-                    Couldn&apos;t save — your text is still here, check your
-                    connection
+                    {COPY.saveError}
                   </span>
                 )}
-                {saveState === "idle" && !completedAt && "Draft"}
+                {saveState === "idle" && !completedAt && COPY.draft}
               </p>
 
               <div className="flex items-center gap-3">
@@ -286,21 +467,21 @@ export default function JournalEntry({
                     <span
                       style={{ fontSize: "12.5px", color: "var(--rf-text-2)" }}
                     >
-                      Move to trash?
+                      {COPY.confirmDelete}
                     </span>
                     <button
                       onClick={handleDelete}
                       className="transition-colors"
                       style={{ fontSize: "12.5px", color: "var(--color-error)" }}
                     >
-                      Move to trash
+                      {COPY.confirmDeleteYes}
                     </button>
                     <button
                       onClick={() => setConfirmDelete(false)}
                       className="transition-colors"
                       style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
                     >
-                      Cancel
+                      {COPY.cancel}
                     </button>
                   </>
                 ) : (
@@ -309,7 +490,25 @@ export default function JournalEntry({
                     className="transition-colors hover:!text-[var(--color-error)]"
                     style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
                   >
-                    Delete
+                    {COPY.delete}
+                  </button>
+                )}
+
+                {/* Editing a completed entry can be abandoned. A draft cannot
+                    — there is nothing to go back to, and Delete covers it. */}
+                {completedAt && !confirmDelete && (
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={completing}
+                    className="rounded-full transition-colors disabled:opacity-40"
+                    style={{
+                      padding: "8px 15px",
+                      fontSize: "12.5px",
+                      color: "var(--rf-text-2)",
+                      boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                    }}
+                  >
+                    {COPY.cancelEdit}
                   </button>
                 )}
 
@@ -326,15 +525,13 @@ export default function JournalEntry({
                   }}
                 >
                   {completing
-                    ? "Saving…"
+                    ? COPY.completing
                     : completedAt
-                      ? "Save changes"
-                      : "Set it down"}
+                      ? COPY.saveChanges
+                      : COPY.complete}
                 </button>
               </div>
             </div>
-
-            {tier !== null && <CrisisResourcePanel tier={tier} />}
           </div>
         </div>
 
@@ -345,8 +542,6 @@ export default function JournalEntry({
           itemCount={guidanceCount}
         />
       </div>
-
-      <Toast message={toast} onDismiss={() => setToast(null)} />
     </PageBg>
   );
 }

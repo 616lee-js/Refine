@@ -23,7 +23,26 @@ import { Eyebrow } from "./sheet";
  * 306px open, 48px collapsed, against the entry's `1fr`. Never an equal split.
  * Below `lg` it leaves the layout and becomes an overlay: on a narrow screen a
  * writing surface sharing space with anything else is not a writing surface.
+ *
+ * ── One way in ────────────────────────────────────────────────────────────────
+ * The rail opens only from the right-hand edge — the spine at `lg`, a fixed edge
+ * tab below it. There is no toggle in the top nav (removed 2026-09-21).
  */
+
+/**
+ * COPY REVIEW — every user-facing string in the foothold rail. Item text lives
+ * in src/lib/journal/guidance.ts and is already marked as draft there.
+ */
+const COPY = {
+  title: "Footholds",
+  intro: "Offered once, at the start. Use one or ignore them all.",
+  collapse: "Collapse footholds", // aria-label
+  dismissAll: "Dismiss all · write cold",
+  spineLabel: "Footholds", // vertical text on the collapsed spine
+  spineAria: "Journaling guidance, collapsed",
+  overlayClose: "Close footholds", // aria-label
+  regionAria: "Journaling guidance",
+} as const;
 
 function RailBody({ onCollapse }: { onCollapse: () => void }) {
   const sections = getGuidanceSections();
@@ -32,7 +51,7 @@ function RailBody({ onCollapse }: { onCollapse: () => void }) {
     <div className="flex h-full flex-col gap-[18px]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <Eyebrow>Footholds</Eyebrow>
+          <Eyebrow>{COPY.title}</Eyebrow>
           <p
             className="mt-[7px] max-w-[210px]"
             style={{
@@ -41,13 +60,13 @@ function RailBody({ onCollapse }: { onCollapse: () => void }) {
               color: "var(--rf-text-3)",
             }}
           >
-            Offered once, at the start. Use one or ignore them all.
+            {COPY.intro}
           </p>
         </div>
         <button
           type="button"
           onClick={onCollapse}
-          aria-label="Collapse footholds"
+          aria-label={COPY.collapse}
           className="mt-0.5 shrink-0 transition-colors"
           style={{ color: "var(--rf-text-3)" }}
         >
@@ -113,34 +132,18 @@ function RailBody({ onCollapse }: { onCollapse: () => void }) {
           onClick={onCollapse}
           className="transition-colors hover:!text-[var(--rf-text)]"
         >
-          <Eyebrow size={9.5}>Dismiss all · write cold</Eyebrow>
+          <Eyebrow size={9.5}>{COPY.dismissAll}</Eyebrow>
         </button>
       </div>
     </div>
   );
 }
 
-/** The toggle. Present at every width, in the entry header. */
-export function GuidanceToggle({
-  open,
-  onToggle,
-}: {
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-controls="journal-guidance"
-      className="transition-colors hover:!text-[var(--rf-text)]"
-      style={{ fontSize: "13.5px", color: "var(--rf-text-3)" }}
-    >
-      {open ? "Hide footholds" : "Footholds"}
-    </button>
-  );
-}
+/*
+ * The header toggle (`GuidanceToggle`) was removed 2026-09-21. The rail is now
+ * opened only from its own edge: the 48px spine at `lg` and up, and the fixed
+ * edge tab below it. Nothing about footholds appears in the top nav.
+ */
 
 export function JournalGuidanceSidebar({
   open,
@@ -159,7 +162,7 @@ export function JournalGuidanceSidebar({
       {open && (
         <aside
           id="journal-guidance"
-          aria-label="Journaling guidance"
+          aria-label={COPY.regionAria}
           className="hidden shrink-0 overflow-y-auto px-[26px] pb-5 pt-[22px] lg:block"
           style={{
             width: 306,
@@ -173,7 +176,7 @@ export function JournalGuidanceSidebar({
       {/* lg and up, collapsed: a 48px spine. Clicking anywhere on it reopens. */}
       {!open && (
         <aside
-          aria-label="Journaling guidance, collapsed"
+          aria-label={COPY.spineAria}
           className="hidden shrink-0 lg:block"
           style={{ width: 48, borderLeft: "1px solid var(--rf-border)" }}
         >
@@ -196,7 +199,7 @@ export function JournalGuidanceSidebar({
                 writingMode: "vertical-rl",
               }}
             >
-              Footholds
+              {COPY.spineLabel}
             </span>
             <span
               className="grid place-items-center font-mono"
@@ -215,19 +218,58 @@ export function JournalGuidanceSidebar({
         </aside>
       )}
 
-      {/* Below lg: an overlay. Never squeezes the writing surface. */}
+      {/* Below lg, collapsed: a fixed tab on the right edge, vertically
+          centred. The rail is an overlay at this width, so it has no spine in
+          the layout to reopen from — and with the header toggle gone this tab
+          is the only way in. z-30 (floating affordance): it is not modal, and
+          the feedback button is bottom-right, so the two never overlap. */}
+      {!open && (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-expanded={false}
+          aria-controls="journal-guidance-overlay"
+          aria-label={COPY.spineAria}
+          className="fixed right-0 top-1/2 z-30 flex -translate-y-1/2 items-center gap-2 py-3 pl-2 pr-[9px] transition-colors lg:hidden print:hidden"
+          style={{
+            background: "var(--rf-paper)",
+            border: "1px solid var(--rf-paper-edge)",
+            borderRight: "none",
+            borderRadius: "6px 0 0 6px",
+            boxShadow: "var(--rf-sheet-shadow)",
+            color: "var(--rf-text-3)",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+            <path d="M9 3 L4.5 7 L9 11" />
+          </svg>
+          <span
+            className="font-mono uppercase"
+            style={{
+              fontSize: "9.5px",
+              letterSpacing: "0.2em",
+              writingMode: "vertical-rl",
+            }}
+          >
+            {COPY.spineLabel}
+          </span>
+        </button>
+      )}
+
+      {/* Below lg, open: an overlay. Never squeezes the writing surface. */}
       {open && (
         <div className="fixed inset-0 z-40 flex lg:hidden">
           <button
             type="button"
-            aria-label="Close footholds"
+            aria-label={COPY.overlayClose}
             onClick={onClose}
             className="flex-1"
             style={{ background: "rgba(40,28,12,0.18)" }}
           />
           <div
+            id="journal-guidance-overlay"
             role="dialog"
-            aria-label="Journaling guidance"
+            aria-label={COPY.regionAria}
             className="overflow-y-auto px-[26px] pb-5 pt-[22px]"
             style={{
               width: "min(20rem, 86vw)",

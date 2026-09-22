@@ -121,6 +121,11 @@ export async function classifyAndLog({
       // Only meaningful when the text was actually split; a single-chunk entry
       // adds nothing beyond `tier`.
       ...(chunkTiers.length > 1 ? { chunkTiers } : {}),
+      // Length at classification time. Recorded here, at the one moment the
+      // text is legitimately in hand, so the review surface never has to read
+      // the entry to say how long it was. Rows written before 2026-09-21 have
+      // no value and the log says so rather than guessing.
+      chars: text.length,
     },
   });
 

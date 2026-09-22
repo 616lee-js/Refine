@@ -109,6 +109,161 @@ should be populated the same way — from the summarization prompt's header, not
 
 ---
 
+## PROPOSAL — Archive ↔ Mirror (not built, awaiting approval)
+
+Proposed 2026-09-21. No schema, no one-way door. Recorded because the two
+surfaces now overlap and the overlap should be deliberate.
+
+**The distinction to hold:** the Archive holds *records* — what happened, in the
+order it happened. Mirror holds *what was derived from them* — threads, facts,
+trends. Same underlying data, opposite direction of travel. The failure to avoid
+is Mirror becoming a second list of entries, or the Archive growing a synthesis
+panel; then there are two half-surfaces instead of two.
+
+The archive's new topic chips make the join concrete, because a topic is now a
+URL (`/reflections?topic=…`):
+
+1. **Mirror → Archive.** A thread in Mirror links to the entries it was drawn
+   from. Today a thread is a sentence with nothing behind it; "show me where this
+   came from" is the obvious missing move, and it is now one link. Likewise a
+   Trends card links to `?filter=checkin`.
+2. **Archive → Mirror.** A topic chip that matches an existing thread links into
+   it. One that does not offers "make this a thread", proposing a `user_memory`
+   row of kind `thread` through the existing API — no new storage.
+3. **What this does NOT become.** Mirror does not list entries, and the archive
+   does not show threads inline. Each links to the other.
+
+**Dependency:** both directions are weak until the topic-vocabulary consistency
+review lands (see the content-pass queue). Matching "Dad" against a thread about
+"my father" fails silently today, and a link that usually finds nothing is worse
+than no link.
+
+**Longer term:** the topic filter is the retrieval surface that Cabinet 3
+embeddings eventually replace. Building it now costs nothing when that arrives —
+the URL shape stays, the matching behind it gets better.
+
+---
+
+## PROPOSAL — per-user summarisation evals (not built, awaiting approval)
+
+Proposed 2026-09-21. **One-way door: this is stored data shape.** Once eval rows
+exist they cannot be reshaped without a data migration, so the model below is for
+review before anything is generated. Nothing else in the build depends on it.
+
+### What it is for
+
+Two things that turn out to be the same thing:
+
+1. **The user corrects what Refine took from an entry** — and says whether it was
+   any good, per part, not as one lump verdict.
+2. **Those judgements become an eval set** that measures whether a change to the
+   summariser prompt made that user's summaries better or worse, and supplies
+   few-shot examples of what "right" looks like for them specifically.
+
+A summary has four parts and they fail independently: the prose can be accurate
+while the quotes are noise (which is the current complaint), or the topics right
+while a name is invented. A single "was this good?" cannot express that, and an
+eval built on it cannot tell you which change helped.
+
+### Schema — all additive
+
+```
+summary_guidelines            -- "how my entries should be summarised", user's words
+  id                 text PK
+  user_id            text NOT NULL  FK users ON DELETE CASCADE
+  encrypted_content  text NOT NULL  -- the rule. PHI-adjacent: it describes how
+                                    -- this person wants to be read
+  is_active          boolean NOT NULL DEFAULT true
+  created_at         timestamptz NOT NULL DEFAULT now()
+  updated_at         timestamptz NOT NULL DEFAULT now()
+
+summary_evals                 -- one row per component judged, not per summary
+  id                   text PK
+  user_id              text NOT NULL  FK users ON DELETE CASCADE
+  journal_entry_id     text           FK journal_entries ON DELETE SET NULL
+  component            text NOT NULL  -- 'summary' | 'topics' | 'people' | 'quotes'
+  verdict              text NOT NULL  -- 'accurate' | 'partly' | 'wrong'
+  encrypted_note       text           -- what was off, optional, their words
+  encrypted_judged     text NOT NULL  -- the exact value judged, snapshotted
+  encrypted_corrected  text           -- what it should have been, if they said
+  generation_version   text NOT NULL  -- summariser prompt version judged
+  guideline_ids        jsonb NOT NULL DEFAULT '[]'  -- rules in force, by id
+  created_at           timestamptz NOT NULL DEFAULT now()
+
+journal_entry_summaries
+  + guideline_ids  jsonb NOT NULL DEFAULT '[]'   -- rules in force when generated
+```
+
+### Why it is shaped like that
+
+- **`component` and `verdict` are plaintext, everything else is encrypted.**
+  This is the decision that makes it an eval pipeline rather than a pile of
+  notes. "Quotes were rated wrong 14 times under v2 and 3 times under v3" is a
+  SQL query on those two columns and nothing else — no decryption, no
+  application-side aggregation. They describe the *model's* output, not the
+  person. The moment a note or a correction is involved it is the person's
+  words, and those are encrypted like everything else in Cabinet 1 and 2.
+
+- **`encrypted_judged` is a snapshot, not a reference.** Summaries regenerate —
+  an entry edit or a prompt change overwrites `encrypted_content` — so a row
+  pointing at the live summary would silently come to describe something the
+  user never saw. The eval has to hold what was actually on screen.
+
+- **`guideline_ids`, not a hash or a version number.** Guidelines are
+  append-only: editing one deactivates the old row and inserts a new one. An id
+  set therefore identifies a rule state exactly, joins directly back to the
+  rules, and needs no counter to keep in step. A hash of plaintext rules was the
+  alternative and is worse — short predictable rules hash predictably.
+
+- **One row per component, not a JSON blob of four verdicts.** Blobs cannot be
+  grouped by in SQL, and "which part is failing" is the only question this data
+  exists to answer.
+
+- **`ON DELETE SET NULL` on the entry, cascade on the user.** Deleting an entry
+  must not destroy the record that the summariser got it wrong; deleting an
+  account must destroy everything.
+
+### How it drives quality
+
+1. **Guidelines are injected into the summariser call** as a per-writer block.
+   ⏸ The wording of that block is Layer 2 content and is owed as a proposal —
+   not drafted here.
+2. **Few-shot pairs.** The K most recent `wrong` / `partly` evals that carry a
+   correction become examples for that user, per component, capped by token
+   budget. A user whose quotes keep coming back wrong teaches the prompt what
+   they consider notable.
+3. **Guidelines apply forward.** Changing a rule does not reflow the archive —
+   that is a full re-summarisation and it costs. A per-entry "re-summarise"
+   action covers the case where someone wants it applied retroactively.
+4. **An eval run** re-summarises each eval case under the current prompt and
+   rules and compares against `encrypted_corrected`. The judge is manual in v1.
+   An LLM judge is a later step and the model above already holds what it would
+   need.
+
+### What the user sees
+
+Mirror gains a third section (alongside Memory and Trends). Per recent summary:
+each of the four components shown with its own `accurate / partly / wrong`
+control, an inline edit that reuses the existing correction API, and an optional
+note. Plus CRUD over the rules themselves.
+
+The read-back page's existing "correct this" stays as it is — correcting and
+judging are different acts, and forcing a verdict every time someone fixes a typo
+would poison the eval set with noise.
+
+### Routes
+
+`/api/user/summary-guidelines` (GET, POST, PATCH, DELETE),
+`/api/reflections/[id]/summary/evals` (POST).
+
+### Migration path
+
+`npm run db:generate` → show the SQL → confirm it is additive (two CREATE TABLE,
+one ADD COLUMN with a default, no DROP, no RENAME) → `npm run backup` →
+`npm run db:migrate` against `DATABASE_URL_DIRECT`.
+
+---
+
 ## Content-pass queue
 
 Items held for the product owner's deliberate content review. Not to be drafted
@@ -144,3 +299,52 @@ or edited in flight. Recorded here because there was nowhere else tracking them.
 - Two stale lines claiming content is "shared with Claude at the start of every
   reflection", on `/settings/profile` and `/settings/system-prompt` — untrue since
   the conversational surface was retired
+
+**Copy pass 2026-09-21 — `[COPY]` placeholders now in the code**
+
+Every user-facing string on the surfaces touched in this pass is hoisted into a
+`COPY` const at the top of its file, marked `// COPY REVIEW`. Strings prefixed
+`[COPY]` are deliberate placeholders and are **not** proposals — they are there
+so the screen is usable while the wording is decided, and so a grep for `[COPY]`
+finds every one.
+
+```
+grep -rn "\[COPY\]" src/
+```
+
+Files carrying a `COPY` const: `app/(protected)/journal-entry.tsx`,
+`reflections/page.tsx`, `reflections/[id]/page.tsx`,
+`reflections/[id]/entry-summary.tsx`, `reflections/[id]/entry-body.tsx`,
+`reflections/[id]/read-back.tsx`, `reflections/[id]/completion-notice.tsx`,
+`checkin/[id]/checkin-form.tsx`, `checkin/[id]/checkin-panel.tsx`,
+`components/ui/feedback-widget.tsx`,
+`components/ui/journal-guidance-sidebar.tsx`.
+
+Decisions the copy depends on, which are not copy:
+- **Completed check-in actions.** "Log and stop" / "Log, then write" are now
+  "[COPY] Save check-in" / "[COPY] Save, then write" and still do what they did.
+  The workflow itself is flagged for redesign — what a completed check-in should
+  offer is undecided, and the labels follow that, not the other way round.
+- **Removed, not renamed:** the "Most entries run three or four sentences" norm
+  line, the read-back word count, and the foothold toggle in the top nav.
+
+**Summariser quality (2026-09-21)**
+- Quote *selection* had a deterministic pass added (`refineQuotes()` in
+  `src/lib/summaries/parse.ts`): unlocatable, too-short, too-long, whole-entry
+  and duplicate picks are dropped before the cap applies. Users can now curate
+  quotes by selecting text in the entry.
+- The prompt itself is untouched and is the real lever. A proposed rewrite of
+  the `quotes` guidance in `entry-summariser.md` is owed, and bumping its
+  `# Version:` reflows the archive automatically (25/day).
+- **Summary categories (`topics` / `people`) need a consistency review.** The
+  vocabulary drifts entry to entry — "Dad" one day, "my father" the next — which
+  makes the archive's new topic filter weaker than it should be. Nothing
+  normalises them today.
+
+**Safety-log classification categories (2026-09-21)**
+The safety log no longer shows journal content, and now carries a legend of the
+tier and source definitions transcribed from `tier-classifier-prompt.md`. A
+per-row *category* (which signal fired, not just which tier) needs the classifier
+to return one — a Layer 3 prompt change, owed as a proposal with a closed
+vocabulary drawn from the existing tier definitions. `raw_signals` is jsonb, so
+recording it needs no migration.

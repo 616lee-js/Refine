@@ -445,14 +445,91 @@ auto-dismissing.
 information available nowhere else is a bug — it disappears, and it disappears
 fastest for the people least able to read it quickly.
 
+**Do not use for a confirmation on a screen the user has just arrived at.** They
+cannot see what changed — they came from somewhere else — so the confirmation
+has to stay. Completing an entry uses an inline notice on the read-back page
+(`reflections/[id]/completion-notice.tsx`), not a toast.
+
 - `role="status"` with `aria-live="polite"`, never `alert` — these confirm, they
   do not interrupt.
-- ~4 seconds, and never the only feedback: the underlying view should already
-  reflect the change.
+- 3–4 seconds, and never the only feedback: the underlying view should already
+  reflect the change. 4s is the default; 3s (`durationMs={3000}`) suits a
+  confirmation with nothing to read, such as feedback being sent, where the
+  panel closing is already the answer.
 - One at a time. A queue of toasts means too much is being confirmed.
 - Distinct from **inline confirmation** (`Remove? / Cancel` in place), which is
   the existing pattern for asking *before* a destructive action. Toasts report
   after; inline confirms before.
+
+---
+
+### Record states: viewed, then edited — ADDED 2026-09-21
+
+A completed record is **read**. Editing it is a separate, deliberate action that
+opens a different surface and returns when it ends. Nothing is simultaneously
+finished and in an editor.
+
+| State | Where | How it ends |
+|---|---|---|
+| Draft / never completed | the editor (`/reflection/[id]`, check-in in edit mode) | completing it |
+| Completed | the read view (`/reflections/[id]`, check-in read-only) | opening the editor |
+| Editing a completed record | the editor | **Save** (writes, returns) or **Cancel** (restores, returns) |
+
+Rules:
+
+1. **Completing navigates.** The editor does not flip into a "saved" state in
+   place — that state was the source of the confusion this replaced. Journal
+   entries push to the read view with `?completed=1` / `?saved=1`; the check-in
+   returns to its own read-only view.
+2. **Cancel writes, it does not merely navigate.** Both surfaces autosave, so by
+   the time someone presses Cancel their change is usually already persisted.
+   Cancel restores the snapshot taken when editing began. A cancel that only
+   navigated away would silently keep the change.
+3. **Cancel exists only where there is something to go back to.** A draft that
+   has never been completed has no previous version; Delete covers that case.
+4. **Wait for the autosave before finishing.** Save and Cancel both await the
+   request in flight. A debounced PUT landing after the PATCH would overwrite
+   the finished text with an older draft — the mutation-order bug class that has
+   already cost writing here more than once.
+
+### Master–detail — ADDED 2026-09-21
+
+Used by the daily check-in: a side panel of records beside the one being worked
+on (`checkin/[id]/checkin-panel.tsx`).
+
+```html
+<!-- lg and up: panel beside the detail. Below: panel after it. -->
+<div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+  <div class="min-w-0 flex-1"><!-- the record --></div>
+  <aside class="w-full shrink-0 lg:w-[290px]"><!-- the list --></aside>
+</div>
+```
+
+- **Actions first, then the list.** The panel answers "what can I do here"
+  before "what have I done".
+- **The panel moves below the detail at narrow widths, it does not disappear.**
+  It is `lg:flex-row` with the aside second in source order, so the stacking is
+  the natural one.
+- **Card summaries state values, they do not score them.** No averages, no
+  colour ramp implying a good day and a bad day, no streak. Movement over time
+  is Mirror's job.
+- **Bounded.** The panel decrypts each record it lists, so the query is capped
+  (60 for the check-in) and the page logs **one** `content_access_log` row
+  carrying the count — never one per record. Same rule as Trends.
+
+### Select-to-quote — ADDED 2026-09-21
+
+Quotes attached to an entry's summary are selected from the entry itself
+(`reflections/[id]/entry-body.tsx`), never typed.
+
+- A selection inside the entry raises a floating `z-30` button above it; pressing
+  it hands the text to the summary panel, which opens and enters edit mode.
+- `onMouseDown` / `onTouchStart` are prevented so the selection survives long
+  enough for the click handler to read it.
+- **No free-text quote field anywhere.** A typed quote would be a paraphrase,
+  which the server rejects — a dead end dressed as a feature. Selection makes
+  every candidate verbatim by construction, and the server's `locate()` check
+  becomes a guard against tampering rather than something users walk into.
 
 ---
 
@@ -511,7 +588,7 @@ Three layers. There is no `z-10`, no `z-20`, and nothing above `50`.
 
 | Layer | Value | What lives here |
 |---|---|---|
-| Floating affordance | `z-30` | Feedback widget. Anything anchored to a screen corner that is *not* modal. |
+| Floating affordance | `z-30` | Feedback widget (bottom-right). Foothold edge tab below `lg` (right edge, vertically centred). Select-to-quote button (follows the selection). Anything anchored to the viewport that is *not* modal. |
 | Modal overlay | `z-40` | Footholds sidebar below `lg`. Anything that dims the page and takes focus. |
 | Transient message | `z-50` | Toast. Must be readable over everything, including a modal. |
 
@@ -520,10 +597,11 @@ Rules:
 1. **A floating affordance never covers a modal.** This is why the widget is
    `z-30` and not `z-50`: a button that sits on top of an open dialog is the
    standard failure of the pattern. The overlay covering it is correct.
-2. **Corner-anchored elements must not collide with each other.** The toast is
+2. **Viewport-anchored elements must not collide with each other.** The toast is
    bottom-centre and the widget bottom-right, which is fine on a wide screen and
-   overlaps at 375px — so the toast carries `bottom-24 sm:bottom-6`. Check any
-   new corner element against the two that already exist.
+   overlaps at 375px — so the toast carries `bottom-24 sm:bottom-6`. The foothold
+   edge tab is right-edge *centred* for the same reason: bottom-right is taken.
+   Check any new one against all three.
 3. **A new value needs a row in this table.** If something does not fit these
    three, the scale is wrong and should be changed here first, not worked around
    with a one-off number.
@@ -661,4 +739,37 @@ Streaming cursor and voice indicator animations suppressed for users with `prefe
 
 ---
 
-*Last updated: 2026-05-08. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*
+### OQ-006 — Entry summary panel: collapsed or open by default?
+
+Added 2026-09-21. "What Refine took from this" moved above the entry on the
+read-back page. It is still a collapsed `<details>`, which was chosen when it sat
+*below* the writing — available, not imposed on someone re-reading their own
+words.
+
+Leading the page changes that calculus: a collapsed panel at the top is now the
+first thing on the screen and says nothing. Open by default would make the
+summary the headline of the entry, which is the opposite of the product's
+posture.
+
+**Options:** (a) keep collapsed; (b) open by default; (c) open only when the
+summary has been corrected, or only when it is stale.
+
+**Resolution pending — product owner.**
+
+### OQ-007 — Crisis resources on re-reading a Tier 2/3 entry
+
+Added 2026-09-21. The crisis panel renders on the read-back page only when
+arriving from completion (`?completed=1` / `?saved=1`), which preserves exactly
+the behaviour it had when it lived in the editor.
+
+Whether re-opening a Tier 2/3 entry weeks later should also surface resources is
+undecided, and it is a safety decision rather than a design one: always-on risks
+the ambient crisis framing the persistent footer was removed for (see the
+removed "Crisis line" pattern above and LIM-016); never-on means the resources
+are reachable only in the minute after writing.
+
+**Resolution pending — needs the clinical review, not a design call.**
+
+---
+
+*Last updated: 2026-09-21. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*

@@ -7,6 +7,12 @@ import { decrypt } from "@/lib/crypto";
 import JournalEntry from "../../journal-entry";
 import { AdminNav } from "@/components/ui/admin-nav";
 
+// COPY REVIEW: this message reaches the user through the error boundary.
+const COPY = {
+  unreadable:
+    "[COPY] This entry could not be read and was not opened for editing.",
+} as const;
+
 /**
  * The writing surface for one journal entry — new, draft, or editing a
  * completed one. Read-only viewing lives at /reflections/[id].
@@ -50,7 +56,7 @@ export default async function JournalEntryPage({
         `Journal entry decrypt failed for ${id}; refusing to open the editor:`,
         err instanceof Error ? err.message : err
       );
-      throw new Error("This entry could not be read and was not opened for editing.");
+      throw new Error(COPY.unreadable);
     }
   }
 

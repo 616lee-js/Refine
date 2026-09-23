@@ -33,6 +33,55 @@ import {
  * styled as a warning, and nothing here uses "worse".
  */
 
+/**
+ * COPY REVIEW — every user-facing string Trends produces.
+ *
+ * These are deterministic templates, never model-written: interpretive prose
+ * about someone's mental-health scores is a Layer 2/3 content decision, not a
+ * UI string. That is exactly why they belong in one reviewable block rather
+ * than scattered through the builders.
+ *
+ * Two constraints the wording must keep, whatever the review decides:
+ * no causal claims (state co-occurrence, with the count visible), and no
+ * severity language — nothing here says "worse".
+ */
+const COPY = {
+  sleepLabel: "[COPY] Sleep · hours",
+  sleepMeta: (med: number) => `[COPY] median ${med}h · from daily check-ins`,
+  sleepMetaGathering: "[COPY] From daily check-ins",
+  moodLabel: "[COPY] Mood",
+  moodMeta: "[COPY] 1 low · 5 good",
+  energyLabel: "[COPY] Energy",
+  energyMeta: "[COPY] 1 empty · 5 full",
+
+  matrixLabel: (field: string, days: number) => `[COPY] ${field} · last ${days} days`,
+  matrixGathering: (logged: number, days: number) =>
+    `[COPY] ${logged} of the last ${days} days logged`,
+
+  level: (since: string) => `[COPY] level since ${since}`,
+  moved: (dir: string, size: number, since: string) =>
+    `[COPY] ${dir} ${size} since ${since}`,
+  up: "up",
+  down: "down",
+
+  bandProvenance: (name: string) =>
+    `[COPY] ${name}'s own scoring ranges. A screening tool's category, not a diagnosis.`,
+
+  plainlyCounts: (
+    checkins: number,
+    readings: number,
+    label: string,
+    firstValue: number,
+    firstAt: string,
+    lastValue: number,
+    lastAt: string
+  ) =>
+    `[COPY] You have logged ${checkins} check-ins and ${readings} ${label} readings. ` +
+    `The readings run from ${firstValue} on ${firstAt} to ${lastValue} on ${lastAt}.`,
+  plainlyCooccurrence: (comparable: number, below: number, med: number) =>
+    `[COPY] Of the ${comparable} highest readings with sleep logged around them, ${below} fell in a week whose median sleep was below your overall median of ${med} hours.`,
+} as const;
+
 /** A line needs enough points that its direction is not an artefact of two. */
 export const MIN_LINE_READINGS = 5;
 
@@ -132,9 +181,9 @@ function movement(readings: Reading[]): string | null {
   const first = readings[0];
   const last = readings[readings.length - 1];
   const delta = last.value - first.value;
-  if (delta === 0) return `level since ${shortDate(first.at)}`;
+  if (delta === 0) return COPY.level(shortDate(first.at));
   const size = Math.abs(Math.round(delta * 10) / 10);
-  return `${delta > 0 ? "up" : "down"} ${size} since ${shortDate(first.at)}`;
+  return COPY.moved(delta > 0 ? COPY.up : COPY.down, size, shortDate(first.at));
 }
 
 // ── Input ────────────────────────────────────────────────────────────────────
@@ -224,7 +273,7 @@ function matrixCard(
   const base = {
     kind: "matrix" as const,
     id: `tracker-${field.key}`,
-    label: `${field.label} · last ${MATRIX_DAYS} days`,
+    label: COPY.matrixLabel(field.label, MATRIX_DAYS),
     count: logged,
   };
 
@@ -233,7 +282,7 @@ function matrixCard(
       ...base,
       state: "gathering",
       rows: [],
-      meta: `${logged} of the last ${MATRIX_DAYS} days logged`,
+      meta: COPY.matrixGathering(logged, MATRIX_DAYS),
     };
   }
 
@@ -281,8 +330,15 @@ function plainly(
   const last = instrument.readings[instrument.readings.length - 1];
 
   parts.push(
-    `You have logged ${checkins.length} check-ins and ${instrument.readings.length} ${instrument.label} readings. ` +
-      `The readings run from ${first.value} on ${shortDate(first.at)} to ${last.value} on ${shortDate(last.at)}.`
+    COPY.plainlyCounts(
+      checkins.length,
+      instrument.readings.length,
+      instrument.label,
+      first.value,
+      shortDate(first.at),
+      last.value,
+      shortDate(last.at)
+    )
   );
 
   // Co-occurrence, counted. Not a claim that one produced the other.
@@ -313,7 +369,7 @@ function plainly(
       ).length;
 
       parts.push(
-        `Of the ${comparable.length} highest readings with sleep logged around them, ${below} fell in a week whose median sleep was below your overall median of ${med} hours.`
+        COPY.plainlyCooccurrence(comparable.length, below, med)
       );
     }
   }
@@ -353,33 +409,33 @@ export function buildTrends(
 
   const sleepCard = lineCard({
     id: "sleep",
-    label: "Sleep · hours",
+    label: COPY.sleepLabel,
     readings: sleep,
     max: 12,
     unit: "h",
     meta:
       sleep.length >= MIN_LINE_READINGS
-        ? `median ${median(sleep.map((r) => r.value))}h · from daily check-ins`
-        : "From daily check-ins",
+        ? COPY.sleepMeta(median(sleep.map((r) => r.value)))
+        : COPY.sleepMetaGathering,
   });
   if (sleepCard) cards.push(sleepCard);
 
   // Mood and energy share a scale and are read together, so they share a card.
   const moodCard = lineCard({
     id: "mood",
-    label: "Mood",
+    label: COPY.moodLabel,
     readings: mood,
     max: 5,
-    meta: "1 low · 5 good",
+    meta: COPY.moodMeta,
   });
   if (moodCard) cards.push(moodCard);
 
   const energyCard = lineCard({
     id: "energy",
-    label: "Energy",
+    label: COPY.energyLabel,
     readings: energy,
     max: 5,
-    meta: "1 empty · 5 full",
+    meta: COPY.energyMeta,
   });
   if (energyCard) cards.push(energyCard);
 
@@ -447,7 +503,7 @@ function instrumentCard(
     }`,
     bandKey,
     // CONTENT PASS: placeholder wording.
-    provenance: `${q.shortName}'s own scoring ranges. A screening tool's category, not a diagnosis.`,
+    provenance: COPY.bandProvenance(q.shortName),
     format: (v) => String(Math.round(v)),
   });
 }

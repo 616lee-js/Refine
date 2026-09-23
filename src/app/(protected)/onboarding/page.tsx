@@ -37,31 +37,55 @@ type Profile = { tendencies: string; goals: string; background: string };
 const FIELDS: { key: keyof Profile; label: string; placeholder: string }[] = [
   {
     key: "tendencies",
-    label: "How would you describe yourself?",
-    placeholder: "Patterns in how you think, feel, or move through the world…",
+    label: "[COPY] How would you describe yourself?",
+    placeholder: "[COPY] Patterns in how you think, feel, or move through the world…",
   },
   {
     key: "goals",
-    label: "What do you want from this practice?",
-    placeholder: "What brought you here, or what you're working toward…",
+    label: "[COPY] What do you want from this practice?",
+    placeholder: "[COPY] What brought you here, or what you're working toward…",
   },
   {
     key: "background",
-    label: "Any background worth knowing?",
-    placeholder: "Anything else that helps Refine understand you…",
+    label: "[COPY] Any background worth knowing?",
+    placeholder: "[COPY] Anything else that helps Refine understand you…",
   },
 ];
 
 const WAYS_IN: [string, string][] = [
   [
-    "Open reflection",
-    "A blank page. A few footholds sit in the margin if you want a way in, then it gets out of the way.",
+    "[COPY] Open reflection",
+    "[COPY] A blank page. A few footholds sit in the margin if you want a way in, then it gets out of the way.",
   ],
   [
-    "Framework",
-    "Established questionnaires and a short daily check-in, whenever you want them. Scored, kept, charted. Never diagnosed.",
+    "[COPY] Framework",
+    "[COPY] Established questionnaires and a short daily check-in, whenever you want them. Scored, kept, charted. Never diagnosed.",
   ],
 ];
+
+// COPY REVIEW: the loose prose on this screen. The field labels and the two
+// mode blurbs above are marked inline. All onboarding copy was already on the
+// content-pass queue before this audit.
+const COPY = {
+  gettingStarted: "[COPY] Getting started",
+  heroBefore: "[COPY] Two ways in. Both are ",
+  heroEmphasis: "[COPY] writing",
+  heroAfter: "[COPY] .",
+  positioning:
+    "[COPY] Refine is not a therapist and not a chatbot. It reads what you write so it can ask better questions next time.",
+  contextEyebrow: "[COPY] A little context, if you want",
+  contextNote:
+    "[COPY] All three are optional and all three are editable later. Skipping costs nothing.",
+  failed:
+    "[COPY] That didn't save, so your answers are still here. Try again, or skip and add them later.",
+  editableIn: "[COPY] Editable any time in",
+  profileLink: "[COPY] Profile",
+  continueCta: "[COPY] Continue",
+  starting: "[COPY] Starting…",
+  skip: "[COPY] Skip — just let me write",
+  saveError:
+    "[COPY] That didn't save, so your answers are still here. Try again, or skip for now — you can fill this in later from your profile.",
+} as const;
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -111,7 +135,7 @@ export default function OnboardingPage() {
           <Wordmark />
 
           <div className="mb-auto mt-auto pt-9">
-            <Eyebrow>Getting started</Eyebrow>
+            <Eyebrow>{COPY.gettingStarted}</Eyebrow>
             <h1
               className="mb-[18px] mt-4 max-w-[420px]"
               style={{
@@ -123,7 +147,9 @@ export default function OnboardingPage() {
                 color: "var(--rf-text)",
               }}
             >
-              Two ways in. Both are <em>writing</em>.
+              {COPY.heroBefore}
+              <em>{COPY.heroEmphasis}</em>
+              {COPY.heroAfter}
             </h1>
 
             <div className="flex max-w-[400px] flex-col gap-5">
@@ -157,14 +183,13 @@ export default function OnboardingPage() {
               color: "var(--rf-text-4)",
             }}
           >
-            Refine is not a therapist and not a chatbot. It reads what you write
-            so it can ask better questions next time.
+            {COPY.positioning}
           </p>
         </div>
 
         {/* Profile capture — the part that actually persists. */}
         <div className="flex flex-col justify-center px-7 py-10 sm:px-12 sm:py-14">
-          <Eyebrow>A little context, if you want</Eyebrow>
+          <Eyebrow>{COPY.contextEyebrow}</Eyebrow>
           <p
             className="mb-6 mt-[10px] max-w-[440px]"
             style={{
@@ -173,8 +198,7 @@ export default function OnboardingPage() {
               color: "var(--rf-text-3)",
             }}
           >
-            All three are optional and all three are editable later. Skipping
-            costs nothing.
+            {COPY.contextNote}
           </p>
 
           <div className="flex max-w-[440px] flex-col gap-[18px]">
@@ -221,14 +245,14 @@ export default function OnboardingPage() {
                 color: "var(--rf-paper)",
               }}
             >
-              {saving ? "Starting…" : "Continue"}
+              {saving ? COPY.starting : COPY.continueCta}
             </button>
             <button
               onClick={() => router.push("/")}
               disabled={saving}
               style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
             >
-              Skip — just let me write
+              {COPY.skip}
             </button>
           </div>
 
@@ -242,8 +266,7 @@ export default function OnboardingPage() {
                 color: "var(--color-error)",
               }}
             >
-              That didn&apos;t save, so your answers are still here. Try again,
-              or skip and add them later.
+              {COPY.failed}
             </p>
           )}
 
@@ -251,12 +274,12 @@ export default function OnboardingPage() {
             className="mt-6 max-w-[440px]"
             style={{ fontSize: "11.5px", color: "var(--rf-text-4)" }}
           >
-            Editable any time in{" "}
+            {COPY.editableIn}{" "}
             <Link
               href="/settings/profile"
               className="underline underline-offset-2"
             >
-              Profile
+              {COPY.profileLink}
             </Link>
             .
           </p>

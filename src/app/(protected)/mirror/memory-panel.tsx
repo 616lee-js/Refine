@@ -27,6 +27,62 @@ import { Toast } from "@/components/ui/toast";
  * one the user added themselves and nothing is ever proposed.
  */
 
+// COPY REVIEW: every user-facing string in Mirror · Memory — kind labels,
+// provenance lines, headings, empty states, errors and controls.
+const COPY = {
+  kindThread: "[COPY] Open thread",
+  kindFact: "[COPY] Facts",
+  kindPreference: "[COPY] Preferences",
+  kindDiagnostic: "[COPY] Diagnostic context",
+  kindOther: "[COPY] Other",
+
+  sourceUserAdded: "[COPY] Added by you",
+  sourceProposed: "[COPY] Caught by Refine",
+  sourceDerived: "[COPY] From your writing",
+
+  keep: "[COPY] Keep",
+  edit: "[COPY] Edit",
+  remove: "[COPY] Remove",
+  cancel: "[COPY] Cancel",
+  save: "[COPY] Save",
+  saving: "[COPY] Saving…",
+  add: "[COPY] Add",
+  adding: "[COPY] Adding…",
+  confirm: "[COPY] Confirm",
+
+  waitingLong: "[COPY] Waiting on you",
+  waitingShort: "[COPY] Waiting",
+  kindLabel: "[COPY] Kind",
+  addPlaceholder: "[COPY] Something worth keeping",
+
+  loading: "[COPY] Loading…",
+  threadsHeading: "[COPY] Threads · what keeps coming back",
+  clearThreads: "[COPY] Clear threads",
+  clear: "[COPY] Clear",
+  clearAll: "[COPY] Delete everything here",
+  addThread: "[COPY] Add a thread",
+  addFact: "[COPY] Add a fact",
+
+  threadsEmptyTitle:
+    "[COPY] Nothing yet. Threads are the things that keep surfacing across what you write — Refine will start proposing them once there is enough writing to find them in.",
+  threadsEmptyNote:
+    "[COPY] You can also name one yourself. Nothing is kept that you have not seen.",
+  waitingCount: (n: number) => `[COPY] ${n} waiting on you`,
+  waitingNote: "[COPY] Refine caught these but won't keep them until you say so.",
+  groupEmpty: "[COPY] Nothing kept yet.",
+
+  trashLink: "[COPY] Trash →",
+  trashNote:
+    "[COPY] What you've deleted, kept for 30 days before it is removed for good.",
+
+  loadError: "[COPY] Couldn't load your memory",
+  keepError: "[COPY] Couldn't keep that one",
+  editError: "[COPY] Couldn't save that change",
+  removeError: "[COPY] Couldn't remove that one",
+  addError: "[COPY] Couldn't add that",
+  clearError: "[COPY] Couldn't clear those",
+} as const;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Kind = "fact" | "thread" | "preference" | "diagnostic_context" | "other";
@@ -41,21 +97,21 @@ type MemoryEntry = {
 };
 
 const ASIDE_KINDS: { value: Exclude<Kind, "thread">; label: string }[] = [
-  { value: "fact", label: "Facts" },
-  { value: "preference", label: "Preferences" },
-  { value: "diagnostic_context", label: "Diagnostic context" },
-  { value: "other", label: "Other" },
+  { value: "fact", label: COPY.kindFact },
+  { value: "preference", label: COPY.kindPreference },
+  { value: "diagnostic_context", label: COPY.kindDiagnostic },
+  { value: "other", label: COPY.kindOther },
 ];
 
 const ALL_KINDS: { value: Kind; label: string }[] = [
-  { value: "thread", label: "Open thread" },
+  { value: "thread", label: COPY.kindThread },
   ...ASIDE_KINDS.map((k) => ({ value: k.value as Kind, label: k.label })),
 ];
 
 function sourceLabel(entry: MemoryEntry): string {
-  if (entry.source === "user_added") return "Added by you";
-  if (!entry.confirmed) return "Caught by Refine";
-  return "From your writing";
+  if (entry.source === "user_added") return COPY.sourceUserAdded;
+  if (!entry.confirmed) return COPY.sourceProposed;
+  return COPY.sourceDerived;
 }
 
 // ── Shared row affordances ────────────────────────────────────────────────────
@@ -88,11 +144,11 @@ function RowActions({
           onClick={() => onConfirm(entry.id)}
           style={{ ...action, color: "var(--rf-accent-2)" }}
         >
-          Keep
+          {COPY.keep}
         </button>
       )}
       <button onClick={onStartEdit} style={action}>
-        Edit
+        {COPY.edit}
       </button>
       {confirmDelete ? (
         <>
@@ -100,15 +156,15 @@ function RowActions({
             onClick={() => onDelete(entry.id)}
             style={{ ...action, color: "var(--color-error)" }}
           >
-            Remove
+            {COPY.remove}
           </button>
           <button onClick={() => setConfirmDelete(false)} style={action}>
-            Cancel
+            {COPY.cancel}
           </button>
         </>
       ) : (
         <button onClick={() => setConfirmDelete(true)} style={action}>
-          Remove
+          {COPY.remove}
         </button>
       )}
     </div>
@@ -156,7 +212,7 @@ function EditBox({
             color: "var(--rf-paper)",
           }}
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? COPY.saving : COPY.save}
         </button>
         <button
           onClick={onCancel}
@@ -256,7 +312,7 @@ function ThreadRow({
                   background: "var(--rf-accent-soft)",
                 }}
               >
-                Waiting on you
+                {COPY.waitingLong}
               </span>
             )}
           </div>
@@ -333,7 +389,7 @@ function FactRow({
                     background: "var(--rf-accent-soft)",
                   }}
                 >
-                  Waiting
+                  {COPY.waitingShort}
                 </span>
               )}
             </div>
@@ -406,7 +462,7 @@ function AddEntry({
             color: "var(--rf-text-3)",
           }}
         >
-          Kind
+          {COPY.kindLabel}
         </label>
         <select
           id={`kind-${defaultKind}`}
@@ -432,7 +488,7 @@ function AddEntry({
         onChange={(e) => setContent(e.target.value)}
         rows={2}
         autoFocus
-        placeholder="Something worth keeping"
+        placeholder={COPY.addPlaceholder}
         className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
         style={{
           fontSize: "13.5px",
@@ -454,7 +510,7 @@ function AddEntry({
             color: "var(--rf-paper)",
           }}
         >
-          {busy ? "Adding…" : "Add"}
+          {busy ? COPY.adding : COPY.add}
         </button>
         <button
           onClick={() => {
@@ -493,7 +549,7 @@ export function MemoryPanel() {
       );
       setEntries(data);
     } else {
-      setToast("Couldn't load your memory");
+      setToast(COPY.loadError);
     }
     setLoading(false);
   }, []);
@@ -508,7 +564,7 @@ export function MemoryPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "confirm" }),
     });
-    if (!res.ok) return setToast("Couldn't keep that one");
+    if (!res.ok) return setToast(COPY.keepError);
     setEntries((prev) =>
       prev.map((e) => (e.id === id ? { ...e, confirmed: true } : e))
     );
@@ -520,7 +576,7 @@ export function MemoryPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
-    if (!res.ok) return setToast("Couldn't save that change");
+    if (!res.ok) return setToast(COPY.editError);
     setEntries((prev) =>
       prev.map((e) => (e.id === id ? { ...e, content, confirmed: true } : e))
     );
@@ -528,7 +584,7 @@ export function MemoryPanel() {
 
   async function deleteEntry(id: string) {
     const res = await fetch(`/api/user/memory/${id}`, { method: "DELETE" });
-    if (!res.ok) return setToast("Couldn't remove that one");
+    if (!res.ok) return setToast(COPY.removeError);
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
@@ -538,7 +594,7 @@ export function MemoryPanel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind, content }),
     });
-    if (!res.ok) return setToast("Couldn't add that");
+    if (!res.ok) return setToast(COPY.addError);
     await load();
   }
 
@@ -550,7 +606,7 @@ export function MemoryPanel() {
     });
     if (!res.ok) {
       setConfirmClear(null);
-      return setToast("Couldn't clear those");
+      return setToast(COPY.clearError);
     }
     setEntries((prev) => (kind ? prev.filter((e) => e.kind !== kind) : []));
     setConfirmClear(null);
@@ -578,10 +634,10 @@ export function MemoryPanel() {
             onClick={() => clear(kind === "all" ? undefined : kind)}
             style={{ ...clearAction, color: "var(--color-error)" }}
           >
-            Confirm
+            {COPY.confirm}
           </button>
           <button onClick={() => setConfirmClear(null)} style={clearAction}>
-            Cancel
+            {COPY.cancel}
           </button>
         </span>
       );
@@ -600,16 +656,16 @@ export function MemoryPanel() {
               className="pt-8"
               style={{ fontSize: "13px", color: "var(--rf-text-4)" }}
             >
-              Loading…
+              {COPY.loading}
             </p>
           ) : (
             <div className="grid gap-x-10 gap-y-10 pt-[22px] lg:grid-cols-[1fr_320px]">
               {/* Threads — the reading column */}
               <div>
                 <div className="flex items-baseline justify-between gap-4">
-                  <Eyebrow>Threads · what keeps coming back</Eyebrow>
+                  <Eyebrow>{COPY.threadsHeading}</Eyebrow>
                   {threads.length > 0 && (
-                    clearControl("thread", "Clear threads")
+                    clearControl("thread", COPY.clearThreads)
                   )}
                 </div>
 
@@ -624,9 +680,7 @@ export function MemoryPanel() {
                         textWrap: "pretty",
                       }}
                     >
-                      Nothing yet. Threads are the things that keep surfacing
-                      across what you write — Refine will start proposing them
-                      once there is enough writing to find them in.
+                      {COPY.threadsEmptyTitle}
                     </p>
                     <p
                       className="mt-[10px]"
@@ -636,8 +690,7 @@ export function MemoryPanel() {
                         color: "var(--rf-text-4)",
                       }}
                     >
-                      You can also name one yourself. Nothing is kept that you
-                      have not seen.
+                      {COPY.threadsEmptyNote}
                     </p>
                   </Sheet>
                 ) : (
@@ -656,7 +709,7 @@ export function MemoryPanel() {
 
                 <AddEntry
                   defaultKind="thread"
-                  label="Add a thread"
+                  label={COPY.addThread}
                   onAdd={addEntry}
                 />
               </div>
@@ -672,7 +725,7 @@ export function MemoryPanel() {
                     }}
                   >
                     <Eyebrow accent size={9.5}>
-                      {waiting} waiting on you
+                      {COPY.waitingCount(waiting)}
                     </Eyebrow>
                     <p
                       className="mt-2"
@@ -682,8 +735,7 @@ export function MemoryPanel() {
                         color: "var(--rf-text-2)",
                       }}
                     >
-                      Refine caught these but won&apos;t keep them until you say
-                      so.
+                      {COPY.waitingNote}
                     </p>
                   </div>
                 )}
@@ -698,7 +750,7 @@ export function MemoryPanel() {
                       <div className="flex items-baseline justify-between gap-4">
                         <Eyebrow>{label}</Eyebrow>
                         {group.length > 0 && (
-                          clearControl(value, "Clear")
+                          clearControl(value, COPY.clear)
                         )}
                       </div>
                       {group.length === 0 ? (
@@ -710,7 +762,7 @@ export function MemoryPanel() {
                             color: "var(--rf-text-4)",
                           }}
                         >
-                          Nothing kept yet.
+                          {COPY.groupEmpty}
                         </p>
                       ) : (
                         <ol className="mt-2">
@@ -731,7 +783,7 @@ export function MemoryPanel() {
 
                 <AddEntry
                   defaultKind="fact"
-                  label="Add a fact"
+                  label={COPY.addFact}
                   onAdd={addEntry}
                 />
 
@@ -740,7 +792,7 @@ export function MemoryPanel() {
                   style={{ borderTop: "1px solid var(--rf-rule)" }}
                 >
                   {entries.length > 0 && (
-                    clearControl("all", "Delete everything here")
+                    clearControl("all", COPY.clearAll)
                   )}
                   <div>
                     <Link
@@ -752,7 +804,7 @@ export function MemoryPanel() {
                         color: "var(--rf-text-3)",
                       }}
                     >
-                      Trash →
+                      {COPY.trashLink}
                     </Link>
                     <p
                       className="mt-[6px]"
@@ -762,8 +814,7 @@ export function MemoryPanel() {
                         color: "var(--rf-text-4)",
                       }}
                     >
-                      What you&apos;ve deleted, kept for 30 days before it is
-                      removed for good.
+                      {COPY.trashNote}
                     </p>
                   </div>
                 </div>

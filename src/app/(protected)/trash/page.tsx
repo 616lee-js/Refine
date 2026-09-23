@@ -29,6 +29,15 @@ import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
 
 export const dynamic = "force-dynamic";
 
+// COPY REVIEW: headings and descriptions, not just controls.
+const COPY = {
+  count: (n: number) => `[COPY] ${n} ${n === 1 ? "item" : "items"}`,
+  headline: "[COPY] Trash",
+  lede: (days: number) =>
+    `[COPY] Kept for ${days} days, then removed for good. You can put anything back before then.`,
+  unreadable: "[COPY] [could not be read]",
+} as const;
+
 export default async function TrashPage() {
   const authSession = await getSession();
   if (!authSession.userId) notFound();
@@ -57,7 +66,7 @@ export default async function TrashPage() {
         // rendering the whole thing on a page about deleting it.
         preview = decrypt(r.encryptedBody).slice(0, 180);
       } catch {
-        preview = "[could not be read]";
+        preview = COPY.unreadable;
       }
     }
 
@@ -90,7 +99,7 @@ export default async function TrashPage() {
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
             <div>
               <Eyebrow>
-                {entries.length} {entries.length === 1 ? "item" : "items"}
+                {COPY.count(entries.length)}
               </Eyebrow>
               <h1
                 className="mt-[9px]"
@@ -102,14 +111,13 @@ export default async function TrashPage() {
                   color: "var(--rf-text)",
                 }}
               >
-                Trash
+                {COPY.headline}
               </h1>
               <p
                 className="mt-[8px] max-w-[440px]"
                 style={{ fontSize: "13px", lineHeight: 1.6, color: "var(--rf-text-3)" }}
               >
-                Kept for {TRASH_RETENTION_DAYS} days, then removed for good. You
-                can put anything back before then.
+                {COPY.lede(TRASH_RETENTION_DAYS)}
               </p>
             </div>
 

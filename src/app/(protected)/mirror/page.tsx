@@ -40,6 +40,16 @@ import { TrendsPanel } from "./trends-panel";
  * gathering-state card, which is honest.
  */
 
+// COPY REVIEW: headings and descriptions, not just controls.
+const COPY = {
+  eyebrow: "[COPY] Mirror",
+  headline: "[COPY] What Refine has of you",
+  lede:
+    "[COPY] Everything here came from your own writing and check-ins. Confirm it, correct it, or take it out.",
+  tabMemory: "[COPY] Memory",
+  tabTrends: "[COPY] Trends",
+} as const;
+
 export const dynamic = "force-dynamic";
 
 type Tab = "memory" | "trends";
@@ -100,7 +110,7 @@ export default async function MirrorPage({
                 : { borderBottom: "1px solid var(--rf-border)" }
             }
           >
-            <Eyebrow accent>Mirror</Eyebrow>
+            <Eyebrow accent>{COPY.eyebrow}</Eyebrow>
             <h1
               className="mb-[6px] mt-2"
               style={{
@@ -111,7 +121,7 @@ export default async function MirrorPage({
                 color: "var(--rf-text)",
               }}
             >
-              What Refine has of you
+              {COPY.headline}
             </h1>
             <p
               className="max-w-[480px]"
@@ -121,8 +131,7 @@ export default async function MirrorPage({
                 color: "var(--rf-text-3)",
               }}
             >
-              Everything here came from your own writing and check-ins. Confirm
-              it, correct it, or take it out.
+              {COPY.lede}
             </p>
           </div>
 
@@ -133,8 +142,8 @@ export default async function MirrorPage({
             >
               {(
                 [
-                  ["memory", "Memory"],
-                  ["trends", "Trends"],
+                  ["memory", COPY.tabMemory],
+                  ["trends", COPY.tabTrends],
                 ] as const
               ).map(([key, label]) => {
                 const on = tab === key;

@@ -8,6 +8,11 @@ import { getQuestionnaire } from "@/lib/questionnaires";
 import { FrameworkForm } from "./framework-form";
 import { AdminNav } from "@/components/ui/admin-nav";
 
+// COPY REVIEW: this message reaches the user through the error boundary.
+const COPY = {
+  unreadable: "[COPY] This response could not be read and was not opened.",
+} as const;
+
 export default async function FrameworkPage({
   params,
 }: {
@@ -57,7 +62,7 @@ export default async function FrameworkPage({
         `Questionnaire answers decrypt failed for ${id}:`,
         err instanceof Error ? err.message : err
       );
-      throw new Error("This response could not be read and was not opened.");
+      throw new Error(COPY.unreadable);
     }
   }
 

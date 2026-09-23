@@ -9,6 +9,11 @@ import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import { CheckinForm, type CheckinSummary } from "./checkin-form";
 import { AdminNav } from "@/components/ui/admin-nav";
 
+// COPY REVIEW: this message reaches the user through the error boundary.
+const COPY = {
+  unreadable: "[COPY] This check-in could not be read and was not opened.",
+} as const;
+
 /**
  * Below this many prior check-ins, the "N of the last 21 days" count is hidden.
  *
@@ -71,7 +76,7 @@ export default async function CheckinPage({
         `Check-in answers decrypt failed for ${id}:`,
         err instanceof Error ? err.message : err
       );
-      throw new Error("This check-in could not be read and was not opened.");
+      throw new Error(COPY.unreadable);
     }
   }
 

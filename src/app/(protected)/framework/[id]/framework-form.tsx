@@ -25,6 +25,16 @@ import type { LikertQuestionnaire } from "@/lib/questionnaires";
 
 const LABEL_COL = 260;
 
+// COPY REVIEW: this screen's own strings. Instrument wording (GAD-7 items and
+// response options) is NOT here and must not be edited as copy — it is
+// clinical text pending source verification. See lib/questionnaires/.
+const COPY = {
+  notePlaceholder: "[COPY] Anything the numbers miss.",
+  recording: "[COPY] Recording…",
+  record: "[COPY] Record answers",
+  recordError: "[COPY] Couldn't record that — your answers are still here",
+} as const;
+
 export function FrameworkForm({
   responseId,
   admin,
@@ -78,7 +88,7 @@ export function FrameworkForm({
       router.push("/");
     } catch {
       setBusy(false);
-      setToast("Couldn't record that — your answers are still here");
+      setToast(COPY.recordError);
     }
   }
 
@@ -289,7 +299,7 @@ export function FrameworkForm({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  placeholder="Anything the numbers miss."
+                  placeholder={COPY.notePlaceholder}
                   className="mt-2 w-full resize-none bg-transparent focus:outline-none"
                   style={{
                     fontFamily: "var(--font-display)",
@@ -338,7 +348,7 @@ export function FrameworkForm({
                   padding: "9px 18px",
                 }}
               >
-                {busy ? "Recording…" : "Record answers"}
+                {busy ? COPY.recording : COPY.record}
               </button>
             </div>
           </div>

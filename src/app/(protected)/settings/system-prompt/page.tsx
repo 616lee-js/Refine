@@ -21,6 +21,22 @@ import { AdminNav } from "@/components/ui/admin-nav";
  * truth about what Claude is instructed to do *when* it is invoked, but it will
  * read oddly to someone who never sees Claude respond.
  */
+// COPY REVIEW: headings and the explanatory prose, which is the bulk of this
+// page. Note the CONTENT PASS caveat above — the wording is not merely
+// unreviewed, part of it is stale.
+const COPY = {
+  eyebrow: "[COPY] Transparency",
+  headline: "[COPY] The system prompt",
+  para1:
+    "[COPY] The standing instructions Claude is given. They are the same for everyone and do not change based on what you write.",
+  para2:
+    "[COPY] Shown so you can see what shapes anything Claude produces. It is read-only — you can't edit it, and neither can Claude.",
+  para3Before: "[COPY] Separately, Claude receives your profile and anything you have kept in",
+  para3Link: "[COPY] Mirror",
+  para3After: "[COPY] . Those are yours to edit or delete at any time.",
+  backToProfile: "[COPY] ← Profile",
+} as const;
+
 export default function SystemPromptPage() {
   return (
     <PageBg>
@@ -28,7 +44,7 @@ export default function SystemPromptPage() {
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-14" style={{ maxWidth: 700 }}>
-          <Eyebrow>Transparency</Eyebrow>
+          <Eyebrow>{COPY.eyebrow}</Eyebrow>
           <h1
             className="mb-[10px] mt-[9px]"
             style={{
@@ -39,32 +55,25 @@ export default function SystemPromptPage() {
               color: "var(--rf-text)",
             }}
           >
-            The system prompt
+            {COPY.headline}
           </h1>
 
           <div
             className="flex max-w-[560px] flex-col gap-[10px]"
             style={{ fontSize: "13px", lineHeight: 1.65, color: "var(--rf-text-3)" }}
           >
+            <p>{COPY.para1}</p>
+            <p>{COPY.para2}</p>
             <p>
-              The standing instructions Claude is given. They are the same for
-              everyone and do not change based on what you write.
-            </p>
-            <p>
-              Shown so you can see what shapes anything Claude produces. It is
-              read-only — you can&apos;t edit it, and neither can Claude.
-            </p>
-            <p>
-              Separately, Claude receives your profile and anything you have kept
-              in{" "}
+              {COPY.para3Before}{" "}
               <Link
                 href="/mirror"
                 className="underline underline-offset-2"
                 style={{ color: "var(--rf-text-2)" }}
               >
-                Mirror
+                {COPY.para3Link}
               </Link>
-              . Those are yours to edit or delete at any time.
+              {COPY.para3After}
             </p>
           </div>
 
@@ -95,7 +104,7 @@ export default function SystemPromptPage() {
                 color: "var(--rf-text-4)",
               }}
             >
-              ← Profile
+              {COPY.backToProfile}
             </Link>
           </div>
         </div>

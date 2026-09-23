@@ -18,25 +18,41 @@ const FIELDS: {
 }[] = [
   {
     key: "tendencies",
-    label: "How would you describe yourself?",
-    note: "Patterns you notice in how you think, feel, or move through the world.",
-    placeholder:
-      "e.g. I tend to overthink decisions, get overwhelmed when there's too much on my plate…",
+    label: "[COPY] How would you describe yourself?",
+    note: "[COPY] Patterns you notice in how you think, feel, or move through the world.",
+    placeholder: "[COPY] e.g. I tend to overthink decisions, get overwhelmed when there's too much on my plate…",
   },
   {
     key: "goals",
-    label: "What do you want from this practice?",
-    note: "What you're working toward, or what brought you here.",
-    placeholder:
-      "e.g. I want to understand my anxiety better and feel less reactive…",
+    label: "[COPY] What do you want from this practice?",
+    note: "[COPY] What you're working toward, or what brought you here.",
+    placeholder: "[COPY] e.g. I want to understand my anxiety better and feel less reactive…",
   },
   {
     key: "background",
-    label: "Any background worth knowing?",
-    note: "Life context, relevant history, anything that helps Refine understand you.",
-    placeholder: "Optional — as much or as little as you like.",
+    label: "[COPY] Any background worth knowing?",
+    note: "[COPY] Life context, relevant history, anything that helps Refine understand you.",
+    placeholder: "[COPY] Optional — as much or as little as you like.",
   },
 ];
+
+// COPY REVIEW: the loose prose. Field labels and notes are marked inline above.
+// The line about content being "shared with Claude at the start of every
+// reflection" is not merely unreviewed — it is stale, and is already on the
+// content-pass queue.
+const COPY = {
+  eyebrow: "[COPY] Profile",
+  headline: "[COPY] What you've told Refine about you",
+  lede:
+    "[COPY] Standing context you can set once and forget. All three are optional and editable whenever you like.",
+  loading: "[COPY] Loading…",
+  saving: "[COPY] Saving…",
+  save: "[COPY] Save",
+  saveError: "[COPY] Didn't save — your text is still here",
+  systemPromptLink: "[COPY] The system prompt →",
+  systemPromptNote:
+    "[COPY] The standing instructions Claude is given, readable in full.",
+} as const;
 
 export function ProfileForm({ admin }: { admin: React.ReactNode }) {
   const [draft, setDraft] = useState<Profile>(EMPTY);
@@ -81,7 +97,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
         <div className="w-full pb-14" style={{ maxWidth: 640 }}>
-          <Eyebrow>Profile</Eyebrow>
+          <Eyebrow>{COPY.eyebrow}</Eyebrow>
           <h1
             className="mb-[8px] mt-[9px]"
             style={{
@@ -92,7 +108,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
               color: "var(--rf-text)",
             }}
           >
-            What you&apos;ve told Refine about you
+            {COPY.headline}
           </h1>
           <p
             className="mb-6 max-w-[460px]"
@@ -101,13 +117,12 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
             {/* CONTENT PASS: the old wording said this is "shared with Claude at
                 the start of every reflection", which stopped being true when the
                 conversational surface was retired. Nothing reads it yet. */}
-            Standing context you can set once and forget. All three are optional
-            and editable whenever you like.
+            {COPY.lede}
           </p>
 
           {loading ? (
             <p style={{ fontSize: "13px", color: "var(--rf-text-4)" }}>
-              Loading…
+              {COPY.loading}
             </p>
           ) : (
             <form onSubmit={save}>
@@ -161,7 +176,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
                     color: "var(--rf-paper)",
                   }}
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? COPY.saving : COPY.save}
                 </button>
                 <span
                   aria-live="polite"
@@ -178,7 +193,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
                   {status === "saved"
                     ? "Saved"
                     : status === "failed"
-                      ? "Didn't save — your text is still here"
+                      ? COPY.saveError
                       : ""}
                 </span>
               </div>
@@ -198,7 +213,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
                 color: "var(--rf-text-3)",
               }}
             >
-              The system prompt →
+              {COPY.systemPromptLink}
             </Link>
             <p
               className="mt-[6px] max-w-[420px]"
@@ -208,7 +223,7 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
                 color: "var(--rf-text-4)",
               }}
             >
-              The standing instructions Claude is given, readable in full.
+              {COPY.systemPromptNote}
             </p>
           </div>
         </div>

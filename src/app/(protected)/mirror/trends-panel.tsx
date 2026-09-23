@@ -154,7 +154,7 @@ function Line({ card }: { card: LineCard }) {
         <div className="grid gap-6 lg:grid-cols-[1fr_190px]">
           {chart}
           <div className="lg:border-l lg:pl-5" style={{ borderColor: "var(--rf-rule)" }}>
-            <Eyebrow size={9}>Scoring ranges</Eyebrow>
+            <Eyebrow size={9}>{COPY.scoringRanges}</Eyebrow>
             <div className="mt-[9px]">
               <BandKey rows={card.bandKey} provenance={card.provenance} />
             </div>
@@ -184,6 +184,12 @@ function Matrix({ card }: { card: MatrixCard }) {
     </ChartCard>
   );
 }
+
+// COPY REVIEW: this panel's own chrome. The card text itself is built in
+// src/lib/trends/index.ts and is marked there.
+const COPY = {
+  scoringRanges: "[COPY] Scoring ranges",
+} as const;
 
 export function TrendsPanel({ trends }: { trends: Trends }) {
   return (

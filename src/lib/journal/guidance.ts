@@ -53,69 +53,75 @@ export type GuidanceSection = {
   items: GuidanceItem[];
 };
 
+// COPY REVIEW: all of it. Every section title, item title and item body
+// here is draft content written by Claude Code, already flagged for the
+// product owner's content pass — see the header note above. The
+// constraints it is written against (optional, about the practice not the
+// person, never asks for a reply, no engagement mechanics) are product
+// rules and survive any rewording.
 const GENERIC_SECTIONS: GuidanceSection[] = [
   {
     id: "starting",
-    title: "If you're not sure where to start",
+    title: "[COPY] If you're not sure where to start",
     items: [
       {
         id: "start-anywhere",
-        title: "Start in the middle",
-        body: "You don't need an opening line. Begin with whatever is nearest to the surface and let the rest arrive as you write.",
+        title: "[COPY] Start in the middle",
+        body: "[COPY] You don't need an opening line. Begin with whatever is nearest to the surface and let the rest arrive as you write.",
         source: "generic",
       },
       {
         id: "start-concrete",
-        title: "Start with something concrete",
-        body: "A specific moment from the day is often easier to write about than how you feel in general — and it usually gets there anyway.",
+        title: "[COPY] Start with something concrete",
+        body: "[COPY] A specific moment from the day is often easier to write about than how you feel in general — and it usually gets there anyway.",
         source: "generic",
       },
       {
         id: "start-small",
-        title: "Short is still worth writing",
-        body: "Three sentences on a day you'd rather not think about is a real entry. Length isn't the measure of anything here.",
+        title: "[COPY] Short is still worth writing",
+        body: "[COPY] Three sentences on a day you'd rather not think about is a real entry. Length isn't the measure of anything here.",
         source: "generic",
       },
     ],
   },
   {
     id: "while-writing",
-    title: "While you're writing",
+    title: "[COPY] While you're writing",
     items: [
       {
         id: "no-audience",
-        title: "Nobody is reading this",
-        body: "No one sees your entries but you. You can contradict yourself, be unfair, change your mind halfway through, and leave it that way.",
+        title: "[COPY] Nobody is reading this",
+        body: "[COPY] No one sees your entries but you. You can contradict yourself, be unfair, change your mind halfway through, and leave it that way.",
         source: "generic",
       },
       {
         id: "unfinished",
-        title: "It doesn't have to resolve",
-        body: "Writing toward a neat conclusion tends to close things down early. It's fine to end mid-thought, or without knowing what you think.",
+        title: "[COPY] It doesn't have to resolve",
+        body: "[COPY] Writing toward a neat conclusion tends to close things down early. It's fine to end mid-thought, or without knowing what you think.",
         source: "generic",
       },
       {
         id: "specifics",
-        title: "Specifics carry more than summaries",
-        body: "What was said, what you noticed, what time it was. Detail tends to reveal more on re-reading than a summary of how the day went.",
+        title: "[COPY] Specifics carry more than summaries",
+        body: "[COPY] What was said, what you noticed, what time it was. Detail tends to reveal more on re-reading than a summary of how the day went.",
         source: "generic",
       },
     ],
   },
   {
     id: "over-time",
-    title: "Over time",
+    title: "[COPY] Over time",
     items: [
       {
         id: "rereading",
-        title: "Re-reading is part of it",
-        body: "Entries from a few weeks ago often read differently than they felt to write. That gap is usually where the useful part is.",
+        title: "[COPY] Re-reading is part of it",
+        body: "[COPY] Entries from a few weeks ago often read differently than they felt to write. That gap is usually where the useful part is.",
         source: "generic",
       },
       {
         id: "irregular",
-        title: "Irregular is fine",
-        body: "A gap in your entries isn't a lapse to correct. People write when there's something to write about, and that isn't evenly distributed.",
+        title: "[COPY] Irregular is fine",
+        body: "[COPY] A gap in your entries isn't a lapse to correct. People write when there's something to write about, and that isn't evenly distributed.",
         source: "generic",
       },
     ],

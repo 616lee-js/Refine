@@ -15,6 +15,17 @@ import { useRouter } from "next/navigation";
  * A title is optional and stays optional. The archive falls back to the date, so
  * an untitled entry is not a gap to be filled.
  */
+// COPY REVIEW: naming an entry, in full.
+const COPY = {
+  placeholder: "[COPY] Give it a name",
+  ariaLabel: "[COPY] Entry title",
+  saveError: "[COPY] Couldn't save that name",
+  saving: "[COPY] Saving…",
+  hint: "[COPY] Enter to keep · Esc to cancel",
+  rename: "[COPY] Rename",
+  nameIt: "[COPY] Give this a name",
+} as const;
+
 export function EntryTitle({
   entryId,
   initialTitle,
@@ -75,8 +86,8 @@ export function EntryTitle({
           }}
           onBlur={save}
           maxLength={120}
-          placeholder="Give it a name"
-          aria-label="Entry title"
+          placeholder={COPY.placeholder}
+          aria-label={COPY.ariaLabel}
           className="w-full bg-transparent outline-none"
           style={{
             fontFamily: "var(--font-display)",
@@ -98,10 +109,10 @@ export function EntryTitle({
           }}
         >
           {failed
-            ? "Couldn't save that name"
+            ? COPY.saveError
             : busy
-              ? "Saving…"
-              : "Enter to keep · Esc to cancel"}
+              ? COPY.saving
+              : COPY.hint}
         </p>
       </div>
     );
@@ -112,7 +123,7 @@ export function EntryTitle({
       type="button"
       onClick={() => setEditing(true)}
       className="group block max-w-full text-left"
-      title={saved ? "Rename" : "Give this a name"}
+      title={saved ? COPY.rename : COPY.nameIt}
     >
       <span
         className="block truncate"
@@ -135,7 +146,7 @@ export function EntryTitle({
           color: "var(--rf-text-4)",
         }}
       >
-        {saved ? "Rename" : "Give this a name"}
+        {saved ? COPY.rename : COPY.nameIt}
       </span>
     </button>
   );

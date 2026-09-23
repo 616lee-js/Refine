@@ -169,7 +169,11 @@ export default async function HomePage() {
       return {
         sort: at.getTime(),
         id: `q-${r.id}`,
-        href: tracker ? `/checkin/${r.id}` : `/framework/${r.id}`,
+        // Into the archive, where records are read — matching the rail's own
+        // links. See loadRecords in reflections/records.ts.
+        href: tracker
+          ? `/reflections/checkin/${r.id}`
+          : `/reflections/framework/${r.id}`,
         at: at.toISOString(),
         detail: [] as string[],
         kindLabel: q?.shortName ?? r.slug,

@@ -124,13 +124,17 @@ export function ScreenHome({
         reflectionId?: string;
         responseId?: string;
       };
-      if (kind === "entry") router.push(`/reflection/${data.reflectionId}`);
+      // Questionnaires open inside the archive; only the writing surface is a
+      // screen of its own. Linked straight there rather than through the old
+      // routes, which redirect — correct, but a wasted hop from here.
+      //
       // `?edit=1`: starting a check-in from here means intending to fill it in.
-      // Without it an already-completed response would open read-only, which is
+      // Without it an already-completed response opens read-only, which is
       // right when arriving from the archive and wrong when pressing "Log".
+      if (kind === "entry") router.push(`/reflection/${data.reflectionId}`);
       else if (kind === "checkin")
-        router.push(`/checkin/${data.responseId}?edit=1`);
-      else router.push(`/framework/${data.responseId}`);
+        router.push(`/reflections/checkin/${data.responseId}?edit=1`);
+      else router.push(`/reflections/framework/${data.responseId}?edit=1`);
     } catch {
       setError(COPY.startError);
       setLoading(null);

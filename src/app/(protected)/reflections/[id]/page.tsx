@@ -6,10 +6,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries, journalEntrySummaries, contentAccessLog } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
-import { PageBg } from "@/components/ui/page-bg";
 import { Eyebrow } from "@/components/ui/sheet";
-import { TopNav } from "@/components/ui/top-nav";
-import { AdminNav } from "@/components/ui/admin-nav";
 import { CrisisResourcePanel } from "@/components/ui/crisis-resource-panel";
 import {
   authoritativeSummary,
@@ -19,8 +16,8 @@ import {
 import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
-import { RecordRail, type RailView } from "../record-rail";
-import { loadRecords, parseFilters } from "../records";
+import { ArchiveShell } from "../archive-shell";
+import { loadRail, type ArchiveSearchParams } from "../records";
 
 /**
  * Reading back a completed entry.
@@ -106,16 +103,9 @@ export default async function ReflectionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    completed?: string;
-    saved?: string;
-    filter?: string;
-    category?: string;
-    range?: string;
-    from?: string;
-    to?: string;
-    q?: string;
-  }>;
+  searchParams: Promise<
+    ArchiveSearchParams & { completed?: string; saved?: string }
+  >;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -212,16 +202,7 @@ export default async function ReflectionDetailPage({
 
   // The rail, carrying whatever filters the archive had applied. It decrypts
   // its own records and writes its own single audit row — see ../records.ts.
-  const { range, ...railFilters } = parseFilters(sp);
-  const rail = await loadRecords(authSession.userId, railFilters);
-  const railView: RailView = {
-    kind: railFilters.kind,
-    range,
-    from: sp.from ?? null,
-    to: sp.to ?? null,
-    category: railFilters.category,
-    q: railFilters.q,
-  };
+  const rail = await loadRail(authSession.userId, sp);
 
   const written = entry.completedAt ?? entry.createdAt;
   const dateLong = written.toLocaleDateString(undefined, {
@@ -232,24 +213,7 @@ export default async function ReflectionDetailPage({
   // No word count (removed 2026-09-21): a count is a target in disguise.
 
   return (
-    <PageBg>
-      <TopNav active="reflections" admin={<AdminNav />} />
-
-      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
-        <div
-          className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-10"
-          style={{ maxWidth: 1100 }}
-        >
-          {/* The same rail as /reflections, with this record selected. */}
-          <RecordRail
-            records={rail.records}
-            categories={rail.categories}
-            total={rail.total}
-            view={railView}
-            selectedId={entry.id}
-          />
-
-          <main className="flex min-w-0 flex-1 flex-col">
+    <ArchiveShell {...rail} selectedId={entry.id}>
           {arrival && <CompletionNotice kind={arrival} />}
 
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
@@ -358,11 +322,8 @@ export default async function ReflectionDetailPage({
             </nav>
           )}
 
-          {/* No "back to the archive" link: the archive is the rail, and it is
-              on screen. A link back to something already visible is noise. */}
-          </main>
-        </div>
-      </div>
-    </PageBg>
+      {/* No "back to the archive" link: the archive is the rail, and it is
+          on screen. A link back to something already visible is noise. */}
+    </ArchiveShell>
   );
 }

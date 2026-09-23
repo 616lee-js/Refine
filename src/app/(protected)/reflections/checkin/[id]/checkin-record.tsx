@@ -2,18 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
-import { TopNav } from "@/components/ui/top-nav";
 import { Toast } from "@/components/ui/toast";
-import { CheckinPanel, type CheckinSummary } from "./checkin-panel";
 import type {
   Answers,
   TrackerQuestionnaire,
   TrackerField,
 } from "@/lib/questionnaires";
-
-export type { CheckinSummary };
 
 /**
  * The daily check-in — the tracker renderer.
@@ -35,6 +30,13 @@ export type { CheckinSummary };
  *
  * Cancel writes rather than merely navigating, because autosave has probably
  * already persisted the change it is undoing.
+ *
+ * ── It brings no page chrome ──────────────────────────────────────────────────
+ * No PageBg, no TopNav, no rail of its own. This renders inside the archive's
+ * main view beside the record rail, which is what makes opening a check-in stay
+ * on the page instead of navigating to a screen of its own. `/checkin/[id]`
+ * redirects here; the separate check-in panel it used to carry is gone, because
+ * the archive rail filtered to check-ins is the same list.
  *
  * ── No streaks ────────────────────────────────────────────────────────────────
  * `loggedRecently` is a count of what happened, shown only once there is enough
@@ -181,29 +183,22 @@ function ReadValue({
   return <p style={muted}>{COPY.unanswered}</p>;
 }
 
-export function CheckinForm({
+export function CheckinRecord({
   responseId,
-  admin,
-
   questionnaire: q,
   initialAnswers,
   initialCompleted,
   initialEditing,
-  recent,
   loggedRecently,
   today,
 }: {
   responseId: string;
-  /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
-  admin: React.ReactNode;
-
   questionnaire: TrackerQuestionnaire;
   initialAnswers: Answers;
   /** Whether this response has already been recorded. */
   initialCompleted: boolean;
   /** Open straight into edit mode — a new response, or `?edit=1`. */
   initialEditing: boolean;
-  recent: CheckinSummary[];
   /** Days logged out of the last 21, or null when there isn't enough history. */
   loggedRecently: number | null;
   today: string;
@@ -336,17 +331,7 @@ export function CheckinForm({
   }
 
   return (
-    <PageBg>
-      <TopNav active="today" admin={admin} />
-
-      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[22px] sm:px-10">
-        {/* Panel and detail. Single breakpoint: side by side at lg, stacked
-            below it with the panel after the form. */}
-        <div
-          className="flex w-full flex-col gap-8 pb-[30px] lg:flex-row lg:items-start lg:gap-10"
-          style={{ maxWidth: 1000 }}
-        >
-          <div className="flex min-w-0 flex-1 flex-col">
+    <>
             <div className="flex flex-wrap items-end justify-between gap-5 pb-[14px]">
               <div>
                 <Eyebrow accent>{COPY.eyebrow}</Eyebrow>
@@ -652,17 +637,8 @@ export function CheckinForm({
                 )}
               </div>
             </div>
-          </div>
-
-          <CheckinPanel
-            questionnaire={q}
-            currentId={responseId}
-            recent={recent}
-          />
-        </div>
-      </div>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
-    </PageBg>
+    </>
   );
 }

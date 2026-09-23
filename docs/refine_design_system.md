@@ -569,21 +569,76 @@ controls that narrow the choosing belong in it rather than above the results.
 - **No "back to the list" link when the list is a rail.** It is already on
   screen; a link back to something visible is noise.
 
-### Filters — ADDED 2026-09-22
+#### Records open in the main view — ADDED 2026-09-23
 
-Preset controls you pick from, not a box you type into. On the archive rail:
-date range (last 7 / 30 days, this month, this year, any, plus custom from–to),
-category, record type, and — demoted below them — a text search.
+Selecting a record shows it beside the rail. It does not navigate to a screen of
+its own — that was the defect: only completed writing entries stayed in the
+layout, so browsing meant constant page-to-page jumping.
+
+| Route | Main view |
+|---|---|
+| `/reflections` | nothing selected |
+| `/reflections/[id]` | writing entry, read |
+| `/reflections/checkin/[id]` | check-in, view **and** edit |
+| `/reflections/framework/[id]` | questionnaire, view **and** edit |
+
+Rules:
+
+1. **The rail cannot live in a layout.** It is built from the filter parameters
+   in the URL, and the App Router passes `searchParams` to pages only. Each page
+   renders the rail; `ArchiveShell` holds the frame so they cannot drift.
+2. **A record component brings no page chrome.** No `PageBg`, no `TopNav`, no
+   rail of its own — it renders into the shell's main pane. When a standalone
+   screen becomes an in-place record, its chrome is stripped and its own
+   panel deleted rather than nested.
+3. **The old routes redirect, they are not removed.** `/checkin/[id]` and
+   `/framework/[id]` are live in bookmarks and in Home's launchers.
+4. **View and edit stay distinct**, per the record-states table above. Editing is
+   local state in the main pane rather than a navigation, so the rail does not
+   reload under it; `?edit=1` only decides the state on arrival.
+
+**The exception: the writing surface.** Editing an entry still opens
+`/reflection/[id]` on its own. The writing surface already carries the foothold
+rail on its right, so hosting it in the archive would put a rail on both sides of
+the text — and "the writing surface keeps width priority" is the one rule that
+outranks visual consistency (see Responsive conventions, rule 3). Reading an
+entry happens in the main view like every other record; only the editor is
+separate, and it returns to the archive on save or cancel.
+
+### Filters — ADDED 2026-09-22, restructured 2026-09-23
+
+Preset controls you pick from, not a box you type into. On the archive rail.
+
+**Split between the bar and a disclosure.** In view: a date range you type
+(From / To), record type, and search. Behind `<details>`: quick ranges and the
+category picker.
+
+The split was forced by a real failure. The category picker rendered every
+distinct category as a chip; categories are specific phrases rather than buckets
+until the summariser v2 prompt lands, so the bar grew roughly one chip per entry
+and buried the list it exists to narrow.
 
 1. **Pick, don't type.** The category filter offers the categories that actually
    exist in the records. A free-text box is a poor way to find a *batch* of
    records and a good way to find one you already remember, which is why search
    survives but is secondary.
-2. **An empty picker does not render.** A category filter with nothing in it
+2. **A long option set is a `<select>`, never chips.** A dropdown absorbs any
+   number of options; a chip row cannot. Options are counted and ordered
+   most-used first, capped at 50 — alphabetical order buries the few that recur
+   among a long tail of one-offs.
+3. **An empty picker does not render.** A category filter with nothing in it
    teaches people the feature is broken.
-3. **State lives in the URL.** Every control is a link or a GET form, so a
+4. **Hiding a filter obliges you to show it is on.** Active filters render as
+   removable chips in the bar whether or not the disclosure is open. Without
+   that, a filter set and forgotten produces a short list with no visible cause,
+   which reads as a bug.
+5. **The visible control wins over the hidden one.** Typed dates take precedence
+   over the quick-range preset. The previous rule honoured typed dates only when
+   a hidden `range=custom` was also set, so typing a date did nothing — a
+   visible control must never depend on an invisible one.
+6. **State lives in the URL.** Every control is a link or a GET form, so a
    filtered view is shareable, survives reload, and needs no client component.
-4. **Clear sits with the controls it clears**, inside the bar — not as a chip row
+7. **Clear sits with the controls it clears**, inside the bar — not as a chip row
    under the results.
 
 ### Machine text vs the person's own words — ADDED 2026-09-22

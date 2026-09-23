@@ -19,6 +19,8 @@ import {
 import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
+import { RecordRail, type RailView } from "../record-rail";
+import { loadRecords, parseFilters } from "../records";
 
 /**
  * Reading back a completed entry.
@@ -48,8 +50,7 @@ import { CompletionNotice } from "./completion-notice";
 // COPY REVIEW: placeholders pending final wording.
 const COPY = {
   edit: "[COPY] Edit entry",
-  unfinished: "unfinished",
-  backToArchive: "← Everything you've written",
+  unfinished: "[COPY] unfinished",
   earlier: "[COPY] ← Earlier",
   later: "[COPY] Later →",
   earliest: "[COPY] Earliest entry",
@@ -105,10 +106,20 @@ export default async function ReflectionDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ completed?: string; saved?: string }>;
+  searchParams: Promise<{
+    completed?: string;
+    saved?: string;
+    filter?: string;
+    category?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+    q?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { completed, saved } = await searchParams;
+  const sp = await searchParams;
+  const { completed, saved } = sp;
   const arrival: "completed" | "saved" | null =
     completed === "1" ? "completed" : saved === "1" ? "saved" : null;
 
@@ -199,6 +210,19 @@ export default async function ReflectionDetailPage({
     entry.completedAt
   );
 
+  // The rail, carrying whatever filters the archive had applied. It decrypts
+  // its own records and writes its own single audit row — see ../records.ts.
+  const { range, ...railFilters } = parseFilters(sp);
+  const rail = await loadRecords(authSession.userId, railFilters);
+  const railView: RailView = {
+    kind: railFilters.kind,
+    range,
+    from: sp.from ?? null,
+    to: sp.to ?? null,
+    category: railFilters.category,
+    q: railFilters.q,
+  };
+
   const written = entry.completedAt ?? entry.createdAt;
   const dateLong = written.toLocaleDateString(undefined, {
     weekday: "long",
@@ -212,7 +236,20 @@ export default async function ReflectionDetailPage({
       <TopNav active="reflections" admin={<AdminNav />} />
 
       <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
-        <div className="w-full pb-14" style={{ maxWidth: 700 }}>
+        <div
+          className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-10"
+          style={{ maxWidth: 1100 }}
+        >
+          {/* The same rail as /reflections, with this record selected. */}
+          <RecordRail
+            records={rail.records}
+            categories={rail.categories}
+            total={rail.total}
+            view={railView}
+            selectedId={entry.id}
+          />
+
+          <main className="flex min-w-0 flex-1 flex-col">
           {arrival && <CompletionNotice kind={arrival} />}
 
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
@@ -321,19 +358,9 @@ export default async function ReflectionDetailPage({
             </nav>
           )}
 
-          <div className="pt-[14px]">
-            <Link
-              href="/reflections"
-              className="font-mono uppercase transition-colors"
-              style={{
-                fontSize: "9.5px",
-                letterSpacing: "0.14em",
-                color: "var(--rf-text-4)",
-              }}
-            >
-              {COPY.backToArchive}
-            </Link>
-          </div>
+          {/* No "back to the archive" link: the archive is the rail, and it is
+              on screen. A link back to something already visible is noise. */}
+          </main>
         </div>
       </div>
     </PageBg>

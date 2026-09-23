@@ -492,10 +492,58 @@ Rules:
    the finished text with an older draft — the mutation-order bug class that has
    already cost writing here more than once.
 
-### Master–detail — ADDED 2026-09-21
+### Record card — ADDED 2026-09-22
 
-Used by the daily check-in: a side panel of records beside the one being worked
-on (`checkin/[id]/checkin-panel.tsx`).
+**Component:** `src/components/ui/record-card.tsx` (`RecordCard`, `RecordCardList`)
+
+A record — an entry, a check-in, a questionnaire — as a discrete card.
+
+```
+┌──────────────────────────────┐
+│ WRITING          Mon 22 Sep  │   title  = mechanism + date
+│ Work · Sleep                 │   sub    = categories / values
+└──────────────────────────────┘
+   gap, not a hairline
+┌──────────────────────────────┐
+│ CHECK-IN         Sun 21 Sep  │
+│ Slept 7h · Mood 3 · Energy 4 │
+└──────────────────────────────┘
+```
+
+**Why it exists.** Archive, Home's recent list, Trash and the check-in panel each
+drew their own rows inside a single `<Sheet>` separated by hairlines — four
+near-identical implementations, none of them actually a card. Restyling the
+contents of a row is not a card redesign, which was the correction that produced
+this component.
+
+Rules:
+
+1. **The title is the mechanism and the date**, never the record's own title and
+   never a placeholder standing in for one. What separates two records in a list
+   is what kind of thing each is and when it happened. A user-set title is a
+   property of the record and belongs in the main view where the record is read.
+   This is also what removed the double date: the old row printed the date in a
+   column and again as an untitled entry's fallback title.
+2. **The subheader says what it was about** — categories for writing, the day's
+   values for a check-in. Supplied by the caller; the card decrypts, queries and
+   interprets nothing. Clamped to two lines.
+3. **Gaps, not dividers.** The gap is what makes each one a discrete object
+   rather than a row in a table.
+4. **Selected reads as lifted, not highlighted.** An accent fill across a list of
+   someone's own writing makes it look like a control panel.
+5. **A list with actions per row cannot use this** — `RecordCard` is a link, and
+   a button inside an anchor is invalid and unusable by keyboard. Trash draws its
+   own card surface with `Sheet` for exactly this reason. Share the surface, not
+   the contents; do not grow this component an actions slot one screen would use.
+
+### Master–detail — ADDED 2026-09-21, extended 2026-09-22
+
+Used by the daily check-in (`checkin/[id]/checkin-panel.tsx`) and by the archive
+(`reflections/record-rail.tsx`, shared by `/reflections` and
+`/reflections/[id]`): a rail of record cards beside the one being read.
+
+The archive rail carries the filters too — a rail is where you choose, so the
+controls that narrow the choosing belong in it rather than above the results.
 
 ```html
 <!-- lg and up: panel beside the detail. Below: panel after it. -->
@@ -513,9 +561,52 @@ on (`checkin/[id]/checkin-panel.tsx`).
 - **Card summaries state values, they do not score them.** No averages, no
   colour ramp implying a good day and a bad day, no streak. Movement over time
   is Mirror's job.
-- **Bounded.** The panel decrypts each record it lists, so the query is capped
-  (60 for the check-in) and the page logs **one** `content_access_log` row
-  carrying the count — never one per record. Same rule as Trends.
+- **Bounded.** The rail decrypts each record it lists, so the query is capped
+  (60 for the check-in, 50 for the archive) and the page logs **one**
+  `content_access_log` row carrying the count — never one per record. Same rule
+  as Trends. This matters more than it looks: the archive rail renders on every
+  entry view, so an uncapped rail would multiply decryptions by every page turn.
+- **No "back to the list" link when the list is a rail.** It is already on
+  screen; a link back to something visible is noise.
+
+### Filters — ADDED 2026-09-22
+
+Preset controls you pick from, not a box you type into. On the archive rail:
+date range (last 7 / 30 days, this month, this year, any, plus custom from–to),
+category, record type, and — demoted below them — a text search.
+
+1. **Pick, don't type.** The category filter offers the categories that actually
+   exist in the records. A free-text box is a poor way to find a *batch* of
+   records and a good way to find one you already remember, which is why search
+   survives but is secondary.
+2. **An empty picker does not render.** A category filter with nothing in it
+   teaches people the feature is broken.
+3. **State lives in the URL.** Every control is a link or a GET form, so a
+   filtered view is shareable, survives reload, and needs no client component.
+4. **Clear sits with the controls it clears**, inside the bar — not as a chip row
+   under the results.
+
+### Machine text vs the person's own words — ADDED 2026-09-22
+
+On the read-back page the summary and the entry were both display serif on a
+paper `Sheet`, which made a machine's description of someone's writing look like
+the writing. They now get opposite treatments:
+
+| | Refine's summary | The entry |
+|---|---|---|
+| Typeface | `--font-sans`, 14px | `--font-display`, `--text-entry` |
+| Surface | `--rf-surface`, inset border, no shadow | paper `Sheet` |
+| Label | "What Refine took from this" | "Your words" |
+
+Rules:
+
+1. **The entry never moves.** Only the machine's text changes to differentiate
+   itself. The writing is the thing; it does not accommodate a description of
+   itself.
+2. **Quotes keep the serif** even inside the sans panel — they *are* the
+   writing, quoted, and the typeface is what says so.
+3. **The labels are the smaller half.** Test it by zooming out past the point
+   where either is readable; if they still look alike, the treatment failed.
 
 ### Select-to-quote — ADDED 2026-09-21
 

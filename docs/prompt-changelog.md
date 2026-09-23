@@ -4,6 +4,19 @@ Track changes to Layer 2 (system prompt) and Layer 3 (reference fragments) here.
 
 ---
 
+## Pending — drafted, not applied
+
+Entries below are written when a change actually lands, so these are pointers only.
+
+- **`entry-summariser.md` v2** — categories become general buckets rather than the
+  writer's specific phrasing; quotes guidance still to be drafted into the same
+  bump. Full diff and consequences in `docs/build-notes.md`. Deferred to the copy
+  review; applying it reflows the whole archive at 25/day.
+- **`tier-classifier-prompt.md`** — a per-row signal category (which signal fired,
+  not just which tier) for the safety log. Closed vocabulary owed as a proposal.
+
+---
+
 ## v1 — 2026-05-06
 
 Initial versions of all prompt files. Clinical review required before v2.

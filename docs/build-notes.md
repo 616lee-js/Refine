@@ -289,6 +289,78 @@ or edited in flight. Recorded here because there was nowhere else tracking them.
   it shapes what every downstream synthesis says about a person.
 - The tonal-context conflict recorded at the top of this file.
 
+### Summariser v2 — DRAFTED 2026-09-23, NOT APPLIED
+
+Categories come back too specific ("the promotion" rather than "work"), which
+makes them useless as buckets and makes the archive's category filter weaker
+than it should be. The cause is a rule in the prompt, not a bug.
+
+This diff is recorded verbatim so the review can approve or rewrite text that
+already exists rather than re-deriving it. **It has not been applied.** Prompt
+wording is copy, and copy is deferred to the full review pass.
+
+```diff
+-# Version: v1 — 2026-07-30
++# Version: v2 — 2026-09-23
+
+-- **Use the writer's own words for topics and names.** If they wrote "the
+-  promotion", the topic is "the promotion" — not "career advancement". If they
+-  wrote "Dad", it is "Dad", not "a parental relationship". Their vocabulary is
+-  the point: it is what makes this recognisable to them later.
++- **Use the writer's own words for names.** If they wrote "Dad", it is "Dad",
++  not "a parental relationship". Their vocabulary is the point for people.
++- **Categories are the opposite: general, not specific.** A category is a
++  bucket an entry sorts into alongside other entries, so it must be a term that
++  will recur. "The promotion" is a topic; "work" is a category. Prefer a term
++  you would expect to apply to many entries over one that fits only this entry.
++  Two or three broad categories beat five narrow ones.
+
+-- `topics` — up to 5 short noun phrases in the writer's own words. What the
+-  entry is about. `[]` if nothing is identifiable.
++- `topics` — up to 3 general, reusable categories. One or two words each,
++  lowercase. Examples of the right level: work, sleep, family, health, money,
++  friendship, grief. Wrong level: "the promotion", "Tuesday's argument",
++  "feeling tired lately". `[]` if nothing is identifiable.
+```
+
+Consequences, established before deferral:
+
+- **The version bump reflows the whole archive**, 25 a day. Existing categories
+  change under the user. That is correct — Cabinet 2 is derived data and should
+  follow its deriver — but it is visible. User *corrections* survive it: they
+  live in `encrypted_user_content`, which the queue never writes.
+- **Open vocabulary drifts.** "work" and "job" will not group. Accepted
+  deliberately over a fixed list. If grouping proves weak in real use the fix is
+  a fixed vocabulary later — another prompt change, not a migration, so the door
+  stays open.
+- **`MAX_TOPICS` 5 → 3** in `src/lib/summaries/types.ts` is coupled to this.
+  It is code rather than copy, but it is pointless without the prompt change, so
+  it defers with it.
+
+**Quotes guidance is still owed** and should be drafted into this same v2 bump
+rather than a v3 — one version change means the archive reflows once instead of
+twice. The deterministic filter (`refineQuotes()` in
+`src/lib/summaries/parse.ts`) already removes the mechanical failures;
+the prompt is what decides whether a quote is *notable*, which is the part still
+wrong.
+
+### Live mismatch: the label shipped ahead of the behaviour
+
+**This is deliberate, not a naming error. Do not "fix" it by renaming back.**
+
+The UI says **Category** — the archive filter in
+`app/(protected)/reflections/record-rail.tsx` and the summary label in
+`reflections/[id]/entry-summary.tsx` — while `entry-summariser.md` still
+instructs the model to use *"the writer's own words for topics"*.
+
+Until v2 lands, the category filter lists specific phrases under a label that
+promises buckets: "the promotion" and "Tuesday's argument" appear where "work"
+and "family" are implied. It will look like a bug and is not one.
+
+The stored field stays `topics` either way. Renaming a key inside a stored JSON
+blob is a data migration for no benefit — the label is the user-facing name and
+the key is storage.
+
 **Copy**
 - "Set it down" replacement wording (frozen, not propagated)
 - All Trends placeholder strings: gathering lines, "Plainly" template, band
@@ -300,25 +372,42 @@ or edited in flight. Recorded here because there was nowhere else tracking them.
   reflection", on `/settings/profile` and `/settings/system-prompt` — untrue since
   the conversational surface was retired
 
-**Copy pass 2026-09-21 — `[COPY]` placeholders now in the code**
+**Copy audit COMPLETE 2026-09-23 — every user-facing string is flagged**
 
-Every user-facing string on the surfaces touched in this pass is hoisted into a
-`COPY` const at the top of its file, marked `// COPY REVIEW`. Strings prefixed
-`[COPY]` are deliberate placeholders and are **not** proposals — they are there
-so the screen is usable while the wording is decided, and so a grep for `[COPY]`
-finds every one.
+Every user-facing string in the product is hoisted into a `COPY` const at the
+top of its file, marked `// COPY REVIEW`. Strings prefixed `[COPY]` are
+deliberate placeholders and are **not** proposals — they exist so a screen stays
+usable while its wording is undecided, and so one grep finds every one.
 
 ```
-grep -rn "\[COPY\]" src/
+grep -rn "\[COPY\]" src/          # 327 placeholders
+grep -rl "COPY REVIEW" src/       # 30 files
 ```
 
-Files carrying a `COPY` const: `app/(protected)/journal-entry.tsx`,
-`reflections/page.tsx`, `reflections/[id]/page.tsx`,
-`reflections/[id]/entry-summary.tsx`, `reflections/[id]/entry-body.tsx`,
-`reflections/[id]/read-back.tsx`, `reflections/[id]/completion-notice.tsx`,
-`checkin/[id]/checkin-form.tsx`, `checkin/[id]/checkin-panel.tsx`,
-`components/ui/feedback-widget.tsx`,
-`components/ui/journal-guidance-sidebar.tsx`.
+Scope is **all of it**, not just CTAs and titles: headlines, section headers,
+descriptions, blurbs, empty states, helper text, error messages, placeholders,
+and `aria-label` / `sr-only` strings. That covers every screen under
+`(protected)` and `(auth)`, plus the two string libraries that generate copy
+rather than holding it — `lib/trends/index.ts` (the deterministic "Plainly"
+templates, movement phrasing and card metadata) and `lib/journal/guidance.ts`
+(every foothold).
+
+Where a file already kept its strings in a structured const — the onboarding and
+profile field definitions, the guidance sections, the signup error map — the
+values are prefixed in place rather than moved. That array already was the
+review surface; it was simply unmarked.
+
+**Two deliberate exclusions. Neither is a miss:**
+
+- **`src/app/admin/*`** — internal review tooling, not product surface. The
+  safety-log legend is transcribed clinical definitions rather than copy, and
+  rewording it to read better would make it disagree with the classifier prompt
+  it describes.
+- **Crisis resource copy** (`lib/safety/crisis-resources.ts`, the Layer 3
+  fragment, and `components/ui/crisis-resource-panel.tsx`) — under clinical
+  review, see LIM-015. Marking it `[COPY]` would invite editing it, and
+  placeholder crisis copy is the one placeholder that can cause harm if it
+  ships. Changes there are safety changes, not copy iteration.
 
 Decisions the copy depends on, which are not copy:
 - **Completed check-in actions.** "Log and stop" / "Log, then write" are now
@@ -327,6 +416,12 @@ Decisions the copy depends on, which are not copy:
   offer is undecided, and the labels follow that, not the other way round.
 - **Removed, not renamed:** the "Most entries run three or four sentences" norm
   line, the read-back word count, and the foothold toggle in the top nav.
+- **Card titles are structural, not copy.** A record card is titled with its
+  mechanism and date — "Writing · Mon 22 Sep". There is no per-card title string
+  to review, and the placeholder that used to stand in for an untitled entry is
+  gone. A user-set title appears in the main view where the record is read.
+- **"Category" is ahead of its behaviour** — see the live-mismatch note under
+  the summariser section above.
 
 **Summariser quality (2026-09-21)**
 - Quote *selection* had a deterministic pass added (`refineQuotes()` in
@@ -334,12 +429,15 @@ Decisions the copy depends on, which are not copy:
   and duplicate picks are dropped before the cap applies. Users can now curate
   quotes by selecting text in the entry.
 - The prompt itself is untouched and is the real lever. A proposed rewrite of
-  the `quotes` guidance in `entry-summariser.md` is owed, and bumping its
-  `# Version:` reflows the archive automatically (25/day).
+  the `quotes` guidance in `entry-summariser.md` is owed — draft it into the
+  **v2 diff recorded above** rather than a separate bump, so the archive reflows
+  once instead of twice.
 - **Summary categories (`topics` / `people`) need a consistency review.** The
   vocabulary drifts entry to entry — "Dad" one day, "my father" the next — which
-  makes the archive's new topic filter weaker than it should be. Nothing
-  normalises them today.
+  makes the archive's category filter weaker than it should be. Nothing
+  normalises them today. The v2 diff addresses the *level* of abstraction; it
+  does not address drift between entries at the same level, and open vocabulary
+  was chosen knowing that.
 
 **Safety-log classification categories (2026-09-21)**
 The safety log no longer shows journal content, and now carries a legend of the

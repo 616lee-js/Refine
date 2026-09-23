@@ -37,6 +37,20 @@ import { authoritativeSummary } from "@/lib/summaries/read";
 
 export const RAIL_LIMIT = 50;
 
+/**
+ * How many categories the picker offers.
+ *
+ * Categories are specific phrases today rather than buckets (the summariser v2
+ * prompt that would fix that is deferred — see docs/build-notes.md), so the
+ * distinct set grows roughly with the number of entries. Uncapped, a long
+ * archive emits thousands of `<option>` elements for a control nobody can use.
+ * Capped and ordered by frequency, whatever is genuinely reusable floats to the
+ * top and the one-off tail is simply absent.
+ */
+export const CATEGORY_LIMIT = 50;
+
+export type CategoryOption = { value: string; count: number };
+
 export type RecordKind = "open" | "framework" | "checkin";
 
 export type ArchiveRecord = {
@@ -98,7 +112,11 @@ function trackerDetail(slug: string, answers: Answers): string[] {
 export async function loadRecords(
   userId: string,
   filters: RecordFilters
-): Promise<{ records: ArchiveRecord[]; categories: string[]; total: number }> {
+): Promise<{
+  records: ArchiveRecord[];
+  categories: CategoryOption[];
+  total: number;
+}> {
   const entryDateBounds = [
     filters.from ? gte(journalEntries.createdAt, filters.from) : undefined,
     filters.to ? lte(journalEntries.createdAt, filters.to) : undefined,
@@ -230,7 +248,11 @@ export async function loadRecords(
 
       return {
         id: r.id,
-        href: tracker ? `/checkin/${r.id}` : `/framework/${r.id}`,
+        // Inside the archive, not the standalone screens. Those redirect here
+        // now — a record opens in the main view rather than navigating away.
+        href: tracker
+          ? `/reflections/checkin/${r.id}`
+          : `/reflections/framework/${r.id}`,
         at: r.completedAt ?? r.createdAt,
         kind: tracker ? "checkin" : "framework",
         kindLabel: q?.shortName ?? r.slug,
@@ -250,13 +272,27 @@ export async function loadRecords(
     );
   }
 
-  // Every category in play, for the picker — derived from the unfiltered set so
-  // choosing one does not empty the list of the others.
-  const categories = [
-    ...new Set(all.flatMap((r) => r.categories.map((c) => c.trim()))),
-  ]
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  /*
+   * The picker's options — derived from the unfiltered set, so choosing one
+   * does not empty the list of the others.
+   *
+   * Counted and ordered most-used first rather than alphabetically. With
+   * categories as specific as they currently are, alphabetical order buries the
+   * few that recur among a long tail of one-offs; frequency puts the usable
+   * ones first. Ties break alphabetically so the order is stable.
+   */
+  const counts = new Map<string, number>();
+  for (const r of all) {
+    for (const c of r.categories) {
+      const key = c.trim();
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const categories: CategoryOption[] = [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+    .slice(0, CATEGORY_LIMIT);
 
   const records = all
     .filter((r) => filters.kind === "all" || r.kind === filters.kind)
@@ -290,6 +326,42 @@ export async function loadRecords(
   return { records: records.slice(0, RAIL_LIMIT), categories, total: records.length };
 }
 
+/** The filter parameters every archive page accepts. */
+export type ArchiveSearchParams = {
+  filter?: string;
+  category?: string;
+  range?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+};
+
+/**
+ * Everything an archive page needs to draw the rail, in one call.
+ *
+ * Shared so the three pages cannot derive the view differently — a rail that
+ * disagrees with its own filters between routes would be a quiet, confusing
+ * bug. Returns the `RailView` shape that `record-rail.tsx` takes.
+ */
+export async function loadRail(userId: string, params: ArchiveSearchParams) {
+  const { range, ...filters } = parseFilters(params);
+  const { records, categories, total } = await loadRecords(userId, filters);
+
+  return {
+    records,
+    categories,
+    total,
+    view: {
+      kind: filters.kind,
+      range,
+      from: params.from ?? null,
+      to: params.to ?? null,
+      category: filters.category,
+      q: filters.q,
+    },
+  };
+}
+
 /** Parses the URL into filters. Unknown values fall back rather than erroring. */
 export function parseFilters(params: {
   filter?: string;
@@ -314,7 +386,30 @@ export function parseFilters(params: {
   let to: Date | null = null;
   const range = params.range ?? "all";
 
-  if (range === "7d") {
+  /*
+   * Typed dates win over the preset.
+   *
+   * The previous rule honoured `from`/`to` only when `range=custom`, which made
+   * the visible control depend on a hidden one: typing a date did nothing
+   * unless a preset elsewhere had already been set to "custom". Now a date
+   * present in the URL IS the range, and the preset applies only when no date
+   * was typed. There is no `custom` mode left to get out of step.
+   *
+   * Date-only strings parse as UTC midnight; `to` is pushed to the end of its
+   * day so a single-day range includes that day rather than nothing.
+   */
+  const parsedFrom = params.from ? new Date(params.from) : null;
+  const parsedTo = params.to ? new Date(params.to) : null;
+  const hasFrom = parsedFrom !== null && !isNaN(parsedFrom.getTime());
+  const hasTo = parsedTo !== null && !isNaN(parsedTo.getTime());
+
+  if (hasFrom || hasTo) {
+    if (hasFrom) from = parsedFrom;
+    if (hasTo) {
+      to = new Date(parsedTo!);
+      to.setHours(23, 59, 59, 999);
+    }
+  } else if (range === "7d") {
     from = startOfDay(now);
     from.setDate(from.getDate() - 6);
   } else if (range === "30d") {
@@ -324,16 +419,6 @@ export function parseFilters(params: {
     from = new Date(now.getFullYear(), now.getMonth(), 1);
   } else if (range === "year") {
     from = new Date(now.getFullYear(), 0, 1);
-  } else if (range === "custom") {
-    // Date-only strings parse as UTC midnight; `to` is pushed to the end of its
-    // day so a single-day range includes that day rather than nothing.
-    const parsedFrom = params.from ? new Date(params.from) : null;
-    const parsedTo = params.to ? new Date(params.to) : null;
-    from = parsedFrom && !isNaN(parsedFrom.getTime()) ? parsedFrom : null;
-    if (parsedTo && !isNaN(parsedTo.getTime())) {
-      to = new Date(parsedTo);
-      to.setHours(23, 59, 59, 999);
-    }
   }
 
   return {

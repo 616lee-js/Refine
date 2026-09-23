@@ -1,26 +1,31 @@
 import Link from "next/link";
 import { Eyebrow } from "@/components/ui/sheet";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
-import type { ArchiveRecord, RecordKind } from "./records";
+import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
 
 /**
  * The archive rail — every record as a card, with the filters that narrow it.
  *
- * ── Preset controls, not a keyword box ────────────────────────────────────────
- * The filters are things you pick: a date range, a category that actually
- * exists in your records, a record type. Text search survives but is demoted
- * beside them, because typing a word is a poor way to find a batch of records
- * and a good way to find one you already remember.
+ * ── Why the bar is split ──────────────────────────────────────────────────────
+ * Three controls are in view: a date range you type, record type, and search.
+ * Everything else sits behind a disclosure.
+ *
+ * The category picker is what forced this. It rendered every distinct category
+ * as a chip, and categories are specific phrases today rather than buckets — so
+ * the bar grew roughly one chip per entry and buried the list it exists to
+ * narrow. A `<select>` absorbs any number of options where a chip row cannot,
+ * which is the real defect; putting it behind a disclosure is the rest of it.
+ * The split stays right once categories become broad.
+ *
+ * ── Active filters are always visible ─────────────────────────────────────────
+ * Anything set from inside the disclosure still shows as a removable chip in
+ * the bar. This is required by the disclosure, not decoration: a filter you
+ * cannot see produces a short list with no visible cause, which reads as a bug.
  *
  * ── State lives in the URL ────────────────────────────────────────────────────
  * Every control is a link or a GET form, so a filtered view is shareable,
- * survives a reload, and needs no client component. `Clear` sits inside the bar
- * with the controls it clears.
- *
- * ── It renders beside the record, not above it ────────────────────────────────
- * The rail is the left column at `lg` and up, with the record in the main view.
- * Below `lg` it stacks above the record rather than disappearing — the
- * design-system rule is move, never hide.
+ * survives a reload, and needs no client component. Native `<details>` for the
+ * disclosure, so keyboard and screen-reader behaviour come free.
  */
 
 // COPY REVIEW: placeholders pending final wording.
@@ -30,19 +35,14 @@ const COPY = {
   count: (shown: number, total: number) =>
     shown < total ? `[COPY] ${shown} of ${total}` : `[COPY] ${total}`,
 
-  filters: "[COPY] Filter",
-  clear: "[COPY] Clear filters",
+  clearAll: "[COPY] Clear all",
+  activeLabel: "[COPY] Filtering by",
+  remove: "[COPY] Remove filter",
 
-  rangeLabel: "[COPY] When",
-  rangeAll: "[COPY] Any time",
-  range7d: "[COPY] Last 7 days",
-  range30d: "[COPY] Last 30 days",
-  rangeMonth: "[COPY] This month",
-  rangeYear: "[COPY] This year",
-  rangeCustom: "[COPY] Custom range",
-  customFrom: "[COPY] From",
-  customTo: "[COPY] To",
-  customApply: "[COPY] Apply",
+  dateLabel: "[COPY] Dates",
+  from: "[COPY] From",
+  to: "[COPY] To",
+  apply: "[COPY] Apply",
 
   typeLabel: "[COPY] Type",
   typeAll: "[COPY] All",
@@ -50,11 +50,30 @@ const COPY = {
   typeCheckin: "[COPY] Check-ins",
   typeFramework: "[COPY] Framework",
 
+  searchLabel: "[COPY] Search records",
+  searchPlaceholder: "[COPY] Search",
+
+  more: "[COPY] More filters",
+  quickRanges: "[COPY] Quick ranges",
+  range7d: "[COPY] Last 7 days",
+  range30d: "[COPY] Last 30 days",
+  rangeMonth: "[COPY] This month",
+  rangeYear: "[COPY] This year",
+  rangeAll: "[COPY] Any time",
+
   categoryLabel: "[COPY] Category",
   categoryAny: "[COPY] Any category",
+  categoryNote: "[COPY] Most used first",
 
-  searchLabel: "[COPY] Search records",
-  searchPlaceholder: "[COPY] Search titles and categories",
+  chipDates: (from: string | null, to: string | null) =>
+    from && to
+      ? `[COPY] ${from} to ${to}`
+      : from
+        ? `[COPY] From ${from}`
+        : `[COPY] Until ${to}`,
+  chipRange: (label: string) => label,
+  chipCategory: (c: string) => `[COPY] Category: ${c}`,
+  chipSearch: (q: string) => `[COPY] Search: ${q}`,
 
   empty: "[COPY] Nothing here yet.",
   emptyFiltered: "[COPY] Nothing matches these filters.",
@@ -78,10 +97,12 @@ export function railHref(current: RailView, change: Partial<RailView>): string {
   const next = { ...current, ...change };
   const params = new URLSearchParams();
   if (next.kind !== "all") params.set("filter", next.kind);
-  if (next.range !== "all") params.set("range", next.range);
-  if (next.range === "custom") {
-    if (next.from) params.set("from", next.from);
-    if (next.to) params.set("to", next.to);
+  // Typed dates win over the preset, so a range value is only meaningful when
+  // neither is set — see parseFilters in ./records.ts.
+  if (next.from) params.set("from", next.from);
+  if (next.to) params.set("to", next.to);
+  if (!next.from && !next.to && next.range !== "all") {
+    params.set("range", next.range);
   }
   if (next.category) params.set("category", next.category);
   if (next.q) params.set("q", next.q);
@@ -115,7 +136,85 @@ function chip(on: boolean) {
   };
 }
 
-const groupLabel = { marginBottom: 6, display: "block" } as const;
+const groupLabel: React.CSSProperties = {
+  display: "block",
+  marginBottom: 6,
+  fontFamily: "var(--font-mono)",
+  fontSize: "9px",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  color: "var(--rf-text-3)",
+};
+
+const fieldStyle: React.CSSProperties = {
+  fontSize: "11.5px",
+  color: "var(--rf-text)",
+  background: "var(--rf-paper)",
+  boxShadow: "inset 0 0 0 1px var(--rf-border)",
+};
+
+/** Carries the filters a form does not itself edit. */
+function HiddenExcept({
+  view,
+  omit,
+}: {
+  view: RailView;
+  omit: (keyof RailView)[];
+}) {
+  const keep = (k: keyof RailView) => !omit.includes(k);
+  return (
+    <>
+      {keep("kind") && view.kind !== "all" && (
+        <input type="hidden" name="filter" value={view.kind} />
+      )}
+      {keep("from") && view.from && (
+        <input type="hidden" name="from" value={view.from} />
+      )}
+      {keep("to") && view.to && <input type="hidden" name="to" value={view.to} />}
+      {keep("range") &&
+        !view.from &&
+        !view.to &&
+        view.range !== "all" && (
+          <input type="hidden" name="range" value={view.range} />
+        )}
+      {keep("category") && view.category && (
+        <input type="hidden" name="category" value={view.category} />
+      )}
+      {keep("q") && view.q && <input type="hidden" name="q" value={view.q} />}
+    </>
+  );
+}
+
+/** One active filter, with the link that removes it. */
+function ActiveChip({ label, href }: { label: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={`${COPY.remove}: ${label}`}
+      className="inline-flex items-center gap-[6px] rounded-full transition-colors"
+      style={{
+        padding: "4px 9px 4px 10px",
+        fontSize: "11px",
+        color: "var(--rf-text-2)",
+        background: "var(--rf-accent-soft)",
+      }}
+    >
+      {label}
+      <svg
+        width="9"
+        height="9"
+        viewBox="0 0 10 10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M2 2 L8 8 M8 2 L2 8" />
+      </svg>
+    </Link>
+  );
+}
 
 export function RecordRail({
   records,
@@ -125,19 +224,20 @@ export function RecordRail({
   selectedId,
 }: {
   records: ArchiveRecord[];
-  /** Every category in play, for the picker. */
-  categories: string[];
+  /** Counted, most-used first — see loadRecords. */
+  categories: CategoryOption[];
   /** How many matched before the rail cap. */
   total: number;
   view: RailView;
   /** The record open in the main view, if any. */
   selectedId?: string;
 }) {
+  const dated = Boolean(view.from || view.to);
+  const ranged = !dated && view.range !== "all";
   const filtered =
-    view.kind !== "all" ||
-    view.range !== "all" ||
-    view.category !== null ||
-    view.q !== null;
+    view.kind !== "all" || dated || ranged || view.category !== null || view.q !== null;
+
+  const rangeLabel = RANGES.find((r) => r.key === view.range)?.label ?? "";
 
   return (
     <aside
@@ -149,7 +249,6 @@ export function RecordRail({
         <Eyebrow size={9}>{COPY.count(records.length, total)}</Eyebrow>
       </div>
 
-      {/* The filter bar. Clear lives here, with what it clears. */}
       <div
         className="rounded-[4px] px-4 py-[14px]"
         style={{
@@ -157,115 +256,55 @@ export function RecordRail({
           boxShadow: "inset 0 0 0 1px var(--rf-border)",
         }}
       >
-        <div className="flex items-baseline justify-between gap-3">
-          <Eyebrow size={9}>{COPY.filters}</Eyebrow>
-          {filtered && (
-            <Link
-              href="/reflections"
-              className="font-mono uppercase transition-colors"
-              style={{
-                fontSize: "9px",
-                letterSpacing: "0.14em",
-                color: "var(--rf-accent)",
-              }}
-            >
-              {COPY.clear}
-            </Link>
-          )}
-        </div>
+        {/* ── Always visible: dates, type, search ── */}
+        <form action="/reflections" method="get">
+          <HiddenExcept view={view} omit={["from", "to", "range", "q"]} />
 
-        <div className="mt-3">
-          <span
-            className="font-mono uppercase"
-            style={{
-              fontSize: "9px",
-              letterSpacing: "0.14em",
-              color: "var(--rf-text-3)",
-              ...groupLabel,
-            }}
-          >
-            {COPY.rangeLabel}
-          </span>
-          <div className="mt-[6px] flex flex-wrap gap-[6px]">
-            {RANGES.map((r) => (
-              <Link
-                key={r.key}
-                href={railHref(view, { range: r.key, from: null, to: null })}
-                aria-current={view.range === r.key ? "true" : undefined}
-                className="transition-colors"
-                style={chip(view.range === r.key)}
-              >
-                {r.label}
-              </Link>
-            ))}
+          <span style={groupLabel}>{COPY.dateLabel}</span>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex-1" style={{ minWidth: 104 }}>
+              <span style={{ ...groupLabel, color: "var(--rf-text-4)" }}>
+                {COPY.from}
+              </span>
+              <input
+                type="date"
+                name="from"
+                defaultValue={view.from ?? ""}
+                className="w-full rounded-[4px] px-2 py-[5px] outline-none"
+                style={fieldStyle}
+              />
+            </label>
+            <label className="flex-1" style={{ minWidth: 104 }}>
+              <span style={{ ...groupLabel, color: "var(--rf-text-4)" }}>
+                {COPY.to}
+              </span>
+              <input
+                type="date"
+                name="to"
+                defaultValue={view.to ?? ""}
+                className="w-full rounded-[4px] px-2 py-[5px] outline-none"
+                style={fieldStyle}
+              />
+            </label>
           </div>
 
-          {/* Custom range. A GET form so the dates become the URL like every
-              other control, rather than needing client state. */}
-          <form action="/reflections" method="get" className="mt-[10px]">
-            <input type="hidden" name="range" value="custom" />
-            {view.kind !== "all" && (
-              <input type="hidden" name="filter" value={view.kind} />
-            )}
-            {view.category && (
-              <input type="hidden" name="category" value={view.category} />
-            )}
-            {view.q && <input type="hidden" name="q" value={view.q} />}
-
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex-1" style={{ minWidth: 110 }}>
-                <span
-                  className="font-mono uppercase"
-                  style={{
-                    fontSize: "9px",
-                    letterSpacing: "0.14em",
-                    color: "var(--rf-text-4)",
-                    ...groupLabel,
-                  }}
-                >
-                  {COPY.customFrom}
-                </span>
-                <input
-                  type="date"
-                  name="from"
-                  defaultValue={view.range === "custom" ? (view.from ?? "") : ""}
-                  className="w-full rounded-[4px] px-2 py-[5px] outline-none"
-                  style={{
-                    fontSize: "11.5px",
-                    color: "var(--rf-text)",
-                    background: "var(--rf-paper)",
-                    boxShadow: "inset 0 0 0 1px var(--rf-border)",
-                  }}
-                />
-              </label>
-              <label className="flex-1" style={{ minWidth: 110 }}>
-                <span
-                  className="font-mono uppercase"
-                  style={{
-                    fontSize: "9px",
-                    letterSpacing: "0.14em",
-                    color: "var(--rf-text-4)",
-                    ...groupLabel,
-                  }}
-                >
-                  {COPY.customTo}
-                </span>
-                <input
-                  type="date"
-                  name="to"
-                  defaultValue={view.range === "custom" ? (view.to ?? "") : ""}
-                  className="w-full rounded-[4px] px-2 py-[5px] outline-none"
-                  style={{
-                    fontSize: "11.5px",
-                    color: "var(--rf-text)",
-                    background: "var(--rf-paper)",
-                    boxShadow: "inset 0 0 0 1px var(--rf-border)",
-                  }}
-                />
-              </label>
+          <div className="mt-3">
+            <label htmlFor="rail-search" style={groupLabel}>
+              {COPY.searchLabel}
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="rail-search"
+                name="q"
+                type="search"
+                defaultValue={view.q ?? ""}
+                placeholder={COPY.searchPlaceholder}
+                className="min-w-0 flex-1 rounded-full px-3 py-[6px] outline-none"
+                style={fieldStyle}
+              />
               <button
                 type="submit"
-                className="rounded-full transition-colors"
+                className="shrink-0 rounded-full transition-colors"
                 style={{
                   padding: "6px 12px",
                   fontSize: "11.5px",
@@ -273,25 +312,15 @@ export function RecordRail({
                   boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
                 }}
               >
-                {COPY.customApply}
+                {COPY.apply}
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
 
-        <div className="mt-4">
-          <span
-            className="font-mono uppercase"
-            style={{
-              fontSize: "9px",
-              letterSpacing: "0.14em",
-              color: "var(--rf-text-3)",
-              ...groupLabel,
-            }}
-          >
-            {COPY.typeLabel}
-          </span>
-          <div className="mt-[6px] flex flex-wrap gap-[6px]">
+        <div className="mt-3">
+          <span style={groupLabel}>{COPY.typeLabel}</span>
+          <div className="flex flex-wrap gap-[6px]">
             {TYPES.map((t) => (
               <Link
                 key={t.key}
@@ -306,81 +335,148 @@ export function RecordRail({
           </div>
         </div>
 
-        {/* Category: chosen from what exists, never typed. Absent entirely when
-            nothing has been categorised yet — an empty picker teaches people the
-            feature is broken. */}
-        {categories.length > 0 && (
-          <div className="mt-4">
-            <span
-              className="font-mono uppercase"
-              style={{
-                fontSize: "9px",
-                letterSpacing: "0.14em",
-                color: "var(--rf-text-3)",
-                ...groupLabel,
-              }}
-            >
-              {COPY.categoryLabel}
-            </span>
-            <div className="mt-[6px] flex flex-wrap gap-[6px]">
-              <Link
-                href={railHref(view, { category: null })}
-                aria-current={view.category === null ? "true" : undefined}
-                className="transition-colors"
-                style={chip(view.category === null)}
-              >
-                {COPY.categoryAny}
-              </Link>
-              {categories.map((c) => (
+        {/* ── Behind a disclosure: quick ranges, category ── */}
+        <details className="mt-3">
+          <summary
+            className="cursor-pointer list-none py-1"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--rf-text-2)",
+            }}
+          >
+            {COPY.more}
+          </summary>
+
+          <div className="mt-2">
+            <span style={groupLabel}>{COPY.quickRanges}</span>
+            <div className="flex flex-wrap gap-[6px]">
+              {RANGES.map((r) => (
                 <Link
-                  key={c}
-                  href={railHref(view, { category: c })}
-                  aria-current={view.category === c ? "true" : undefined}
+                  key={r.key}
+                  href={railHref(view, {
+                    range: r.key,
+                    // A preset replaces typed dates rather than fighting them.
+                    from: null,
+                    to: null,
+                  })}
+                  aria-current={
+                    !dated && view.range === r.key ? "true" : undefined
+                  }
                   className="transition-colors"
-                  style={chip(view.category === c)}
+                  style={chip(!dated && view.range === r.key)}
                 >
-                  {c}
+                  {r.label}
                 </Link>
               ))}
             </div>
           </div>
-        )}
 
-        {/* Secondary to the presets above, deliberately. */}
-        <form action="/reflections" method="get" className="mt-4 flex gap-2">
-          {view.kind !== "all" && (
-            <input type="hidden" name="filter" value={view.kind} />
+          {/* A select, not chips: it absorbs any number of options. Absent
+              entirely when nothing has been categorised — an empty picker
+              teaches people the feature is broken. */}
+          {categories.length > 0 && (
+            <form action="/reflections" method="get" className="mt-3">
+              <HiddenExcept view={view} omit={["category"]} />
+              <label htmlFor="rail-category" style={groupLabel}>
+                {COPY.categoryLabel}{" "}
+                <span style={{ color: "var(--rf-text-4)" }}>
+                  {COPY.categoryNote}
+                </span>
+              </label>
+              <div className="flex gap-2">
+                <select
+                  id="rail-category"
+                  name="category"
+                  defaultValue={view.category ?? ""}
+                  className="min-w-0 flex-1 rounded-[4px] px-2 py-[5px] outline-none"
+                  style={fieldStyle}
+                >
+                  <option value="">{COPY.categoryAny}</option>
+                  {categories.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.value} ({c.count})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-full transition-colors"
+                  style={{
+                    padding: "5px 12px",
+                    fontSize: "11.5px",
+                    color: "var(--rf-text-2)",
+                    boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                  }}
+                >
+                  {COPY.apply}
+                </button>
+              </div>
+            </form>
           )}
-          {view.range !== "all" && (
-            <input type="hidden" name="range" value={view.range} />
-          )}
-          {view.range === "custom" && view.from && (
-            <input type="hidden" name="from" value={view.from} />
-          )}
-          {view.range === "custom" && view.to && (
-            <input type="hidden" name="to" value={view.to} />
-          )}
-          {view.category && (
-            <input type="hidden" name="category" value={view.category} />
-          )}
-          <label htmlFor="rail-search" className="sr-only">
-            {COPY.searchLabel}
-          </label>
-          <input
-            id="rail-search"
-            name="q"
-            type="search"
-            defaultValue={view.q ?? ""}
-            placeholder={COPY.searchPlaceholder}
-            className="min-w-0 flex-1 rounded-full px-3 py-[6px] outline-none"
-            style={{
-              fontSize: "11.5px",
-              color: "var(--rf-text)",
-              background: "var(--rf-paper)",
-              boxShadow: "inset 0 0 0 1px var(--rf-border)",
-            }}
-          />
-        </form>
+        </details>
+
+        {/* ── What is actually on, including anything set above ── */}
+        {filtered && (
+          <div
+            className="mt-3 pt-3"
+            style={{ borderTop: "1px solid var(--rf-border)" }}
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <span style={{ ...groupLabel, marginBottom: 0 }}>
+                {COPY.activeLabel}
+              </span>
+              <Link
+                href="/reflections"
+                className="font-mono uppercase transition-colors"
+                style={{
+                  fontSize: "9px",
+                  letterSpacing: "0.14em",
+                  color: "var(--rf-accent)",
+                }}
+              >
+                {COPY.clearAll}
+              </Link>
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-[6px]">
+              {dated && (
+                <ActiveChip
+                  label={COPY.chipDates(view.from, view.to)}
+                  href={railHref(view, { from: null, to: null })}
+                />
+              )}
+              {ranged && (
+                <ActiveChip
+                  label={COPY.chipRange(rangeLabel)}
+                  href={railHref(view, { range: "all" })}
+                />
+              )}
+              {view.kind !== "all" && (
+                <ActiveChip
+                  label={
+                    TYPES.find((t) => t.key === view.kind)?.label ?? view.kind
+                  }
+                  href={railHref(view, { kind: "all" })}
+                />
+              )}
+              {view.category && (
+                <ActiveChip
+                  label={COPY.chipCategory(view.category)}
+                  href={railHref(view, { category: null })}
+                />
+              )}
+              {view.q && (
+                <ActiveChip
+                  label={COPY.chipSearch(view.q)}
+                  href={railHref(view, { q: null })}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {records.length === 0 ? (

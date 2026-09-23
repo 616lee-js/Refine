@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eyebrow } from "@/components/ui/sheet";
+import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import type { Answers, TrackerQuestionnaire } from "@/lib/questionnaires";
 
 /**
@@ -207,64 +207,21 @@ export function CheckinPanel({
             {recent.length === 0 ? COPY.empty : COPY.emptyFiltered}
           </p>
         ) : (
-          <ol className="mt-3 flex flex-col gap-2">
-            {shown.map((r) => {
-              const at = new Date(r.completedAt);
-              const current = r.id === currentId;
-              const values = summarise(questionnaire, r.answers);
-              return (
-                <li key={r.id}>
-                  <Link
-                    href={`/checkin/${r.id}`}
-                    aria-current={current ? "page" : undefined}
-                    className="block rounded-[4px] transition-colors"
-                    style={{
-                      padding: "10px 12px",
-                      background: current
-                        ? "var(--rf-accent-soft)"
-                        : "var(--rf-paper)",
-                      boxShadow: current
-                        ? "inset 0 0 0 1px var(--rf-accent-soft)"
-                        : "inset 0 0 0 1px var(--rf-paper-edge)",
-                    }}
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          fontSize: "15px",
-                          color: "var(--rf-text)",
-                        }}
-                      >
-                        {at.toLocaleDateString(undefined, {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
-                      {current && (
-                        <Eyebrow accent size={9}>
-                          {COPY.current}
-                        </Eyebrow>
-                      )}
-                    </div>
-                    {values.length > 0 && (
-                      <p
-                        className="mt-[3px]"
-                        style={{
-                          fontSize: "11.5px",
-                          lineHeight: 1.5,
-                          color: "var(--rf-text-3)",
-                        }}
-                      >
-                        {values.join(" · ")}
-                      </p>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
+          // The shared card, the same one the archive rail uses. This panel
+          // used to draw its own; four near-identical row implementations is
+          // what RecordCard exists to end.
+          <RecordCardList className="mt-3">
+            {shown.map((r) => (
+              <RecordCard
+                key={r.id}
+                href={`/checkin/${r.id}`}
+                kindLabel={questionnaire.shortName}
+                at={new Date(r.completedAt)}
+                detail={summarise(questionnaire, r.answers)}
+                selected={r.id === currentId}
+              />
+            ))}
+          </RecordCardList>
         )}
       </div>
     </aside>

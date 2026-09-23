@@ -1,8 +1,13 @@
-import { and, count, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { journalEntries, questionnaireResponses } from "@/lib/db/schema";
+import {
+  journalEntries,
+  journalEntrySummaries,
+  questionnaireResponses,
+} from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { authoritativeSummary } from "@/lib/summaries/read";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { ScreenHome, type RecentRow } from "./home";
 import { AdminNav } from "@/components/ui/admin-nav";
@@ -143,25 +148,21 @@ export default async function HomePage() {
   // it here would be offering to resume a blank page.
   const draft = entries.find((e) => e.completedAt === null && e.hasBody);
 
-  const recent: RecentRow[] = [
-    ...completedEntries.map((e): RecentRow & { sort: number } => {
+  const recent: (RecentRow & { entryId?: string })[] = [
+    ...completedEntries.map((e) => {
       const at = e.completedAt!;
       return {
         sort: at.getTime(),
+        entryId: e.id,
         id: `entry-${e.id}`,
         href: `/reflections/${e.id}`,
-        at: relativeDay(at, now),
-        title: safeDecrypt(e.encryptedTitle),
-        fallback: at.toLocaleDateString(undefined, {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        }),
+        at: at.toISOString(),
+        detail: [] as string[],
         kindLabel: "Writing",
         framework: false,
       };
     }),
-    ...responses.map((r): RecentRow & { sort: number } => {
+    ...responses.map((r) => {
       const q = getQuestionnaire(r.slug);
       const tracker = q?.kind === "tracker";
       const at = r.completedAt!;
@@ -169,9 +170,8 @@ export default async function HomePage() {
         sort: at.getTime(),
         id: `q-${r.id}`,
         href: tracker ? `/checkin/${r.id}` : `/framework/${r.id}`,
-        at: relativeDay(at, now),
-        title: q?.title ?? r.slug,
-        fallback: r.slug,
+        at: at.toISOString(),
+        detail: [] as string[],
         kindLabel: q?.shortName ?? r.slug,
         framework: !tracker,
       };
@@ -179,6 +179,46 @@ export default async function HomePage() {
   ]
     .sort((a, b) => b.sort - a.sort)
     .slice(0, 4);
+
+  /*
+   * Categories for the four cards actually shown — and only those.
+   *
+   * Home is the most-visited screen in the product, so it deliberately does NOT
+   * reuse the archive's loader: that decrypts every summary the user has to
+   * build its rail, which is right for a browsing surface and wrong for a
+   * dashboard. Four ids, four summaries, no audit row for a list that shows no
+   * content of its own.
+   */
+  const shownEntryIds = recent
+    .map((r) => r.entryId)
+    .filter((id): id is string => Boolean(id));
+
+  if (shownEntryIds.length > 0) {
+    const summaries = await db
+      .select({
+        journalEntryId: journalEntrySummaries.journalEntryId,
+        encryptedContent: journalEntrySummaries.encryptedContent,
+        encryptedUserContent: journalEntrySummaries.encryptedUserContent,
+        userEditedAt: journalEntrySummaries.userEditedAt,
+        generatedAt: journalEntrySummaries.generatedAt,
+        generationVersion: journalEntrySummaries.generationVersion,
+      })
+      .from(journalEntrySummaries)
+      .where(inArray(journalEntrySummaries.journalEntryId, shownEntryIds));
+
+    const byEntry = new Map<string, string[]>();
+    for (const row of summaries) {
+      try {
+        byEntry.set(row.journalEntryId, authoritativeSummary(row).summary.topics);
+      } catch {
+        // A summary that will not decrypt costs this card its subheader and
+        // nothing else.
+      }
+    }
+    for (const r of recent) {
+      if (r.entryId) r.detail = byEntry.get(r.entryId) ?? [];
+    }
+  }
 
   // Sorted by completion, not by `updated_at` — editing an old entry today does
   // not mean you wrote today, and the line would be a small lie if it did.

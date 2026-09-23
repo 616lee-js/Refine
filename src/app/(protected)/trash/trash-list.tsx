@@ -20,7 +20,36 @@ export type TrashedEntry = {
  * Permanent delete uses inline confirmation rather than a toast — toasts report
  * after the fact, and this is the one action in the app with no undo. It says so
  * plainly rather than relying on the word "permanent" to carry the weight.
+ *
+ * ── Cards, but not `RecordCard` ───────────────────────────────────────────────
+ * These get the same discrete-card positioning as every other list, drawn with
+ * `Sheet` directly. They cannot use the shared component because each carries
+ * buttons, and `RecordCard` is a link — nesting a button inside an anchor is
+ * invalid and unusable with a keyboard. Rather than grow the shared card an
+ * actions slot that only this screen would ever pass, the surface is shared and
+ * the contents are not.
  */
+
+// COPY REVIEW: placeholders pending final wording.
+const COPY = {
+  empty: "[COPY] Nothing here.",
+  emptyNote: (days: number) =>
+    `[COPY] What you delete waits ${days} days before it is gone for good.`,
+  emptyEntry: "[COPY] Empty entry",
+  goesToday: "[COPY] Goes today",
+  daysLeft: (n: number) => `[COPY] ${n} day${n === 1 ? "" : "s"} left`,
+  restore: "[COPY] Put it back",
+  confirmPrompt: "[COPY] Gone for good?",
+  confirmYes: "[COPY] Yes, delete it",
+  cancel: "[COPY] Cancel",
+  deleteNow: "[COPY] Delete now",
+  restoredToast: "[COPY] Put back",
+  restoreError: "[COPY] Couldn't put that back",
+  purgedToast: "[COPY] Deleted for good",
+  purgeError: "[COPY] Couldn't delete that",
+  footnote:
+    "[COPY] That deletion is real — the text is destroyed, not hidden, and cannot be recovered afterwards.",
+} as const;
 export function TrashList({ entries }: { entries: TrashedEntry[] }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -31,7 +60,7 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
     setBusy(id);
     const res = await fetch(`/api/reflections/${id}/restore`, { method: "POST" });
     setBusy(null);
-    setToast(res.ok ? "Put back" : "Couldn't put that back");
+    setToast(res.ok ? COPY.restoredToast : COPY.restoreError);
     if (res.ok) router.refresh();
   }
 
@@ -40,7 +69,7 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
     const res = await fetch(`/api/reflections/${id}/purge`, { method: "DELETE" });
     setBusy(null);
     setConfirming(null);
-    setToast(res.ok ? "Deleted for good" : "Couldn't delete that");
+    setToast(res.ok ? COPY.purgedToast : COPY.purgeError);
     if (res.ok) router.refresh();
   }
 
@@ -57,10 +86,9 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
         <p
           style={{ fontSize: "14px", lineHeight: 1.9, color: "var(--rf-text-3)" }}
         >
-          Nothing here.
+          {COPY.empty}
           <br />
-          What you delete waits {TRASH_RETENTION_DAYS} days before it is gone for
-          good.
+          {COPY.emptyNote(TRASH_RETENTION_DAYS)}
         </p>
       </Sheet>
     );
@@ -68,13 +96,9 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
 
   return (
     <>
-      <Sheet className="px-7 pb-5 pt-1">
-        {entries.map((e, i) => (
-          <div
-            key={e.id}
-            className="py-[15px]"
-            style={{ borderTop: i === 0 ? "none" : "1px solid var(--rf-rule)" }}
-          >
+      <div className="flex flex-col gap-[10px]">
+        {entries.map((e) => (
+          <Sheet key={e.id} className="px-6 py-[15px]">
             <p
               className="line-clamp-2"
               style={{
@@ -84,7 +108,7 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
                 color: e.preview ? "var(--rf-text)" : "var(--rf-text-4)",
               }}
             >
-              {e.preview || "Empty entry"}
+              {e.preview || COPY.emptyEntry}
             </p>
 
             <div className="mt-[9px] flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -106,9 +130,7 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
                     e.daysLeft <= 3 ? "var(--rf-warn)" : "var(--rf-text-4)",
                 }}
               >
-                {e.daysLeft <= 0
-                  ? "Goes today"
-                  : `${e.daysLeft} day${e.daysLeft === 1 ? "" : "s"} left`}
+                {e.daysLeft <= 0 ? COPY.goesToday : COPY.daysLeft(e.daysLeft)}
               </span>
 
               <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -118,13 +140,13 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
                   className="disabled:opacity-40"
                   style={{ ...action, color: "var(--rf-text-2)" }}
                 >
-                  Put it back
+                  {COPY.restore}
                 </button>
 
                 {confirming === e.id ? (
                   <>
                     <span style={{ ...action, color: "var(--rf-text-3)" }}>
-                      Gone for good?
+                      {COPY.confirmPrompt}
                     </span>
                     <button
                       onClick={() => purge(e.id)}
@@ -132,13 +154,13 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
                       className="disabled:opacity-40"
                       style={{ ...action, color: "var(--color-error)" }}
                     >
-                      Yes, delete it
+                      {COPY.confirmYes}
                     </button>
                     <button
                       onClick={() => setConfirming(null)}
                       style={{ ...action, color: "var(--rf-text-4)" }}
                     >
-                      Cancel
+                      {COPY.cancel}
                     </button>
                   </>
                 ) : (
@@ -146,21 +168,20 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
                     onClick={() => setConfirming(e.id)}
                     style={{ ...action, color: "var(--rf-text-4)" }}
                   >
-                    Delete now
+                    {COPY.deleteNow}
                   </button>
                 )}
               </span>
             </div>
-          </div>
+          </Sheet>
         ))}
-      </Sheet>
+      </div>
 
       <p
         className="mt-[14px] max-w-[520px]"
         style={{ fontSize: "11.5px", lineHeight: 1.6, color: "var(--rf-text-4)" }}
       >
-        That deletion is real — the text is destroyed, not hidden, and cannot be
-        recovered afterwards.
+        {COPY.footnote}
       </p>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />

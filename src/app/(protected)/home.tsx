@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import { TopNav } from "@/components/ui/top-nav";
 
 /**
@@ -26,12 +27,51 @@ import { TopNav } from "@/components/ui/top-nav";
  * which is knowable today, rather than what you last wrote about, which is not.
  */
 
+// COPY REVIEW: every user-facing string on Home — headings, descriptions and
+// CTAs alike. `[COPY]` marks a placeholder; the rest is shipped wording awaiting
+// the same review.
+const COPY = {
+  headline: "[COPY] What would you like to do?",
+  lastWrote: (when: string) => `[COPY] You last wrote ${when}.`,
+  recordCount: (n: number) =>
+    `[COPY] ${n} ${n === 1 ? "record" : "records"} so far`,
+  startError: "[COPY] Something went wrong. Please try again.",
+
+  unfinishedLabel: (when: string) => `[COPY] Unfinished · ${when}`,
+  unfinishedFallback: "[COPY] Something you started",
+  unfinishedCta: "[COPY] Pick it back up",
+
+  writeEyebrow: "[COPY] Open reflection",
+  writeTitle: "[COPY] Write what's there",
+  writeBody:
+    "[COPY] Nothing to answer. A few footholds wait in the margin if you want a way in.",
+  writeCta: "[COPY] Begin",
+
+  frameworkEyebrow: "[COPY] Framework · GAD-7",
+  frameworkTitle: "[COPY] Generalised anxiety",
+  frameworkBody: "[COPY] Seven questions, then back to your own words.",
+  frameworkCta: "[COPY] Start",
+
+  checkinEyebrow: "[COPY] Check-in",
+  checkinDone: "[COPY] Logged today. You can change it if something shifted.",
+  checkinTodo:
+    "[COPY] Sleep, mood, energy, and what you kept up. Fifteen seconds.",
+  checkinChangeCta: "[COPY] Change it",
+  checkinLogCta: "[COPY] Log",
+
+  opening: "[COPY] Opening…",
+
+  recentHeading: "[COPY] Recent",
+  seeEverything: "[COPY] See everything →",
+} as const;
+
 export type RecentRow = {
   id: string;
   href: string;
+  /** ISO string — the card formats it. */
   at: string;
-  title: string | null;
-  fallback: string;
+  /** Categories, or a check-in's values. The card's subheader. */
+  detail: string[];
   kindLabel: string;
   framework: boolean;
 };
@@ -92,7 +132,7 @@ export function ScreenHome({
         router.push(`/checkin/${data.responseId}?edit=1`);
       else router.push(`/framework/${data.responseId}`);
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError(COPY.startError);
       setLoading(null);
     }
   }
@@ -116,14 +156,14 @@ export function ScreenHome({
                 color: "var(--rf-text)",
               }}
             >
-              What would you like to do?
+              {COPY.headline}
             </h1>
             {lastWrote && (
               <p
                 className="mt-[10px]"
                 style={{ fontSize: "13px", color: "var(--rf-text-3)" }}
               >
-                You last wrote {lastWrote}.{" "}
+                {COPY.lastWrote(lastWrote)}{" "}
                 <Link
                   href="/reflections"
                   className="underline underline-offset-[3px]"
@@ -132,8 +172,7 @@ export function ScreenHome({
                     textDecorationColor: "var(--rf-border-strong)",
                   }}
                 >
-                  {totalRecords} {totalRecords === 1 ? "record" : "records"} so
-                  far
+                  {COPY.recordCount(totalRecords)}
                 </Link>
                 .
               </p>
@@ -154,7 +193,7 @@ export function ScreenHome({
             >
               <div className="min-w-0">
                 <Eyebrow accent size={9.5}>
-                  Unfinished · {unfinished.when}
+                  {COPY.unfinishedLabel(unfinished.when)}
                 </Eyebrow>
                 <p
                   className="mt-1 truncate"
@@ -164,7 +203,7 @@ export function ScreenHome({
                     color: "var(--rf-text)",
                   }}
                 >
-                  {unfinished.title ?? "Something you started"}
+                  {unfinished.title ?? COPY.unfinishedFallback}
                 </p>
               </div>
               <span
@@ -176,7 +215,7 @@ export function ScreenHome({
                   background: "var(--rf-accent)",
                 }}
               >
-                Pick it back up
+                {COPY.unfinishedCta}
               </span>
             </Link>
           )}
@@ -185,7 +224,7 @@ export function ScreenHome({
             <Sheet minHeight={168}>
               <div className="flex flex-1 flex-col gap-[10px] p-5">
                 <Eyebrow accent size={9.5}>
-                  Open reflection
+                  {COPY.writeEyebrow}
                 </Eyebrow>
                 <h2
                   style={{
@@ -197,7 +236,7 @@ export function ScreenHome({
                     color: "var(--rf-text)",
                   }}
                 >
-                  Write what&apos;s there
+                  {COPY.writeTitle}
                 </h2>
                 <p
                   className="flex-1"
@@ -207,8 +246,7 @@ export function ScreenHome({
                     color: "var(--rf-text-3)",
                   }}
                 >
-                  Nothing to answer. A few footholds wait in the margin if you
-                  want a way in.
+                  {COPY.writeBody}
                 </p>
                 <div>
                   <button
@@ -222,7 +260,7 @@ export function ScreenHome({
                       fontWeight: 500,
                     }}
                   >
-                    {loading === "entry" ? "Opening…" : "Begin"}
+                    {loading === "entry" ? COPY.opening : COPY.writeCta}
                   </button>
                 </div>
               </div>
@@ -230,7 +268,7 @@ export function ScreenHome({
 
             <Sheet minHeight={168}>
               <div className="flex flex-1 flex-col gap-[10px] p-5">
-                <Eyebrow size={9.5}>Framework · GAD-7</Eyebrow>
+                <Eyebrow size={9.5}>{COPY.frameworkEyebrow}</Eyebrow>
                 <h2
                   style={{
                     fontFamily: "var(--font-display)",
@@ -241,7 +279,7 @@ export function ScreenHome({
                     color: "var(--rf-text)",
                   }}
                 >
-                  Generalised anxiety
+                  {COPY.frameworkTitle}
                 </h2>
                 <p
                   className="flex-1"
@@ -251,7 +289,7 @@ export function ScreenHome({
                     color: "var(--rf-text-3)",
                   }}
                 >
-                  Seven questions, then back to your own words.
+                  {COPY.frameworkBody}
                 </p>
                 <div>
                   <button
@@ -265,7 +303,7 @@ export function ScreenHome({
                       fontWeight: 500,
                     }}
                   >
-                    {loading === "framework" ? "Opening…" : "Start"}
+                    {loading === "framework" ? COPY.opening : COPY.frameworkCta}
                   </button>
                 </div>
               </div>
@@ -281,14 +319,12 @@ export function ScreenHome({
             style={{ background: "var(--rf-surface)" }}
           >
             <div>
-              <Eyebrow size={9.5}>Check-in</Eyebrow>
+              <Eyebrow size={9.5}>{COPY.checkinEyebrow}</Eyebrow>
               <p
                 className="mt-1"
                 style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
               >
-                {checkedInToday
-                  ? "Logged today. You can change it if something shifted."
-                  : "Sleep, mood, energy, and what you kept up. Fifteen seconds."}
+                {checkedInToday ? COPY.checkinDone : COPY.checkinTodo}
               </p>
             </div>
             <button
@@ -303,10 +339,10 @@ export function ScreenHome({
               }}
             >
               {loading === "checkin"
-                ? "Opening…"
+                ? COPY.opening
                 : checkedInToday
-                  ? "Change it"
-                  : "Log"}
+                  ? COPY.checkinChangeCta
+                  : COPY.checkinLogCta}
             </button>
           </div>
 
@@ -322,7 +358,7 @@ export function ScreenHome({
           {recent.length > 0 && (
             <section className="mt-[34px]">
               <div className="mb-[10px] flex items-baseline justify-between gap-4">
-                <Eyebrow>Recent</Eyebrow>
+                <Eyebrow>{COPY.recentHeading}</Eyebrow>
                 <Link
                   href="/reflections"
                   className="font-mono uppercase transition-colors"
@@ -332,64 +368,25 @@ export function ScreenHome({
                     color: "var(--rf-text-4)",
                   }}
                 >
-                  See everything →
+                  {COPY.seeEverything}
                 </Link>
               </div>
 
-              <Sheet className="px-6 pb-4 pt-1">
-                {recent.map((r, i) => (
-                  <Link
+              {/* Cards, the same ones the archive rail and the check-in panel
+                  use. No rail here — a dashboard panel is not a browsing
+                  surface, and "see everything" above goes to the one that is. */}
+              <RecordCardList>
+                {recent.map((r) => (
+                  <RecordCard
                     key={r.id}
                     href={r.href}
-                    className="grid items-center gap-x-5 gap-y-1 py-[13px] sm:grid-cols-[1fr_auto]"
-                    style={{
-                      borderTop: i === 0 ? "none" : "1px solid var(--rf-rule)",
-                    }}
-                  >
-                    <div className="min-w-0">
-                      <p
-                        className="truncate"
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          fontSize: "16.5px",
-                          color: "var(--rf-text)",
-                        }}
-                      >
-                        {r.title ?? r.fallback}
-                      </p>
-                      <p
-                        className="mt-[3px] font-mono uppercase"
-                        style={{
-                          fontSize: "9.5px",
-                          letterSpacing: "0.14em",
-                          color: "var(--rf-text-4)",
-                        }}
-                      >
-                        {r.at}
-                      </p>
-                    </div>
-                    <span
-                      className="w-fit rounded-full font-mono uppercase"
-                      style={{
-                        padding: "4px 9px",
-                        fontSize: "9.5px",
-                        letterSpacing: "0.12em",
-                        color: r.framework
-                          ? "var(--rf-accent)"
-                          : "var(--rf-text-3)",
-                        background: r.framework
-                          ? "var(--rf-accent-soft)"
-                          : "transparent",
-                        boxShadow: r.framework
-                          ? "none"
-                          : "inset 0 0 0 1px var(--rf-border)",
-                      }}
-                    >
-                      {r.kindLabel}
-                    </span>
-                  </Link>
+                    kindLabel={r.kindLabel}
+                    at={new Date(r.at)}
+                    detail={r.detail}
+                    accent={r.framework}
+                  />
                 ))}
-              </Sheet>
+              </RecordCardList>
             </section>
           )}
         </div>

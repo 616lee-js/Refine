@@ -20,6 +20,7 @@ export function Sheet({
   minHeight,
   ruled = false,
   as: Tag = "div",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -28,6 +29,12 @@ export function Sheet({
   /** Draws 30px ruling, like lined paper. */
   ruled?: boolean;
   as?: "div" | "article" | "section";
+  /**
+   * Overrides for the paper itself — a selected card's fill, for example.
+   * Applied last, so it can replace `background` and `boxShadow`. Use sparingly:
+   * a sheet that does not look like paper is not a sheet.
+   */
+  style?: React.CSSProperties;
 }) {
   return (
     <Tag
@@ -44,6 +51,7 @@ export function Sheet({
                 "repeating-linear-gradient(to bottom, transparent, transparent 29px, var(--rf-rule) 29px, var(--rf-rule) 30px)",
             }
           : {}),
+        ...style,
       }}
     >
       {/*

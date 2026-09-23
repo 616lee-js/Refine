@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
 import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/summaries/types";
 
@@ -23,6 +23,17 @@ import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/
  * There is no field to type a quote into. The server verifies every quote is
  * found in the body and rejects the save otherwise.
  *
+ * ── It must not look like the entry ───────────────────────────────────────────
+ * Both used to be display serif on a paper `Sheet`, which made a machine's
+ * description of someone's writing look like the writing. They now get opposite
+ * treatments: the summary is sans-serif on a recessed panel, the entry stays
+ * serif on paper. The entry did not move — the writing is the thing, and it
+ * should not be what changes to accommodate a description of itself.
+ *
+ * The labels ("What Refine took from this" / "Your words") are the smaller half
+ * of that. The treatments carry it: the two are still distinguishable with the
+ * page zoomed past the point of reading either.
+ *
  * ── Collapsed by default ──────────────────────────────────────────────────────
  * Native <details>, controlled so a quote arriving from the text can open it.
  * Collapsed because someone re-reading their own writing has not asked to be
@@ -38,39 +49,42 @@ import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/
 
 // COPY REVIEW: shipped wording hoisted; `[COPY]` items are placeholders.
 const COPY = {
-  heading: "What Refine took from this",
-  yourVersion: "Your version",
-  summarising: "Summarising — check back in a moment",
+  heading: "[COPY] What Refine took from this",
+  yourVersion: "[COPY] Your version",
+  summarising: "[COPY] Summarising — check back in a moment",
   unreadable:
-    "The summary of this entry could not be read. Your writing above is unaffected.",
-  stale: "This describes an earlier version of the entry. Refine will re-summarise it shortly",
-  staleKept: "; your correction is kept either way",
-  thin: "Short entry — deliberately minimal",
-  summaryLabel: "Summary",
-  topicsLabel: "Topics",
-  peopleLabel: "People",
-  commaHint: "— separated by commas",
+    "[COPY] The summary of this entry could not be read. Your writing is unaffected.",
+  stale: "[COPY] This describes an earlier version of the entry. Refine will re-summarise it shortly",
+  staleKept: "[COPY] ; your correction is kept either way",
+  thin: "[COPY] Short entry — deliberately minimal",
+  summaryLabel: "[COPY] Summary",
+  // "Categories", not "Topics": these are the buckets a record sorts into.
+  // The stored field is still `topics` — renaming a key inside a stored JSON
+  // blob is a data migration for no benefit.
+  topicsLabel: "[COPY] Categories",
+  peopleLabel: "[COPY] People",
+  commaHint: "[COPY] — separated by commas",
   quotesLabel: "[COPY] Quotes",
   quotesHint: "[COPY] Select text in the entry to add a quote",
   quotesFull: "[COPY] That's the most quotes an entry can keep",
   removeQuote: "[COPY] Remove",
   noSummaryForQuote: "[COPY] No summary yet to attach a quote to",
-  emptyError: "A summary cannot be empty.",
-  saveError: "That didn't save. Your text is still here — try again.",
+  emptyError: "[COPY] A summary cannot be empty.",
+  saveError: "[COPY] That didn't save. Your text is still here — try again.",
   quoteRejected: "[COPY] One of the quotes wasn't found in the entry",
-  revertError: "Couldn't undo that.",
-  savedToast: "Saved — this is what Refine will use",
-  revertedToast: "Back to Refine's version",
-  save: "Save",
-  saving: "Saving…",
-  cancel: "Cancel",
-  correct: "Correct this",
-  editYours: "Edit yours",
-  backToYours: "Back to yours",
-  seeOriginal: "See Refine's version",
-  discardMine: "Discard mine",
-  original: "Refine's original",
-  generated: (date: string) => `Generated ${date}`,
+  revertError: "[COPY] Couldn't undo that.",
+  savedToast: "[COPY] Saved — this is what Refine will use",
+  revertedToast: "[COPY] Back to Refine's version",
+  save: "[COPY] Save",
+  saving: "[COPY] Saving…",
+  cancel: "[COPY] Cancel",
+  correct: "[COPY] Correct this",
+  editYours: "[COPY] Edit yours",
+  backToYours: "[COPY] Back to yours",
+  seeOriginal: "[COPY] See Refine's version",
+  discardMine: "[COPY] Discard mine",
+  original: "[COPY] Refine's original",
+  generated: (date: string) => `[COPY] Generated ${date}`,
 } as const;
 
 export type EntrySummaryPanelProps = {
@@ -266,7 +280,15 @@ export function EntrySummaryPanel({
           )}
         </summary>
 
-        <Sheet className="mt-3 px-6 py-5">
+        {/* A recessed panel, not paper: no shadow, inset border, secondary
+            surface. See the note at the top of this file. */}
+        <div
+          className="mt-3 rounded-[4px] px-6 py-5"
+          style={{
+            background: "var(--rf-surface)",
+            boxShadow: "inset 0 0 0 1px var(--rf-border)",
+          }}
+        >
           {stale && (
             <p
               className="mb-3 rounded-[4px] px-3 py-2"
@@ -309,11 +331,12 @@ export function EntrySummaryPanel({
                   autoFocus
                   className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
                   style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "15px",
+                    // Sans, like the summary it edits. See the note at the top.
+                    fontFamily: "var(--font-sans)",
+                    fontSize: "14px",
                     lineHeight: 1.6,
                     color: "var(--rf-text)",
-                    background: "var(--rf-surface)",
+                    background: "var(--rf-paper)",
                     boxShadow: "inset 0 0 0 1px var(--rf-border)",
                   }}
                 />
@@ -433,13 +456,16 @@ export function EntrySummaryPanel({
             </div>
           ) : (
             <>
+              {/* Sans. This is a machine's description of the person's writing,
+                  and it must not wear the writing's typeface. The quotes below
+                  keep the serif, because those ARE the writing. */}
               <p
                 className="whitespace-pre-wrap"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "15px",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "14px",
                   lineHeight: 1.65,
-                  color: "var(--rf-text)",
+                  color: "var(--rf-text-2)",
                   textWrap: "pretty",
                 }}
               >
@@ -551,7 +577,7 @@ export function EntrySummaryPanel({
               )}
             </>
           )}
-        </Sheet>
+        </div>
       </details>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />

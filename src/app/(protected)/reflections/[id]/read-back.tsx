@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "@/components/ui/sheet";
+import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { EntrySummaryPanel, type EntrySummaryPanelProps } from "./entry-summary";
 import { EntryBody } from "./entry-body";
 
@@ -13,11 +13,12 @@ import { EntryBody } from "./entry-body";
  * draft. The server page decrypts and passes plain props; nothing here fetches.
  */
 
-// COPY REVIEW: shipped wording, hoisted for review.
+// COPY REVIEW: `[COPY]` items are placeholders; the rest is shipped wording.
 const COPY = {
+  yourWords: "[COPY] Your words",
   decryptFailed:
-    "This entry could not be read. Its content is still stored, but the encryption key does not match — nothing has been lost, and it should not be edited or overwritten until that is resolved.",
-  emptyBody: "This one is empty.",
+    "[COPY] This entry could not be read. Its content is still stored, but the encryption key does not match — nothing has been lost, and it should not be edited or overwritten until that is resolved.",
+  emptyBody: "[COPY] This one is empty.",
 } as const;
 
 export function ReadBack({
@@ -39,7 +40,16 @@ export function ReadBack({
         onQuoteConsumed={() => setPendingQuote(null)}
       />
 
-      <Sheet className="mt-[14px] px-9 py-9 sm:px-12 sm:py-11">
+      {/* The entry is labelled as the person's own, against the summary's
+          machine attribution above it. The label is the smaller half of the
+          distinction — the treatments differ structurally (serif on paper here,
+          sans on a recessed panel there), so the two are still told apart with
+          the page zoomed past the point of reading either. */}
+      <div className="mt-[18px] mb-[8px]">
+        <Eyebrow size={9.5}>{COPY.yourWords}</Eyebrow>
+      </div>
+
+      <Sheet className="px-9 py-9 sm:px-12 sm:py-11">
         {decryptFailed ? (
           <p
             className="rounded-[10px] px-5 py-4"

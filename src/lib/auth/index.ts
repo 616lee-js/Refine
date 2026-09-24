@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { cache } from "react";
 import { hash, compare } from "bcryptjs";
 import { getIronSession, IronSession } from "iron-session";
 import { cookies } from "next/headers";
@@ -24,10 +25,25 @@ const SESSION_OPTIONS = {
   },
 };
 
-export async function getSession(): Promise<IronSession<SessionData>> {
-  const cookieStore = await cookies();
-  return getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
-}
+/**
+ * The current session.
+ *
+ * ── Memoised per request, not cached ──────────────────────────────────────────
+ * React's `cache()` deduplicates calls **within a single render** and nothing
+ * more: it does not persist between requests, users, or page loads. That
+ * distinction matters here — the session is identity, and identity must never
+ * be reused across requests.
+ *
+ * Worth doing because every page calls this AND renders `<AdminNav />`, which
+ * calls it again, so the session cookie was being decrypted at least twice per
+ * page for no gain.
+ */
+export const getSession = cache(
+  async (): Promise<IronSession<SessionData>> => {
+    const cookieStore = await cookies();
+    return getIronSession<SessionData>(cookieStore, SESSION_OPTIONS);
+  }
+);
 
 // ── Email HMAC ────────────────────────────────────────────────────────────────
 

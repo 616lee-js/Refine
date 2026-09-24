@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -7,7 +8,7 @@ import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { ArchiveShell } from "../../archive-shell";
-import { loadRail, type ArchiveSearchParams } from "../../records";
+import { type ArchiveSearchParams } from "../../records";
 import { FrameworkRecord } from "./framework-record";
 
 /**
@@ -33,6 +34,8 @@ export default async function ArchiveFrameworkPage({
   const sp = await searchParams;
   const authSession = await getSession();
   if (!authSession.userId) notFound();
+  // Captured so the narrowing survives into the after() callback below.
+  const userId = authSession.userId;
 
   const [row] = await db
     .select()
@@ -80,36 +83,52 @@ export default async function ArchiveFrameworkPage({
     }
   }
 
-  const [rail, previousRows] = await Promise.all([
-    loadRail(authSession.userId, sp),
-    // "Last taken" reads from other completed responses to this instrument.
-    db
-      .select({ completedAt: questionnaireResponses.completedAt })
-      .from(questionnaireResponses)
-      .where(
-        and(
-          eq(questionnaireResponses.userId, authSession.userId),
-          eq(questionnaireResponses.questionnaireSlug, row.questionnaireSlug),
-          isNotNull(questionnaireResponses.completedAt),
-          ne(questionnaireResponses.id, id)
-        )
+  // "Last taken" reads from other completed responses to this instrument.
+  const previousRows = await db
+    .select({ completedAt: questionnaireResponses.completedAt })
+    .from(questionnaireResponses)
+    .where(
+      and(
+        eq(questionnaireResponses.userId, authSession.userId),
+        eq(questionnaireResponses.questionnaireSlug, row.questionnaireSlug),
+        isNotNull(questionnaireResponses.completedAt),
+        ne(questionnaireResponses.id, id)
       )
-      .orderBy(desc(questionnaireResponses.completedAt))
-      .limit(1),
-  ]);
+    )
+    .orderBy(desc(questionnaireResponses.completedAt))
+    .limit(1);
 
   // This response's own answers are a deliberate decryption, logged separately
   // from the rail's single row — that one records reading the list, this one
   // records reading the record.
-  await db.insert(contentAccessLog).values({
-    id: randomUUID(),
-    userId: authSession.userId,
-    questionnaireResponseId: id,
-    context: "questionnaire_detail_view",
+  /*
+   * Off the rendering path. The row is still written — `after()` holds the
+   * function open until it lands — but the page no longer waits on a write
+   * before it can show the record. See src/lib/after-response.ts.
+   */
+  after(async () => {
+    try {
+      await db.insert(contentAccessLog).values({
+        id: randomUUID(),
+        userId,
+        questionnaireResponseId: id,
+        context: "questionnaire_detail_view",
+      });
+    } catch (err) {
+      console.error(
+        "Questionnaire detail access log failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
   });
 
+
   return (
-    <ArchiveShell {...rail} selectedId={row.id}>
+    <ArchiveShell
+      userId={authSession.userId}
+      searchParams={sp}
+      selectedId={row.id}
+    >
       <FrameworkRecord
         responseId={row.id}
         questionnaire={questionnaire}

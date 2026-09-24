@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { and, asc, desc, eq, gt, isNotNull, isNull, lt } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries, journalEntrySummaries, contentAccessLog } from "@/lib/db/schema";
@@ -17,7 +18,7 @@ import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
 import { ArchiveShell } from "../archive-shell";
-import { loadRail, type ArchiveSearchParams } from "../records";
+import { type ArchiveSearchParams } from "../records";
 
 /**
  * Reading back a completed entry.
@@ -115,6 +116,8 @@ export default async function ReflectionDetailPage({
 
   const authSession = await getSession();
   if (!authSession.userId) notFound();
+  // Captured so the narrowing survives into the after() callback below.
+  const userId = authSession.userId;
 
   const [entry] = await db
     .select()
@@ -163,14 +166,29 @@ export default async function ReflectionDetailPage({
   // single row Trends writes. The log records decryptions, not eyeballs: this is
   // written whether or not the disclosure below is expanded, because the
   // decryption genuinely happened server-side.
-  await db.insert(contentAccessLog).values({
-    id: randomUUID(),
-    userId: authSession.userId,
-    journalEntryId: id,
-    context: summaryRow
-      ? "journal_entry_detail_view (+summary)"
-      : "journal_entry_detail_view",
+  /*
+   * Off the rendering path. The row is still written — `after()` holds the
+   * function open until it lands — but the page no longer waits on a write
+   * before it can show the record. See src/lib/after-response.ts.
+   */
+  after(async () => {
+    try {
+      await db.insert(contentAccessLog).values({
+        id: randomUUID(),
+        userId,
+        journalEntryId: id,
+        context: summaryRow
+          ? "journal_entry_detail_view (+summary)"
+          : "journal_entry_detail_view",
+      });
+    } catch (err) {
+      console.error(
+        "Entry detail access log failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
   });
+
 
   let body = "";
   let decryptFailed = false;
@@ -200,9 +218,6 @@ export default async function ReflectionDetailPage({
     entry.completedAt
   );
 
-  // The rail, carrying whatever filters the archive had applied. It decrypts
-  // its own records and writes its own single audit row — see ../records.ts.
-  const rail = await loadRail(authSession.userId, sp);
 
   const written = entry.completedAt ?? entry.createdAt;
   const dateLong = written.toLocaleDateString(undefined, {
@@ -213,7 +228,11 @@ export default async function ReflectionDetailPage({
   // No word count (removed 2026-09-21): a count is a target in disguise.
 
   return (
-    <ArchiveShell {...rail} selectedId={entry.id}>
+    <ArchiveShell
+      userId={authSession.userId}
+      searchParams={sp}
+      selectedId={entry.id}
+    >
           {arrival && <CompletionNotice kind={arrival} />}
 
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">

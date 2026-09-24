@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { and, eq, gte, isNotNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -7,7 +8,7 @@ import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import { ArchiveShell } from "../../archive-shell";
-import { loadRail, type ArchiveSearchParams } from "../../records";
+import { type ArchiveSearchParams } from "../../records";
 import { CheckinRecord } from "./checkin-record";
 
 /**
@@ -46,6 +47,8 @@ export default async function ArchiveCheckinPage({
   const sp = await searchParams;
   const authSession = await getSession();
   if (!authSession.userId) notFound();
+  // Captured so the narrowing survives into the after() callback below.
+  const userId = authSession.userId;
 
   const [row] = await db
     .select()
@@ -87,35 +90,51 @@ export default async function ArchiveCheckinPage({
 
   const since = new Date(Date.now() - 21 * 86_400_000);
 
-  const [rail, history] = await Promise.all([
-    loadRail(authSession.userId, sp),
-    db
-      .select({ id: questionnaireResponses.id })
-      .from(questionnaireResponses)
-      .where(
-        and(
-          eq(questionnaireResponses.userId, authSession.userId),
-          eq(questionnaireResponses.questionnaireSlug, questionnaire.slug),
-          isNotNull(questionnaireResponses.completedAt),
-          gte(questionnaireResponses.completedAt, since)
-        )
-      ),
-  ]);
+  const history = await db
+    .select({ id: questionnaireResponses.id })
+    .from(questionnaireResponses)
+    .where(
+      and(
+        eq(questionnaireResponses.userId, authSession.userId),
+        eq(questionnaireResponses.questionnaireSlug, questionnaire.slug),
+        isNotNull(questionnaireResponses.completedAt),
+        gte(questionnaireResponses.completedAt, since)
+      )
+    );
 
   // This response's own answers are a deliberate decryption, logged separately
   // from the rail's single row — that one records reading the list, this one
   // records reading the record.
-  await db.insert(contentAccessLog).values({
-    id: randomUUID(),
-    userId: authSession.userId,
-    questionnaireResponseId: id,
-    context: "checkin_detail_view",
+  /*
+   * Off the rendering path. The row is still written — `after()` holds the
+   * function open until it lands — but the page no longer waits on a write
+   * before it can show the record. See src/lib/after-response.ts.
+   */
+  after(async () => {
+    try {
+      await db.insert(contentAccessLog).values({
+        id: randomUUID(),
+        userId,
+        questionnaireResponseId: id,
+        context: "checkin_detail_view",
+      });
+    } catch (err) {
+      console.error(
+        "Check-in detail access log failed:",
+        err instanceof Error ? err.message : err
+      );
+    }
   });
+
 
   const at = row.completedAt ?? row.createdAt;
 
   return (
-    <ArchiveShell {...rail} selectedId={row.id}>
+    <ArchiveShell
+      userId={authSession.userId}
+      searchParams={sp}
+      selectedId={row.id}
+    >
       <CheckinRecord
         responseId={row.id}
         questionnaire={questionnaire}

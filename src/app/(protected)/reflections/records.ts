@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -116,6 +117,8 @@ export async function loadRecords(
   records: ArchiveRecord[];
   categories: CategoryOption[];
   total: number;
+  /** The row limit cut the list short, so `total` is a floor, not a total. */
+  capped: boolean;
 }> {
   const entryDateBounds = [
     filters.from ? gte(journalEntries.createdAt, filters.from) : undefined,
@@ -127,49 +130,77 @@ export async function loadRecords(
     filters.to ? lte(questionnaireResponses.completedAt, filters.to) : undefined,
   ].filter(Boolean);
 
-  const [entries, responses] = await Promise.all([
-    db
-      .select({
-        id: journalEntries.id,
-        createdAt: journalEntries.createdAt,
-        updatedAt: journalEntries.updatedAt,
-        completedAt: journalEntries.completedAt,
-        encryptedTitle: journalEntries.encryptedTitle,
-      })
-      .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.userId, userId),
-          isNull(journalEntries.deletedAt),
-          isNull(journalEntries.purgedAt),
-          ...entryDateBounds
-        )
-      )
-      .orderBy(desc(journalEntries.updatedAt)),
+  /*
+   * How much to load.
+   *
+   * ── The common case is bounded ──────────────────────────────────────────────
+   * Both lists come back newest-first, so taking RAIL_LIMIT from each and
+   * merging still yields the true newest RAIL_LIMIT of the union — one list
+   * cannot hide a record newer than the other's cut-off.
+   *
+   * This used to fetch EVERYTHING, decrypt every title, category set and
+   * check-in answer, and only then slice. The cap was on what was displayed
+   * rather than on what was done, so the cost grew with total history on every
+   * record view — the rail renders on all of them.
+   *
+   * ── Search and category are deliberately not bounded ────────────────────────
+   * Categories and titles live inside encrypted blobs, so Postgres cannot
+   * filter on them; the matching happens here, after decryption. Applying a
+   * limit first would silently drop older matches and make search quietly
+   * wrong. So an explicit search stays exhaustive and pays for it, while the
+   * ordinary case — no filter — is fast.
+   */
+  const needsFullScan = filters.category !== null || filters.q !== null;
+  const rowLimit = needsFullScan ? undefined : RAIL_LIMIT;
 
-    db
-      .select({
-        id: questionnaireResponses.id,
-        slug: questionnaireResponses.questionnaireSlug,
-        createdAt: questionnaireResponses.createdAt,
-        completedAt: questionnaireResponses.completedAt,
-        encryptedAnswers: questionnaireResponses.encryptedAnswers,
-      })
-      .from(questionnaireResponses)
-      .where(
-        and(
-          eq(questionnaireResponses.userId, userId),
-          // Unlike entries, an unfinished questionnaire is not listed. A drafted
-          // GAD-7 is a half-answered form, not a piece of writing to come back
-          // to — surfacing it invites completing it days later, which would make
-          // the recall window meaningless.
-          isNotNull(questionnaireResponses.completedAt),
-          isNull(questionnaireResponses.deletedAt),
-          isNull(questionnaireResponses.purgedAt),
-          ...responseDateBounds
-        )
+  const entryQuery = db
+    .select({
+      id: journalEntries.id,
+      createdAt: journalEntries.createdAt,
+      updatedAt: journalEntries.updatedAt,
+      completedAt: journalEntries.completedAt,
+      encryptedTitle: journalEntries.encryptedTitle,
+    })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.userId, userId),
+        isNull(journalEntries.deletedAt),
+        isNull(journalEntries.purgedAt),
+        ...entryDateBounds
       )
-      .orderBy(desc(questionnaireResponses.completedAt)),
+    )
+    .orderBy(desc(journalEntries.updatedAt))
+    .$dynamic();
+
+  const responseQuery = db
+    .select({
+      id: questionnaireResponses.id,
+      slug: questionnaireResponses.questionnaireSlug,
+      createdAt: questionnaireResponses.createdAt,
+      completedAt: questionnaireResponses.completedAt,
+      encryptedAnswers: questionnaireResponses.encryptedAnswers,
+    })
+    .from(questionnaireResponses)
+    .where(
+      and(
+        eq(questionnaireResponses.userId, userId),
+        // Unlike entries, an unfinished questionnaire is not listed. A drafted
+        // GAD-7 is a half-answered form, not a piece of writing to come back
+        // to — surfacing it invites completing it days later, which would make
+        // the recall window meaningless.
+        isNotNull(questionnaireResponses.completedAt),
+        isNull(questionnaireResponses.deletedAt),
+        isNull(questionnaireResponses.purgedAt),
+        ...responseDateBounds
+      )
+    )
+    .orderBy(desc(questionnaireResponses.completedAt))
+    .$dynamic();
+
+  const [entries, responses] = await Promise.all([
+    rowLimit ? entryQuery.limit(rowLimit) : entryQuery,
+    rowLimit ? responseQuery.limit(rowLimit) : responseQuery,
   ]);
 
   const entryIds = entries.map((e) => e.id);
@@ -280,6 +311,17 @@ export async function loadRecords(
    * categories as specific as they currently are, alphabetical order buries the
    * few that recur among a long tail of one-offs; frequency puts the usable
    * ones first. Ties break alphabetically so the order is stable.
+   *
+   * ── Scoped to what was loaded ───────────────────────────────────────────────
+   * Since the unfiltered load is bounded (see above), these are the categories
+   * present in the most recent RAIL_LIMIT records, not in the whole archive. A
+   * category that appears only in much older writing is not offered.
+   *
+   * That is the price of not decrypting the entire archive on every record
+   * view, and it mostly resolves itself: once categories become broad groupings
+   * rather than one-off phrases, the handful of real ones all appear in recent
+   * records anyway. Search is the exhaustive path in the meantime — it scans
+   * everything precisely so nothing old becomes unreachable.
    */
   const counts = new Map<string, number>();
   for (const r of all) {
@@ -314,16 +356,51 @@ export async function loadRecords(
     })
     .sort((a, b) => b.at.getTime() - a.at.getTime());
 
+  /*
+   * Off the rendering path.
+   *
+   * This is a genuine decryption and it is genuinely logged — but the page has
+   * no reason to wait for the write before showing anything. `after()` keeps
+   * the function alive until it lands, which is the same mechanism the
+   * summariser uses; see src/lib/after-response.ts for why an un-awaited
+   * promise would not be safe here.
+   */
   const decrypted = categoriesByEntry.size + responses.length;
   if (decrypted > 0) {
-    await db.insert(contentAccessLog).values({
-      id: randomUUID(),
-      userId,
-      context: `archive_rail_view (${categoriesByEntry.size} summaries, ${responses.length} responses read)`,
+    after(async () => {
+      try {
+        await db.insert(contentAccessLog).values({
+          id: randomUUID(),
+          userId,
+          context: `archive_rail_view (${categoriesByEntry.size} summaries, ${responses.length} responses read)`,
+        });
+      } catch (err) {
+        // The response is already sent; there is nobody left to report to, and
+        // a failed audit write must not take down a page that rendered fine.
+        console.error(
+          "Archive rail access log failed:",
+          err instanceof Error ? err.message : err
+        );
+      }
     });
   }
 
-  return { records: records.slice(0, RAIL_LIMIT), categories, total: records.length };
+  /*
+   * `capped` says the list was cut short by the row limit rather than by the
+   * filters, so the count can say "50+" instead of claiming 50 is the total.
+   * Counting properly would mean extra queries per view for a label; saying
+   * "at least this many" is honest and free.
+   */
+  const capped =
+    rowLimit !== undefined &&
+    (entries.length === rowLimit || responses.length === rowLimit);
+
+  return {
+    records: records.slice(0, RAIL_LIMIT),
+    categories,
+    total: records.length,
+    capped,
+  };
 }
 
 /** The filter parameters every archive page accepts. */
@@ -345,12 +422,16 @@ export type ArchiveSearchParams = {
  */
 export async function loadRail(userId: string, params: ArchiveSearchParams) {
   const { range, ...filters } = parseFilters(params);
-  const { records, categories, total } = await loadRecords(userId, filters);
+  const { records, categories, total, capped } = await loadRecords(
+    userId,
+    filters
+  );
 
   return {
     records,
     categories,
     total,
+    capped,
     view: {
       kind: filters.kind,
       range,

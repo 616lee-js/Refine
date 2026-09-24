@@ -43,8 +43,14 @@ import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
 const COPY = {
   railLabel: "[COPY] Search your records",
   heading: "[COPY] Search",
-  count: (shown: number, total: number) =>
-    shown < total ? `[COPY] ${shown} of ${total}` : `[COPY] ${total}`,
+  // `capped` means the list was cut short by the row limit rather than by the
+  // filters, so the number is a floor and says so rather than claiming a total.
+  count: (shown: number, total: number, capped: boolean) =>
+    capped
+      ? `[COPY] ${shown}+`
+      : shown < total
+        ? `[COPY] ${shown} of ${total}`
+        : `[COPY] ${total}`,
 
   clearAll: "[COPY] Clear all",
   activeLabel: "[COPY] Filtering by",
@@ -239,14 +245,17 @@ export function RecordRail({
   records,
   categories,
   total,
+  capped,
   view,
   selectedId,
 }: {
   records: ArchiveRecord[];
   /** Counted, most-used first — see loadRecords. */
   categories: CategoryOption[];
-  /** How many matched before the rail cap. */
+  /** How many matched before the display cap. */
   total: number;
+  /** The row limit cut the load short, so `total` is a floor. */
+  capped: boolean;
   view: RailView;
   /** The record open in the main view, if any. */
   selectedId?: string;
@@ -540,7 +549,7 @@ export function RecordRail({
         className="mt-3 flex items-baseline justify-between gap-3 pt-3"
         style={{ borderTop: "1px solid var(--rf-border)" }}
       >
-        <span style={groupLabel}>{COPY.count(records.length, total)}</span>
+        <span style={groupLabel}>{COPY.count(records.length, total, capped)}</span>
       </div>
 
       {records.length === 0 ? (

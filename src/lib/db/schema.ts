@@ -1,3 +1,4 @@
+import { desc } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -5,6 +6,7 @@ import {
   boolean,
   integer,
   jsonb,
+  index,
   pgEnum,
 } from "drizzle-orm/pg-core";
 
@@ -209,7 +211,19 @@ export const journalEntries = pgTable("journal_entries", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  /**
+   * Postgres does NOT index a foreign-key column automatically. Every query
+   * here filters on user_id and orders by a timestamp, so without these each
+   * one scans the whole table — which the archive then pays for on every
+   * record view, not just on the list.
+   *
+   * Ordering matters: the sort column is part of the index, so Postgres can
+   * walk it in order instead of sorting afterwards.
+   */
+  index("journal_entries_user_updated_idx").on(t.userId, desc(t.updatedAt)),
+  index("journal_entries_user_completed_idx").on(t.userId, desc(t.completedAt)),
+]);
 
 /**
  * Cabinet 2: a narrative summary generated after an entry is completed.
@@ -340,7 +354,23 @@ export const questionnaireResponses = pgTable("questionnaire_responses", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  /** The record list and Trends: this user's responses, newest first. */
+  index("questionnaire_responses_user_completed_idx").on(
+    t.userId,
+    desc(t.completedAt)
+  ),
+  /**
+   * Per-instrument history — "N of the last 21 days" on the check-in, Home's
+   * "logged today", and resuming an unfinished response. Slug comes before the
+   * timestamp because it is matched for equality, not ordered on.
+   */
+  index("questionnaire_responses_user_slug_completed_idx").on(
+    t.userId,
+    t.questionnaireSlug,
+    desc(t.completedAt)
+  ),
+]);
 
 // ── Layer 4 memory ───────────────────────────────────────────────────────────
 

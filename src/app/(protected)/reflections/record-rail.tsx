@@ -1,37 +1,48 @@
 import Link from "next/link";
-import { Eyebrow } from "@/components/ui/sheet";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
 
 /**
- * The archive rail — every record as a card, with the filters that narrow it.
+ * The archive's left column: how you find a record, and the records themselves.
  *
- * ── Why the bar is split ──────────────────────────────────────────────────────
- * Three controls are in view: a date range you type, record type, and search.
- * Everything else sits behind a disclosure.
+ * ── One panel, not stacked parts ──────────────────────────────────────────────
+ * The whole column is a single bordered panel on the secondary paper tone, with
+ * the search controls above a divider and the record cards below it. The cards
+ * keep the brighter paper, so they still read as separate objects sitting
+ * inside the panel rather than dissolving into a list.
  *
- * The category picker is what forced this. It rendered every distinct category
- * as a chip, and categories are specific phrases today rather than buckets — so
- * the bar grew roughly one chip per entry and buried the list it exists to
- * narrow. A `<select>` absorbs any number of options where a chip row cannot,
- * which is the real defect; putting it behind a disclosure is the rest of it.
+ * ── The controls are compact on purpose ───────────────────────────────────────
+ * This block sat about 200px tall, which pushed the first record below the fold
+ * on shorter screens. The headings above each control were most of that, so
+ * they are gone visually and kept as screen-reader-only labels — the controls
+ * are self-evident by shape, an invisible label is not.
+ *
+ * The search box and its submit button share one border, so the box runs the
+ * panel's full width instead of stopping short of a separate button.
+ *
+ * ── Why the rest is behind an expandable section ──────────────────────────────
+ * The category picker forced the split. It rendered every distinct category as
+ * its own small button, and categories are specific phrases today rather than
+ * broad groupings — so the block grew roughly one button per entry and buried
+ * the list it exists to narrow. A dropdown absorbs any number of options where
+ * a row of buttons cannot; that is the real fix, and collapsing it is the rest.
  * The split stays right once categories become broad.
  *
  * ── Active filters are always visible ─────────────────────────────────────────
- * Anything set from inside the disclosure still shows as a removable chip in
- * the bar. This is required by the disclosure, not decoration: a filter you
+ * Anything set inside the collapsed section still shows as a removable marker
+ * up top. This is required by collapsing it, not decoration: a filter you
  * cannot see produces a short list with no visible cause, which reads as a bug.
  *
  * ── State lives in the URL ────────────────────────────────────────────────────
  * Every control is a link or a GET form, so a filtered view is shareable,
- * survives a reload, and needs no client component. Native `<details>` for the
- * disclosure, so keyboard and screen-reader behaviour come free.
+ * survives a reload, and needs no client component. The collapsible section is
+ * the browser's own, so keyboard and screen-reader behaviour come free.
  */
 
 // COPY REVIEW: placeholders pending final wording.
 const COPY = {
-  railLabel: "[COPY] Your records",
-  heading: "[COPY] Records",
+  railLabel: "[COPY] Search your records",
+  heading: "[COPY] Search",
   count: (shown: number, total: number) =>
     shown < total ? `[COPY] ${shown} of ${total}` : `[COPY] ${total}`,
 
@@ -39,11 +50,12 @@ const COPY = {
   activeLabel: "[COPY] Filtering by",
   remove: "[COPY] Remove filter",
 
-  dateLabel: "[COPY] Dates",
+  // Kept beside each box. The group heading above them is gone.
   from: "[COPY] From",
   to: "[COPY] To",
   apply: "[COPY] Apply",
 
+  // Heading dropped; kept for screen readers via sr-only.
   typeLabel: "[COPY] Type",
   typeAll: "[COPY] All",
   typeWriting: "[COPY] Writing",
@@ -125,10 +137,11 @@ const TYPES: { key: RecordKind | "all"; label: string }[] = [
   { key: "framework", label: COPY.typeFramework },
 ];
 
+/** Small rounded buttons. Sized down so four fit on one line at rail width. */
 function chip(on: boolean) {
   return {
-    padding: "5px 11px",
-    fontSize: "11.5px",
+    padding: "4px 9px",
+    fontSize: "10.5px",
     borderRadius: 999,
     color: on ? "var(--rf-paper)" : "var(--rf-text-3)",
     background: on ? "var(--rf-text)" : "transparent",
@@ -136,9 +149,8 @@ function chip(on: boolean) {
   };
 }
 
+/** Used only where a label is still shown — "From", "To", the section name. */
 const groupLabel: React.CSSProperties = {
-  display: "block",
-  marginBottom: 6,
   fontFamily: "var(--font-mono)",
   fontSize: "9px",
   letterSpacing: "0.14em",
@@ -146,8 +158,15 @@ const groupLabel: React.CSSProperties = {
   color: "var(--rf-text-3)",
 };
 
+/** The same, on its own line — inside the expandable section. */
+const blockLabel: React.CSSProperties = {
+  ...groupLabel,
+  display: "block",
+  marginBottom: 6,
+};
+
 const fieldStyle: React.CSSProperties = {
-  fontSize: "11.5px",
+  fontSize: "11px",
   color: "var(--rf-text)",
   background: "var(--rf-paper)",
   boxShadow: "inset 0 0 0 1px var(--rf-border)",
@@ -242,27 +261,29 @@ export function RecordRail({
   return (
     <aside
       aria-label={COPY.railLabel}
-      className="flex w-full shrink-0 flex-col gap-4 lg:w-[310px]"
+      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[310px]"
+      style={{
+        background: "var(--rf-surface)",
+        boxShadow: "inset 0 0 0 1px var(--rf-border)",
+      }}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <Eyebrow>{COPY.heading}</Eyebrow>
-        <Eyebrow size={9}>{COPY.count(records.length, total)}</Eyebrow>
+      <div className="mb-2">
+        <span style={groupLabel}>{COPY.heading}</span>
       </div>
 
-      <div
-        className="rounded-[4px] px-4 py-[14px]"
-        style={{
-          background: "var(--rf-surface)",
-          boxShadow: "inset 0 0 0 1px var(--rf-border)",
-        }}
-      >
-        {/* ── Always visible: dates, type, search ── */}
+      <div>
+        {/* ── Always visible: dates, search, type ──
+            No headings above these. The controls say what they are, and the
+            labels survive for screen readers below. */}
         <form action="/reflections" method="get">
           <HiddenExcept view={view} omit={["from", "to", "range", "q"]} />
 
-          <span style={groupLabel}>{COPY.dateLabel}</span>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex-1" style={{ minWidth: 104 }}>
+          {/* Labels sit beside the boxes rather than above, which is a line
+              saved. Allowed to wrap: browsers give a native date box a minimum
+              width of its own, and two of them plus labels is close to it at
+              this column width. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-[6px]">
+            <label className="flex flex-1 items-center gap-[6px]" style={{ minWidth: 118 }}>
               <span style={{ ...groupLabel, color: "var(--rf-text-4)" }}>
                 {COPY.from}
               </span>
@@ -270,11 +291,11 @@ export function RecordRail({
                 type="date"
                 name="from"
                 defaultValue={view.from ?? ""}
-                className="w-full rounded-[4px] px-2 py-[5px] outline-none"
+                className="min-w-0 flex-1 rounded-[4px] px-[6px] py-[4px] outline-none"
                 style={fieldStyle}
               />
             </label>
-            <label className="flex-1" style={{ minWidth: 104 }}>
+            <label className="flex flex-1 items-center gap-[6px]" style={{ minWidth: 118 }}>
               <span style={{ ...groupLabel, color: "var(--rf-text-4)" }}>
                 {COPY.to}
               </span>
@@ -282,45 +303,66 @@ export function RecordRail({
                 type="date"
                 name="to"
                 defaultValue={view.to ?? ""}
-                className="w-full rounded-[4px] px-2 py-[5px] outline-none"
+                className="min-w-0 flex-1 rounded-[4px] px-[6px] py-[4px] outline-none"
                 style={fieldStyle}
               />
             </label>
           </div>
 
-          <div className="mt-3">
-            <label htmlFor="rail-search" style={groupLabel}>
+          {/* Input and submit share one border, so the box runs the full width
+              of the panel instead of stopping short of a separate button.
+              Enter submits too — the button is a visible way to do the same
+              thing, not the only one. */}
+          <div
+            className="mt-2 flex items-center rounded-full pr-[3px]"
+            style={{
+              background: "var(--rf-paper)",
+              boxShadow: "inset 0 0 0 1px var(--rf-border)",
+            }}
+          >
+            <label htmlFor="rail-search" className="sr-only">
               {COPY.searchLabel}
             </label>
-            <div className="flex gap-2">
-              <input
-                id="rail-search"
-                name="q"
-                type="search"
-                defaultValue={view.q ?? ""}
-                placeholder={COPY.searchPlaceholder}
-                className="min-w-0 flex-1 rounded-full px-3 py-[6px] outline-none"
-                style={fieldStyle}
-              />
-              <button
-                type="submit"
-                className="shrink-0 rounded-full transition-colors"
-                style={{
-                  padding: "6px 12px",
-                  fontSize: "11.5px",
-                  color: "var(--rf-text-2)",
-                  boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-                }}
+            <input
+              id="rail-search"
+              name="q"
+              type="search"
+              defaultValue={view.q ?? ""}
+              placeholder={COPY.searchPlaceholder}
+              className="min-w-0 flex-1 bg-transparent px-3 py-[6px] outline-none"
+              style={{ fontSize: "11px", color: "var(--rf-text)" }}
+            />
+            <button
+              type="submit"
+              aria-label={COPY.apply}
+              className="grid shrink-0 place-items-center rounded-full transition-colors"
+              style={{
+                width: 22,
+                height: 22,
+                color: "var(--rf-text-2)",
+                background: "var(--rf-surface)",
+              }}
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                {COPY.apply}
-              </button>
-            </div>
+                <path d="M2 6 H9 M6 3 L9 6 L6 9" />
+              </svg>
+            </button>
           </div>
         </form>
 
-        <div className="mt-3">
-          <span style={groupLabel}>{COPY.typeLabel}</span>
-          <div className="flex flex-wrap gap-[6px]">
+        <div className="mt-2">
+          <span className="sr-only">{COPY.typeLabel}</span>
+          <div className="flex flex-wrap gap-[5px]">
             {TYPES.map((t) => (
               <Link
                 key={t.key}
@@ -335,10 +377,10 @@ export function RecordRail({
           </div>
         </div>
 
-        {/* ── Behind a disclosure: quick ranges, category ── */}
-        <details className="mt-3">
+        {/* ── Behind an expandable section: quick ranges, category ── */}
+        <details className="group mt-2">
           <summary
-            className="cursor-pointer list-none py-1"
+            className="flex cursor-pointer list-none items-center gap-[5px] py-1"
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "9px",
@@ -347,11 +389,24 @@ export function RecordRail({
               color: "var(--rf-text-2)",
             }}
           >
+            {/* Turns when the section opens, so it reads as something that
+                opens rather than as a label. The browser's own open state
+                drives it — no JavaScript. */}
+            <svg
+              width="8"
+              height="8"
+              viewBox="0 0 10 10"
+              fill="currentColor"
+              className="transition-transform group-open:rotate-90"
+              aria-hidden="true"
+            >
+              <path d="M3 1 L8 5 L3 9 Z" />
+            </svg>
             {COPY.more}
           </summary>
 
           <div className="mt-2">
-            <span style={groupLabel}>{COPY.quickRanges}</span>
+            <span style={blockLabel}>{COPY.quickRanges}</span>
             <div className="flex flex-wrap gap-[6px]">
               {RANGES.map((r) => (
                 <Link
@@ -380,7 +435,7 @@ export function RecordRail({
           {categories.length > 0 && (
             <form action="/reflections" method="get" className="mt-3">
               <HiddenExcept view={view} omit={["category"]} />
-              <label htmlFor="rail-category" style={groupLabel}>
+              <label htmlFor="rail-category" style={blockLabel}>
                 {COPY.categoryLabel}{" "}
                 <span style={{ color: "var(--rf-text-4)" }}>
                   {COPY.categoryNote}
@@ -425,7 +480,7 @@ export function RecordRail({
             style={{ borderTop: "1px solid var(--rf-border)" }}
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span style={{ ...groupLabel, marginBottom: 0 }}>
+              <span style={groupLabel}>
                 {COPY.activeLabel}
               </span>
               <Link
@@ -479,8 +534,17 @@ export function RecordRail({
         )}
       </div>
 
+      {/* The divider separates finding records from the records themselves,
+          and carries the count that used to sit under a "Records" heading. */}
+      <div
+        className="mt-3 flex items-baseline justify-between gap-3 pt-3"
+        style={{ borderTop: "1px solid var(--rf-border)" }}
+      >
+        <span style={groupLabel}>{COPY.count(records.length, total)}</span>
+      </div>
+
       {records.length === 0 ? (
-        <p style={{ fontSize: "12.5px", color: "var(--rf-text-4)" }}>
+        <p className="mt-2" style={{ fontSize: "12.5px", color: "var(--rf-text-4)" }}>
           {filtered ? COPY.emptyFiltered : COPY.empty}{" "}
           {!filtered && (
             <Link
@@ -493,7 +557,7 @@ export function RecordRail({
           )}
         </p>
       ) : (
-        <RecordCardList>
+        <RecordCardList className="mt-2">
           {records.map((r) => (
             <RecordCard
               key={`${r.kind}-${r.id}`}

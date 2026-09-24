@@ -568,6 +568,11 @@ controls that narrow the choosing belong in it rather than above the results.
   entry view, so an uncapped rail would multiply decryptions by every page turn.
 - **No "back to the list" link when the list is a rail.** It is already on
   screen; a link back to something visible is noise.
+- **The rail is one panel, not stacked parts.** Search controls above a divider,
+  record cards below it, all inside a single bordered container on the secondary
+  paper tone. The cards keep the brighter paper so they still read as separate
+  objects inside the panel rather than dissolving into a list. A column of loose
+  pieces does not read as a section of the page.
 
 #### Records open in the main view — ADDED 2026-09-23
 
@@ -640,6 +645,28 @@ and buried the list it exists to narrow.
    filtered view is shareable, survives reload, and needs no client component.
 7. **Clear sits with the controls it clears**, inside the bar — not as a chip row
    under the results.
+
+#### Keeping the controls compact — ADDED 2026-09-23
+
+The block sat ~200px tall, pushing the first record below the fold on shorter
+screens. What reclaimed it:
+
+- **A heading per control group is usually the thing to cut first.** Three of
+  them cost more height than every other saving combined. They are now
+  `sr-only`, so assistive technology still announces each control — the controls
+  are self-evident by shape, an invisible label is not.
+- **One heading for the whole block**, not one per group.
+- **Labels beside a field, not above it**, where the field is narrow enough to
+  allow it. "From [box] To [box]" on one line instead of three.
+- **An input and its submit button share one border.** Two controls with a gap
+  between them cost the input the button's width; one bordered container with
+  the button tucked inside gives it back. Enter already submits, so the button
+  is a visible route to the same action rather than the only one.
+- **A collapsible section needs a marker that turns.** Plain text does not read
+  as something that opens. The triangle rotates off the browser's own open
+  state — no JavaScript.
+
+Result: ~200px down to ~105px.
 
 ### Machine text vs the person's own words — ADDED 2026-09-22
 
@@ -916,6 +943,39 @@ are reachable only in the minute after writing.
 
 **Resolution pending — needs the clinical review, not a design call.**
 
+### OQ-008 — The Refine main page has not been restructured
+
+Added 2026-09-23. **Deferred by the product owner; recorded so the decision is
+not lost.**
+
+The archive became a left column of record cards with the selected record shown
+beside it. The main page (`/`) did **not** follow. It received the shared record
+card for its Recent list and nothing else, so it is still one centred column at
+780px: greeting, two side-by-side start panels, a check-in strip, recent cards.
+
+That gap was a scoping call made while building — the main page was treated as a
+dashboard rather than a browsing surface — and it did not match what was asked
+for. It is recorded here rather than silently left alone.
+
+**Why it is genuinely not the same problem as the archive.** The archive has one
+obvious thing to show beside the list: the record you picked. The main page has
+no such thing. It has three ways to start, a notice about an unfinished entry,
+and a recent list. Applying the same layout requires deciding what occupies the
+main area, and that is a product question, not a styling one.
+
+Three options, sketched during the discussion:
+
+1. **Recent down the left, actions in the main area.** Identical to the archive,
+   so the two screens share one shape. Clicking a recent card leaves for the
+   archive to read it.
+2. **Actions down the left, recent in the main area.** Reads as a launcher with
+   your history as the body.
+3. **One column, restyled** into the same panel treatment as the archive, so the
+   screens look like one product without adopting the two-column layout.
+
+**Two-way door** — layout only, nothing stored depends on it. Deferring costs
+consistency between the two screens and nothing else.
+
 ---
 
-*Last updated: 2026-09-21. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*
+*Last updated: 2026-09-23. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*

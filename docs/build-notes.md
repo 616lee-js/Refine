@@ -329,10 +329,22 @@ Consequences, established before deferral:
   change under the user. That is correct — Cabinet 2 is derived data and should
   follow its deriver — but it is visible. User *corrections* survive it: they
   live in `encrypted_user_content`, which the queue never writes.
-- **Open vocabulary drifts.** "work" and "job" will not group. Accepted
-  deliberately over a fixed list. If grouping proves weak in real use the fix is
-  a fixed vocabulary later — another prompt change, not a migration, so the door
-  stays open.
+- **The vocabulary is now fixed — decided 2026-09-24.** This supersedes the
+  earlier open-vocabulary choice, and the diff above must be rewritten around it
+  before it is applied. Categories come from nine life domains:
+
+  **work · relationships · health · money · purpose · rest · community ·
+  personal growth · faith**
+
+  A fixed list is what makes categories groupable: "work" and "job" drifting
+  apart was the accepted cost of an open vocabulary, and a closed one removes it
+  entirely. It also makes the archive's category filter finite and the counts
+  meaningful.
+
+  Open questions for the item-4 session: whether the model may return nothing
+  when no domain fits (it should — forcing a domain onto an entry that has none
+  is worse than leaving it uncategorised), and whether more than one domain per
+  entry is allowed (almost certainly yes, capped low).
 - **`MAX_TOPICS` 5 → 3** in `src/lib/summaries/types.ts` is coupled to this.
   It is code rather than copy, but it is pointless without the prompt change, so
   it defers with it.

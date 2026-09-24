@@ -7,6 +7,7 @@ import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import { TopNav } from "@/components/ui/top-nav";
+import { listStartable } from "@/lib/questionnaires";
 
 /**
  * Home.
@@ -47,9 +48,8 @@ const COPY = {
     "[COPY] Nothing to answer. A few footholds wait in the margin if you want a way in.",
   writeCta: "[COPY] Begin",
 
-  frameworkEyebrow: "[COPY] Framework · GAD-7",
-  frameworkTitle: "[COPY] Generalised anxiety",
-  frameworkBody: "[COPY] Seven questions, then back to your own words.",
+  frameworkEyebrow: "[COPY] Frameworks",
+  frameworkBody: "[COPY] Structured questions, then back to your own words.",
   frameworkCta: "[COPY] Start",
 
   checkinEyebrow: "[COPY] Check-in",
@@ -64,6 +64,18 @@ const COPY = {
   recentHeading: "[COPY] Recent",
   seeEverything: "[COPY] See everything →",
 } as const;
+
+/**
+ * The instruments offered on Home, from the registry.
+ *
+ * Trackers are excluded: the daily check-in is a different weight of action and
+ * has its own strip further down. `listStartable()` already applies the
+ * `shipped` gate, so an unshipped instrument cannot appear here by omission.
+ *
+ * Computed at module scope — the definitions are static data and do not change
+ * between renders.
+ */
+const INSTRUMENTS = listStartable().filter((q) => q.kind === "likert");
 
 export type RecentRow = {
   id: string;
@@ -102,6 +114,8 @@ export function ScreenHome({
   const [loading, setLoading] = useState<
     "entry" | "framework" | "checkin" | null
   >(null);
+  /** Which instrument is opening, so only its own row says so. */
+  const [loadingSlug, setLoadingSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function start(
@@ -109,6 +123,7 @@ export function ScreenHome({
     slug?: string
   ) {
     setLoading(kind);
+    setLoadingSlug(slug ?? null);
     setError(null);
     try {
       const res =
@@ -138,6 +153,7 @@ export function ScreenHome({
     } catch {
       setError(COPY.startError);
       setLoading(null);
+      setLoadingSlug(null);
     }
   }
 
@@ -273,20 +289,7 @@ export function ScreenHome({
             <Sheet minHeight={168}>
               <div className="flex flex-1 flex-col gap-[10px] p-5">
                 <Eyebrow size={9.5}>{COPY.frameworkEyebrow}</Eyebrow>
-                <h2
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "22px",
-                    lineHeight: 1.2,
-                    fontWeight: 380,
-                    letterSpacing: "-0.014em",
-                    color: "var(--rf-text)",
-                  }}
-                >
-                  {COPY.frameworkTitle}
-                </h2>
                 <p
-                  className="flex-1"
                   style={{
                     fontSize: "12.5px",
                     lineHeight: 1.6,
@@ -295,21 +298,49 @@ export function ScreenHome({
                 >
                   {COPY.frameworkBody}
                 </p>
-                <div>
-                  <button
-                    onClick={() => start("framework", "gad7")}
-                    disabled={loading !== null}
-                    className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
-                    style={{
-                      background: "var(--rf-text)",
-                      color: "var(--rf-paper)",
-                      fontSize: "12.5px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {loading === "framework" ? COPY.opening : COPY.frameworkCta}
-                  </button>
-                </div>
+
+                {/* Driven by the registry rather than hard-coded, so shipping
+                    an instrument is a flag in its own file and nothing here
+                    needs touching. Trackers are excluded — the daily check-in
+                    has its own strip below. */}
+                <ul className="flex flex-1 flex-col justify-center">
+                  {INSTRUMENTS.map((q, i) => (
+                    <li
+                      key={q.slug}
+                      className="flex items-center justify-between gap-3 py-[7px]"
+                      style={{
+                        borderTop:
+                          i === 0 ? "none" : "1px solid var(--rf-rule)",
+                      }}
+                    >
+                      <span
+                        className="min-w-0 truncate"
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          fontSize: "16px",
+                          color: "var(--rf-text)",
+                        }}
+                      >
+                        {q.title}
+                      </span>
+                      <button
+                        onClick={() => start("framework", q.slug)}
+                        disabled={loading !== null}
+                        className="shrink-0 rounded-full transition-colors disabled:opacity-40"
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "11.5px",
+                          color: "var(--rf-text-2)",
+                          boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                        }}
+                      >
+                        {loadingSlug === q.slug
+                          ? COPY.opening
+                          : COPY.frameworkCta}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </Sheet>
           </div>

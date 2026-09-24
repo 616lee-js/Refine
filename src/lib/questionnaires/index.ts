@@ -1,6 +1,7 @@
 import type { Questionnaire } from "./types";
 import { gad7 } from "./gad7";
 import { phq9 } from "./phq9";
+import { swls } from "./swls";
 import { dailyCheckin } from "./daily-checkin";
 
 export * from "./types";
@@ -11,7 +12,7 @@ export * from "./types";
  * Every instrument the codebase knows about, shipped or not. Adding one is a new
  * file plus a line here — no migration, no seeding.
  */
-const ALL: Questionnaire[] = [gad7, phq9, dailyCheckin];
+const ALL: Questionnaire[] = [gad7, phq9, swls, dailyCheckin];
 
 const BY_SLUG = new Map(ALL.map((q) => [q.slug, q]));
 

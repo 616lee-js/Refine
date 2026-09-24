@@ -33,7 +33,19 @@ import type { LikertQuestionnaire } from "@/lib/questionnaires";
  * change your mind, and answer roughly is the entire point.
  */
 
-const LABEL_COL = 260;
+/**
+ * Width of the answer column, scaled to how many options the instrument has.
+ *
+ * Fixed at 260px this gave GAD-7 and PHQ-9's four options ~65px each, which is
+ * comfortable, and SWLS's seven ~37px, which is not — the radios crowd and the
+ * repeated labels under them on narrow screens have nowhere to go.
+ *
+ * Capped at 380 so a long scale does not squeeze the item text it sits beside;
+ * the row stacks below `sm` regardless, where each option carries its own label.
+ */
+function answerColumnWidth(optionCount: number): number {
+  return Math.min(380, Math.max(260, optionCount * 52));
+}
 
 // COPY REVIEW: this screen's own strings. Instrument wording (GAD-7 items and
 // response options) is NOT here and must not be edited as copy — it is
@@ -94,6 +106,11 @@ export function FrameworkRecord({
   const answeredCount = q.items.filter(
     (i) => typeof answers[i.key] === "number"
   ).length;
+
+  // Wider for a seven-point scale than for a four-point one. The Tailwind
+  // classes below cannot express this, so the rows carry it as a style.
+  const answerCol = answerColumnWidth(q.options.length);
+  const rowColumns = { gridTemplateColumns: `1fr ${answerCol}px` };
 
   function choose(key: string, value: number) {
     setAnswers((a) => ({ ...a, [key]: value }));
@@ -226,7 +243,7 @@ export function FrameworkRecord({
           <div
             className="hidden gap-[22px] pb-2 sm:grid"
             style={{
-              gridTemplateColumns: `1fr ${LABEL_COL}px`,
+              ...rowColumns,
               borderBottom: "1px solid var(--rf-border)",
             }}
           >
@@ -295,10 +312,11 @@ export function FrameworkRecord({
             return (
               <div
                 key={item.key}
-                className="grid items-center gap-[22px] py-[10px] sm:grid-cols-[1fr_260px]"
+                className="grid items-center gap-[22px] py-[10px] sm:[grid-template-columns:var(--answer-cols)]"
                 style={{
                   borderBottom: last ? "none" : "1px solid var(--rf-rule)",
-                }}
+                  "--answer-cols": `1fr ${answerCol}px`,
+                } as React.CSSProperties}
               >
                 <div className="flex gap-3">
                   {number}
@@ -319,10 +337,11 @@ export function FrameworkRecord({
           return (
             <fieldset
               key={item.key}
-              className="grid items-center gap-[22px] py-[6px] sm:grid-cols-[1fr_260px]"
+              className="grid items-center gap-[22px] py-[6px] sm:[grid-template-columns:var(--answer-cols)]"
               style={{
                 borderBottom: last ? "none" : "1px solid var(--rf-rule)",
-              }}
+                "--answer-cols": `1fr ${answerCol}px`,
+              } as React.CSSProperties}
             >
               <legend className="sr-only">{item.text}</legend>
               <div className="flex gap-3">

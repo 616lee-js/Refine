@@ -3,23 +3,29 @@ import type { LikertQuestionnaire } from "./types";
 /**
  * PHQ-9 — Patient Health Questionnaire, 9 items.
  *
- * ── NOT SHIPPED. `shipped: false` keeps it out of the product. ────────────────
- * This is structure, not a live instrument, and it must stay that way until two
- * things are settled by the product owner:
+ * ── Shipped 2026-09-24 ────────────────────────────────────────────────────────
+ * This was gated on one thing: item 9 ("thoughts that you would be better off
+ * dead, or of hurting yourself in some way") is not a symptom rating but a
+ * disclosure of risk, answered by tapping a radio button. Shipping it meant
+ * recording that and showing the person nothing.
  *
- *   1. **Item 9's response path.** "Thoughts that you would be better off dead,
- *      or of hurting yourself in some way" is not a symptom rating — it is a
- *      disclosure of risk, answered by tapping a radio button. It routes through
- *      safety_log with source "questionnaire", which records it, but recording
- *      is not responding. What the person sees after answering it above zero is
- *      a content decision belonging with the Tier 2/3 pass. Until that exists,
- *      shipping this instrument means collecting a risk disclosure and showing
- *      the person nothing.
+ * That is now the intended behaviour rather than a gap. Refine is an isolated
+ * entry and reflection log; it does not carry escalation paths to external
+ * services, and it is not screening anyone. Item 9 keeps `safetyItem: true`, so
+ * answering it above zero still writes a `safety_log` row with source
+ * "questionnaire" — that log exists to verify the classifier and the safety
+ * plumbing work, not to surveil.
  *
- *   2. **Wording and licensing.** As with GAD-7, the text below was written from
- *      knowledge rather than transcribed from an authoritative copy, and a
- *      validated instrument is validated at its exact wording. Verify against a
- *      primary source (Kroenke, Spitzer & Williams, 2001) before use.
+ * **If the escalation stance changes, this instrument is where it lands first.**
+ * Adding a response surface after item 9 is a deliberate decision, not a tidy-up.
+ *
+ * ── Wording and licensing are still unverified ────────────────────────────────
+ * As with GAD-7, the text below was written from knowledge rather than
+ * transcribed from an authoritative copy, and a validated instrument is
+ * validated at its exact wording. `wordingVerified` stays false, which is what
+ * keeps Mirror from charting it — answers are recorded either way. Verify
+ * against a primary source (Kroenke, Spitzer & Williams, 2001) and flip the flag
+ * in the same change.
  *
  * The tenth PHQ-9 question — the functional-impairment item — is deliberately
  * absent: it is not scored in the 0–27 total and needs its own presentation.
@@ -36,8 +42,7 @@ export const phq9: LikertQuestionnaire = {
   cadence: "Every 2 weeks",
   allowsNote: true,
 
-  /** Gated. See the note above — do not flip without the item 9 response path. */
-  shipped: false,
+  shipped: true,
 
   // Not yet checked against a primary source, so Mirror charts nothing for
   // it. Flip to true in the same change that verifies the item text.

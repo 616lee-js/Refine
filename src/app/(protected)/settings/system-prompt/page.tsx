@@ -42,7 +42,7 @@ export default function SystemPromptPage() {
     <PageBg>
       <TopNav active="profile" admin={<AdminNav />} />
 
-      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
+      <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
         <div className="w-full pb-14" style={{ maxWidth: 700 }}>
           <Eyebrow>{COPY.eyebrow}</Eyebrow>
           <h1

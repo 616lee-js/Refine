@@ -16,9 +16,16 @@ import { Toast } from "@/components/ui/toast";
  *
  * Our memory model has five kinds, not two, so the mapping is: `thread` runs
  * down the main column at reading size; everything else — facts, preferences,
- * diagnostic context, other — sits in the aside at scanning size, grouped.
- * Nothing is hidden behind a filter any more, which is what the old kind
- * dropdown was for.
+ * diagnostic context, other — sits in the side column at scanning size,
+ * grouped. Nothing is hidden behind a filter any more, which is what the old
+ * kind dropdown was for.
+ *
+ * ── The side column is not a narrow one ───────────────────────────────────────
+ * It was 320px, and a fact could not fill it: `RowActions` sat beside the text
+ * and held a fixed strip of that width, so the words got about 190px and
+ * wrapped every three or four. "Scanning size" means smaller type, not less
+ * room. It is now 420px with the actions moved below the text — see FactRow,
+ * which is the half of the fix that matters most.
  *
  * ── Proposed vs active ────────────────────────────────────────────────────────
  * Proposed entries sit in place among their own kind rather than in a separate
@@ -137,6 +144,9 @@ function RowActions({
     color: "var(--rf-text-3)",
   };
 
+  // `pt-[3px]` nudges these onto the first line of the text beside them, which
+  // is what ThreadRow needs. FactRow puts them on their own line below, where
+  // the offset is invisible.
   return (
     <div className="flex shrink-0 items-center gap-3 pt-[3px]">
       {!entry.confirmed && (
@@ -223,7 +233,7 @@ function EditBox({
             color: "var(--rf-text-3)",
           }}
         >
-          Cancel
+          {COPY.cancel}
         </button>
       </div>
     </div>
@@ -364,19 +374,28 @@ function FactRow({
           }}
         />
       ) : (
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <p
-              className="whitespace-pre-wrap"
-              style={{
-                fontSize: "13px",
-                lineHeight: 1.55,
-                color: "var(--rf-text)",
-              }}
-            >
-              {entry.content}
-            </p>
-            <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+        /*
+         * Text first, on its own full-width line; provenance and actions share
+         * the line below it.
+         *
+         * These used to sit side by side, which meant the buttons held a fixed
+         * strip of the column and the fact wrapped inside whatever was left.
+         * A fact is short — giving it the whole width usually means one line
+         * instead of four.
+         */
+        <div>
+          <p
+            className="whitespace-pre-wrap"
+            style={{
+              fontSize: "13px",
+              lineHeight: 1.55,
+              color: "var(--rf-text)",
+            }}
+          >
+            {entry.content}
+          </p>
+          <div className="mt-[6px] flex flex-wrap items-center justify-between gap-x-4 gap-y-[6px]">
+            <div className="flex flex-wrap items-center gap-[8px]">
               <Eyebrow size={9.5}>{sourceLabel(entry)}</Eyebrow>
               {!entry.confirmed && (
                 <span
@@ -393,13 +412,13 @@ function FactRow({
                 </span>
               )}
             </div>
+            <RowActions
+              entry={entry}
+              onConfirm={onConfirm}
+              onStartEdit={() => setEditing(true)}
+              onDelete={onDelete}
+            />
           </div>
-          <RowActions
-            entry={entry}
-            onConfirm={onConfirm}
-            onStartEdit={() => setEditing(true)}
-            onDelete={onDelete}
-          />
         </div>
       )}
     </li>
@@ -659,7 +678,11 @@ export function MemoryPanel() {
               {COPY.loading}
             </p>
           ) : (
-            <div className="grid gap-x-10 gap-y-10 pt-[22px] lg:grid-cols-[1fr_320px]">
+            /* Facts were 320px, which a fact could not fill: the row's action
+               buttons sat beside the text and took a permanent slice, leaving
+               the words about 190px and wrapping them every few words. Wider
+               column, and the actions moved below the text — see FactRow. */
+            <div className="grid gap-x-10 gap-y-10 pt-[22px] lg:grid-cols-[1fr_420px]">
               {/* Threads — the reading column */}
               <div>
                 <div className="flex items-baseline justify-between gap-4">

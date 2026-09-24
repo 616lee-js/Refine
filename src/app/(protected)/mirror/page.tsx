@@ -100,8 +100,11 @@ export default async function MirrorPage({
     <PageBg>
       <TopNav active="mirror" admin={<AdminNav />} />
 
-      <div className="flex min-h-0 flex-1 justify-center px-6 pt-[26px] sm:px-10">
-        <div className="w-full pb-16" style={{ maxWidth: 900 }}>
+      {/* Same frame as the archive. Mirror holds two columns, so it needs the
+          width for the same reason — capped at 900 the Facts column could not
+          fit a readable line. */}
+      <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
+        <div className="w-full pb-16" style={{ maxWidth: 1240 }}>
           <div
             className={trendsAvailable ? "" : "pb-5"}
             style={

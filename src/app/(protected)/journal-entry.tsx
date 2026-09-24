@@ -348,7 +348,7 @@ export default function JournalEntry({
             height. A fresh page keeps its visible bottom edge and no scrollbar;
             a long entry gets somewhere for the caret to scroll into. */}
         <div
-          className="flex min-w-0 flex-1 flex-col items-center px-6 pt-[38px] sm:px-10"
+          className="flex min-w-0 flex-1 flex-col items-center px-4 pt-[38px] sm:px-6"
           style={{ paddingBottom: grown ? "35vh" : 30 }}
         >
           <div className="w-full" style={{ maxWidth: 620 }}>

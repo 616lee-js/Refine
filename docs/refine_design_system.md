@@ -108,18 +108,32 @@ Refine uses a compressed type scale — almost everything is `text-xs` or `text-
 
 ### Spacing
 
-**Page-level padding** — consistent across all pages:
-- Header: `px-6 py-4`
-- Main content: `px-6 py-8`
-- Chat message area: `px-6 py-10` (additional breathing room)
-- Chat footer: `px-6 py-5`
+**Page gutters** — `px-4 sm:px-6` on every page. *(Updated 2026-09-23; was
+`px-6 sm:px-10`, and the chat-era values below it are gone with the chat.)*
 
-**Content max-widths:**
-- `max-w-sm` — auth forms
-- `max-w-md` — session selector cards, check-in form
-- `max-w-2xl` — standard content (chat, sessions list, session detail)
-- `max-w-prose` — Claude's message text within the 2xl container
-- `max-w-5xl` — admin safety log table (needs width for columns)
+The header keeps its own `px-6 py-4 sm:px-10`, since the nav is a band across
+the full width rather than content inside the measure.
+
+Gutters mostly buy width on phones and tablets. On a wide screen a page is
+limited by its max-width, not its gutters — so **if content feels cramped on a
+large screen, the gutter is rarely the cause.** Check for a fixed-width
+sub-column first. Mirror's Facts looked like a padding problem and was actually
+a 320px column with the row's buttons holding a fixed strip inside it; widening
+the page alone would have changed nothing.
+
+**Content max-widths** — set per page by what the page is for:
+
+| Width | Pages | Why |
+|---|---|---|
+| 1240 | Reflections, Mirror | Two columns. Needs width so neither is starved. |
+| 780 | Home | Launcher. Pending OQ-008. |
+| 700 | Trash, system prompt | Single column of prose |
+| 640 | Profile | Form |
+| 620 | The writing surface | Deliberately the narrowest — see the anti-essay note in `journal-entry.tsx` |
+
+**A reading page does not get wider because there is room.** Line length is what
+makes prose readable; a paragraph at 1240px is harder to read than one at 700px.
+Only pages with more than one column take the full width.
 
 **Component internal padding:**
 - Large input/textarea: `px-4 py-3`

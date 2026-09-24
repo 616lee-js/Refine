@@ -78,8 +78,13 @@ export function RecordCard({
           <span
             className="font-mono uppercase"
             style={{
-              fontSize: "9.5px",
-              letterSpacing: "0.14em",
+              // Matched to the date beside it. At 9.5px the kind read as a
+              // caption on the date rather than as the card's title, which is
+              // backwards — the kind and the date are the title, together.
+              // Tracking is pulled in from 0.14em, since uppercase mono at this
+              // size does not need as much to stay legible.
+              fontSize: "14px",
+              letterSpacing: "0.08em",
               fontWeight: 500,
               color: accent ? "var(--rf-accent)" : "var(--rf-text-3)",
             }}

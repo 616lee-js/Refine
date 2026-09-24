@@ -51,6 +51,7 @@ const COPY = {
   frameworkEyebrow: "[COPY] Frameworks",
   frameworkBody: "[COPY] Structured questions, then back to your own words.",
   frameworkCta: "[COPY] Start",
+  frameworkPickLabel: "[COPY] Choose a framework",
 
   checkinEyebrow: "[COPY] Check-in",
   checkinDone: "[COPY] Logged today. You can change it if something shifted.",
@@ -114,8 +115,8 @@ export function ScreenHome({
   const [loading, setLoading] = useState<
     "entry" | "framework" | "checkin" | null
   >(null);
-  /** Which instrument is opening, so only its own row says so. */
-  const [loadingSlug, setLoadingSlug] = useState<string | null>(null);
+  /** Which instrument the picker has selected. */
+  const [instrument, setInstrument] = useState(INSTRUMENTS[0]?.slug ?? "");
   const [error, setError] = useState<string | null>(null);
 
   async function start(
@@ -123,7 +124,6 @@ export function ScreenHome({
     slug?: string
   ) {
     setLoading(kind);
-    setLoadingSlug(slug ?? null);
     setError(null);
     try {
       const res =
@@ -153,7 +153,6 @@ export function ScreenHome({
     } catch {
       setError(COPY.startError);
       setLoading(null);
-      setLoadingSlug(null);
     }
   }
 
@@ -299,48 +298,54 @@ export function ScreenHome({
                   {COPY.frameworkBody}
                 </p>
 
-                {/* Driven by the registry rather than hard-coded, so shipping
-                    an instrument is a flag in its own file and nothing here
-                    needs touching. Trackers are excluded — the daily check-in
-                    has its own strip below. */}
-                <ul className="flex flex-1 flex-col justify-center">
-                  {INSTRUMENTS.map((q, i) => (
-                    <li
-                      key={q.slug}
-                      className="flex items-center justify-between gap-3 py-[7px]"
+                {/* A picker, not a list. Driven by the registry rather than
+                    hard-coded, so shipping an instrument is a flag in its own
+                    file and nothing here needs touching — and the card stays
+                    one fixed height however many there are, which a list of
+                    every option would not. Trackers are excluded: the daily
+                    check-in has its own strip below. */}
+                <div className="flex flex-1 flex-col justify-end gap-[10px]">
+                  <label htmlFor="framework-pick" className="sr-only">
+                    {COPY.frameworkPickLabel}
+                  </label>
+                  <select
+                    id="framework-pick"
+                    value={instrument}
+                    onChange={(e) => setInstrument(e.target.value)}
+                    disabled={loading !== null}
+                    className="w-full rounded-[4px] px-2 py-[7px] outline-none disabled:opacity-40"
+                    style={{
+                      fontSize: "13px",
+                      color: "var(--rf-text)",
+                      background: "var(--rf-paper)",
+                      boxShadow: "inset 0 0 0 1px var(--rf-border)",
+                    }}
+                  >
+                    {INSTRUMENTS.map((q) => (
+                      <option key={q.slug} value={q.slug}>
+                        {q.title}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div>
+                    <button
+                      onClick={() => start("framework", instrument)}
+                      disabled={loading !== null || !instrument}
+                      className="rounded-full px-4 py-2 transition-colors disabled:opacity-40"
                       style={{
-                        borderTop:
-                          i === 0 ? "none" : "1px solid var(--rf-rule)",
+                        background: "var(--rf-text)",
+                        color: "var(--rf-paper)",
+                        fontSize: "12.5px",
+                        fontWeight: 500,
                       }}
                     >
-                      <span
-                        className="min-w-0 truncate"
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          fontSize: "16px",
-                          color: "var(--rf-text)",
-                        }}
-                      >
-                        {q.title}
-                      </span>
-                      <button
-                        onClick={() => start("framework", q.slug)}
-                        disabled={loading !== null}
-                        className="shrink-0 rounded-full transition-colors disabled:opacity-40"
-                        style={{
-                          padding: "5px 12px",
-                          fontSize: "11.5px",
-                          color: "var(--rf-text-2)",
-                          boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-                        }}
-                      >
-                        {loadingSlug === q.slug
-                          ? COPY.opening
-                          : COPY.frameworkCta}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                      {loading === "framework"
+                        ? COPY.opening
+                        : COPY.frameworkCta}
+                    </button>
+                  </div>
+                </div>
               </div>
             </Sheet>
           </div>

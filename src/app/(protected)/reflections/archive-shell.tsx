@@ -24,10 +24,13 @@ import { loadRail, type ArchiveSearchParams } from "./records";
  * and the list arrives behind it. `RailSkeleton` holds the exact width in the
  * meantime, so nothing shifts sideways when the real one lands.
  *
- * ── Gutters ───────────────────────────────────────────────────────────────────
- * Narrower than the single-column screens. The list already occupies the left
- * side, so the wide page gutter that reads as margin on a centred column reads
- * as wasted space here.
+ * ── Gutters and width ─────────────────────────────────────────────────────────
+ * Narrower gutters than the single-column screens, and a wider container than
+ * them too. The list already occupies the left side, so the page margin that
+ * reads as breathing room around a centred column reads as wasted space here —
+ * and because the whole thing is centred, a narrow container pushes the list
+ * inward toward the middle of the screen rather than letting it sit out to the
+ * left where it belongs.
  */
 export function ArchiveShell({
   userId,
@@ -48,7 +51,7 @@ export function ArchiveShell({
       <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
         <div
           className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-9"
-          style={{ maxWidth: 1240 }}
+          style={{ maxWidth: 1440 }}
         >
           <Suspense fallback={<RailSkeleton />}>
             <RailData

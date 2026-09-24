@@ -2,7 +2,7 @@
  * What sits in the left column while the real list loads.
  *
  * ── It must hold the same width ───────────────────────────────────────────────
- * Same `lg:w-[310px]`, same panel padding and border as the real list. If this
+ * Same `lg:w-[340px]`, same panel padding and border as the real list. If this
  * were narrower, the record beside it would render at one width and then jump
  * sideways when the list arrived — which is worse than waiting.
  *
@@ -30,7 +30,7 @@ export function RailSkeleton() {
   return (
     <div
       aria-hidden="true"
-      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[310px]"
+      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[340px]"
       style={{
         background: "var(--rf-surface)",
         boxShadow: "inset 0 0 0 1px var(--rf-border)",

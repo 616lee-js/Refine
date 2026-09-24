@@ -270,7 +270,7 @@ export function RecordRail({
   return (
     <aside
       aria-label={COPY.railLabel}
-      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[310px]"
+      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[340px]"
       style={{
         background: "var(--rf-surface)",
         boxShadow: "inset 0 0 0 1px var(--rf-border)",

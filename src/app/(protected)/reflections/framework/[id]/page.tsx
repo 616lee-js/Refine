@@ -7,7 +7,6 @@ import { db } from "@/lib/db";
 import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire } from "@/lib/questionnaires";
-import { ArchiveShell } from "../../archive-shell";
 import { type ArchiveSearchParams } from "../../records";
 import { FrameworkRecord } from "./framework-record";
 
@@ -124,11 +123,7 @@ export default async function ArchiveFrameworkPage({
 
 
   return (
-    <ArchiveShell
-      userId={authSession.userId}
-      searchParams={sp}
-      selectedId={row.id}
-    >
+    <>
       <FrameworkRecord
         responseId={row.id}
         questionnaire={questionnaire}
@@ -138,6 +133,6 @@ export default async function ArchiveFrameworkPage({
         initialEditing={row.completedAt === null || sp.edit === "1"}
         lastTakenAt={previousRows[0]?.completedAt?.toISOString() ?? null}
       />
-    </ArchiveShell>
+    </>
   );
 }

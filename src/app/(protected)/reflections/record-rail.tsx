@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
 
@@ -33,10 +37,22 @@ import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
  * up top. This is required by collapsing it, not decoration: a filter you
  * cannot see produces a short list with no visible cause, which reads as a bug.
  *
- * ── State lives in the URL ────────────────────────────────────────────────────
- * Every control is a link or a GET form, so a filtered view is shareable,
- * survives a reload, and needs no client component. The collapsible section is
- * the browser's own, so keyboard and screen-reader behaviour come free.
+ * ── It lives in the layout, so it survives navigation ─────────────────────────
+ * This is the whole point of the file sitting where it does. Rendered per page,
+ * every click on a record re-ran its queries, re-decrypted fifty records and
+ * flashed the placeholder back in — which reads as the page reloading rather
+ * than the record opening beside a list that stayed put.
+ *
+ * In `layout.tsx` React keeps this subtree mounted across navigation to any
+ * child route, so it renders once and stays. That is why it is a client
+ * component: a layout is not given the URL's search parameters, so the filters
+ * have to be read here, with `useSearchParams`.
+ *
+ * ── State still lives in the URL ──────────────────────────────────────────────
+ * A filtered view stays shareable and survives a reload. What changed is how it
+ * gets there: the filter controls were plain GET forms, which submit natively
+ * and reload the whole browser page. They now push through the router, and the
+ * list refetches its own data rather than the page being rebuilt around it.
  */
 
 // COPY REVIEW: placeholders pending final wording.
@@ -178,38 +194,6 @@ const fieldStyle: React.CSSProperties = {
   boxShadow: "inset 0 0 0 1px var(--rf-border)",
 };
 
-/** Carries the filters a form does not itself edit. */
-function HiddenExcept({
-  view,
-  omit,
-}: {
-  view: RailView;
-  omit: (keyof RailView)[];
-}) {
-  const keep = (k: keyof RailView) => !omit.includes(k);
-  return (
-    <>
-      {keep("kind") && view.kind !== "all" && (
-        <input type="hidden" name="filter" value={view.kind} />
-      )}
-      {keep("from") && view.from && (
-        <input type="hidden" name="from" value={view.from} />
-      )}
-      {keep("to") && view.to && <input type="hidden" name="to" value={view.to} />}
-      {keep("range") &&
-        !view.from &&
-        !view.to &&
-        view.range !== "all" && (
-          <input type="hidden" name="range" value={view.range} />
-        )}
-      {keep("category") && view.category && (
-        <input type="hidden" name="category" value={view.category} />
-      )}
-      {keep("q") && view.q && <input type="hidden" name="q" value={view.q} />}
-    </>
-  );
-}
-
 /** One active filter, with the link that removes it. */
 function ActiveChip({ label, href }: { label: string; href: string }) {
   return (
@@ -241,25 +225,99 @@ function ActiveChip({ label, href }: { label: string; href: string }) {
   );
 }
 
+/** The record open in the main view, taken from the path rather than a prop. */
+function selectedIdFrom(pathname: string): string | undefined {
+  const parts = pathname.split("/").filter(Boolean);
+  // /reflections/<id> · /reflections/checkin/<id> · /reflections/framework/<id>
+  if (parts[0] !== "reflections" || parts.length < 2) return undefined;
+  return parts[parts.length - 1];
+}
+
 export function RecordRail({
-  records,
-  categories,
-  total,
-  capped,
-  view,
-  selectedId,
+  initial,
 }: {
-  records: ArchiveRecord[];
-  /** Counted, most-used first — see loadRecords. */
-  categories: CategoryOption[];
-  /** How many matched before the display cap. */
-  total: number;
-  /** The row limit cut the load short, so `total` is a floor. */
-  capped: boolean;
-  view: RailView;
-  /** The record open in the main view, if any. */
-  selectedId?: string;
+  /**
+   * Server-rendered on first load so the list is present immediately. Fetched
+   * with no filters, because the layout that renders this cannot see them —
+   * arriving on a filtered URL refetches once on mount.
+   */
+  initial: {
+    records: ArchiveRecord[];
+    categories: CategoryOption[];
+    total: number;
+    capped: boolean;
+  };
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const selectedId = selectedIdFrom(pathname);
+
+  const view: RailView = {
+    kind: (() => {
+      const k = params.get("filter");
+      return k === "open" || k === "framework" || k === "checkin" ? k : "all";
+    })(),
+    range: params.get("range") ?? "all",
+    from: params.get("from"),
+    to: params.get("to"),
+    category: params.get("category"),
+    q: params.get("q"),
+  };
+
+  const [data, setData] = useState(initial);
+  const [loading, setLoading] = useState(false);
+
+  /*
+   * Refetch when the filters change.
+   *
+   * Keyed on the query string so navigating between records — which keeps the
+   * filters identical — does not refetch. Only a filter actually changing does.
+   */
+  const query = params.toString();
+  const lastQuery = useRef<string | null>(null);
+
+  useEffect(() => {
+    // First render already has server-rendered data for the unfiltered case.
+    if (lastQuery.current === null && query === "") {
+      lastQuery.current = query;
+      return;
+    }
+    if (lastQuery.current === query) return;
+    lastQuery.current = query;
+
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/records?${query}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
+      .then((next) => {
+        // A slower earlier request must not overwrite a newer result.
+        if (!cancelled) setData(next);
+      })
+      .catch(() => {
+        // Leaving the previous list up is better than emptying it: the filters
+        // are visible above, so a stale list is legible where a blank one is
+        // just confusing.
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [query]);
+
+  const { records, categories, total, capped } = data;
+
+  /** Applies a filter change without a full page navigation. */
+  function apply(next: Partial<RailView>) {
+    router.push(railHref(view, next), { scroll: false });
+  }
+
   const dated = Boolean(view.from || view.to);
   const ranged = !dated && view.range !== "all";
   const filtered =
@@ -284,8 +342,19 @@ export function RecordRail({
         {/* ── Always visible: dates, search, type ──
             No headings above these. The controls say what they are, and the
             labels survive for screen readers below. */}
-        <form action="/reflections" method="get">
-          <HiddenExcept view={view} omit={["from", "to", "range", "q"]} />
+        {/* Submits through the router. As a plain GET form this reloaded the
+            whole browser page, which threw away the list beside it. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            const str = (k: string) => {
+              const v = f.get(k);
+              return typeof v === "string" && v.trim() ? v.trim() : null;
+            };
+            apply({ from: str("from"), to: str("to"), q: str("q") });
+          }}
+        >
 
           {/* Labels sit beside the boxes rather than above, which is a line
               saved. Allowed to wrap: browsers give a native date box a minimum
@@ -442,8 +511,16 @@ export function RecordRail({
               entirely when nothing has been categorised — an empty picker
               teaches people the feature is broken. */}
           {categories.length > 0 && (
-            <form action="/reflections" method="get" className="mt-3">
-              <HiddenExcept view={view} omit={["category"]} />
+            <form
+              className="mt-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const v = new FormData(e.currentTarget).get("category");
+                apply({
+                  category: typeof v === "string" && v ? v : null,
+                });
+              }}
+            >
               <label htmlFor="rail-category" style={blockLabel}>
                 {COPY.categoryLabel}{" "}
                 <span style={{ color: "var(--rf-text-4)" }}>
@@ -566,7 +643,13 @@ export function RecordRail({
           )}
         </p>
       ) : (
-        <RecordCardList className="mt-2">
+        /* Dimmed rather than replaced while refiltering. Swapping in a
+           placeholder would throw away a list that is still mostly correct,
+           and the flicker is worse than the wait. */
+        <RecordCardList
+          className="mt-2 transition-opacity"
+          style={{ opacity: loading ? 0.45 : 1 }}
+        >
           {records.map((r) => (
             <RecordCard
               key={`${r.kind}-${r.id}`}

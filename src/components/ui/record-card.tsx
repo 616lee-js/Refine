@@ -141,9 +141,16 @@ export function RecordCard({
 export function RecordCardList({
   children,
   className = "",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Used to dim the list while it is being refiltered. */
+  style?: React.CSSProperties;
 }) {
-  return <div className={`flex flex-col gap-[10px] ${className}`}>{children}</div>;
+  return (
+    <div className={`flex flex-col gap-[10px] ${className}`} style={style}>
+      {children}
+    </div>
+  );
 }

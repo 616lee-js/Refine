@@ -17,7 +17,6 @@ import {
 import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
-import { ArchiveShell } from "../archive-shell";
 import { type ArchiveSearchParams } from "../records";
 
 /**
@@ -228,11 +227,7 @@ export default async function ReflectionDetailPage({
   // No word count (removed 2026-09-21): a count is a target in disguise.
 
   return (
-    <ArchiveShell
-      userId={authSession.userId}
-      searchParams={sp}
-      selectedId={entry.id}
-    >
+    <>
           {arrival && <CompletionNotice kind={arrival} />}
 
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
@@ -343,6 +338,6 @@ export default async function ReflectionDetailPage({
 
       {/* No "back to the archive" link: the archive is the rail, and it is
           on screen. A link back to something already visible is noise. */}
-    </ArchiveShell>
+    </>
   );
 }

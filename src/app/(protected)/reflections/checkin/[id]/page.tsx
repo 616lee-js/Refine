@@ -7,7 +7,6 @@ import { db } from "@/lib/db";
 import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
-import { ArchiveShell } from "../../archive-shell";
 import { type ArchiveSearchParams } from "../../records";
 import { CheckinRecord } from "./checkin-record";
 
@@ -130,11 +129,7 @@ export default async function ArchiveCheckinPage({
   const at = row.completedAt ?? row.createdAt;
 
   return (
-    <ArchiveShell
-      userId={authSession.userId}
-      searchParams={sp}
-      selectedId={row.id}
-    >
+    <>
       <CheckinRecord
         responseId={row.id}
         questionnaire={questionnaire}
@@ -150,6 +145,6 @@ export default async function ArchiveCheckinPage({
           month: "long",
         })}
       />
-    </ArchiveShell>
+    </>
   );
 }

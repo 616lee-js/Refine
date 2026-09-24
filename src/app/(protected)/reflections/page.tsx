@@ -1,6 +1,3 @@
-import { getSession } from "@/lib/auth";
-import { type ArchiveSearchParams } from "./records";
-import { ArchiveShell } from "./archive-shell";
 
 /**
  * The archive — the record list with nothing selected.
@@ -22,16 +19,9 @@ const COPY = {
   lede: "[COPY] Every entry, check-in and questionnaire you've recorded. Pick one to read it.",
 } as const;
 
-export default async function ReflectionsPage({
-  searchParams,
-}: {
-  searchParams: Promise<ArchiveSearchParams>;
-}) {
-  const params = await searchParams;
-  const authSession = await getSession();
-
+export default function ReflectionsPage() {
   return (
-    <ArchiveShell userId={authSession.userId!} searchParams={params}>
+    <>
       <div className="pb-[14px]">
         <h1
           style={{
@@ -55,6 +45,6 @@ export default async function ReflectionsPage({
           {COPY.lede}
         </p>
       </div>
-    </ArchiveShell>
+    </>
   );
 }

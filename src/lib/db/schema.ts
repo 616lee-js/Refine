@@ -535,3 +535,110 @@ export const feedback = pgTable("feedback", {
     .notNull()
     .defaultNow(),
 });
+
+// ── Summarisation evaluation ─────────────────────────────────────────────────
+
+/**
+ * Structured assessments of summary quality, for system-level review.
+ *
+ * ── What this is NOT ──────────────────────────────────────────────────────────
+ * Not a personalisation loop. A user's assessment never alters their own future
+ * summaries — the per-user direction was dropped 2026-09-24. These rows are
+ * evidence about the summariser, read by the product owner and acted on by hand.
+ * If that ever changes, it is a decision, not an extension.
+ *
+ * ── Why the rubric is plaintext and nothing else is ───────────────────────────
+ * The four booleans and the rating describe what the MODEL did. They say nothing
+ * about the person, and aggregation is the entire point — "how often was a quote
+ * altered under v2 versus v3" has to be a SQL query, not a decrypt-every-row
+ * loop. The snapshots and the notes are journal content and the writer's own
+ * words, so they are encrypted like everything in Cabinet 1 and 2.
+ *
+ * ── true is always the acceptable answer ──────────────────────────────────────
+ * Every boolean here is worded so that `true` means the summariser did the right
+ * thing. Three of them asking "did something go wrong" while a fourth asked "is
+ * it right" is how counts get read backwards months later.
+ *
+ * ── Snapshots are nullable on purpose ─────────────────────────────────────────
+ * Three separate reasons a snapshot may be absent, and they must stay
+ * distinguishable:
+ *   capture switched off     both columns null, `snapshots_cleared_at` null
+ *   destroyed by an admin    both columns null, `snapshots_cleared_at` set
+ *   entry permanently purged both columns null AND `encrypted_notes` null
+ *
+ * ── Deletion reaches in here ──────────────────────────────────────────────────
+ * Purging an entry nulls this row's snapshots and notes — see
+ * api/reflections/[id]/purge and api/cron/purge-trash, which already delete the
+ * entry's summary for the same reason. The rubric survives: it describes the
+ * model, and holds nothing of the person's.
+ */
+export const summaryEvaluations = pgTable("summary_evaluations", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** SET NULL, not cascade: the assessment outlives the entry it judged. */
+  journalEntryId: text("journal_entry_id").references(() => journalEntries.id, {
+    onDelete: "set null",
+  }),
+
+  /** Nothing stated that the entry does not support. */
+  supported: boolean("supported").notNull(),
+  /** Key facts and named people captured. */
+  complete: boolean("complete").notNull(),
+  /** Quotes copied exactly. NULL when the summary carried no quotes to judge. */
+  quotesVerbatim: boolean("quotes_verbatim"),
+  /** Stayed descriptive — did not assess or characterise the writer. */
+  descriptiveOnly: boolean("descriptive_only").notNull(),
+  /** 1–5. See the scale's labels in the assessment UI. */
+  overallAccuracy: integer("overall_accuracy").notNull(),
+
+  /** Which summariser produced what was judged, e.g. "v2@2026-09-24+c9-...". */
+  summariserVersion: text("summariser_version").notNull(),
+  /**
+   * The entry's `updated_at` when the assessment was made. An entry can be
+   * edited afterwards, and without this there is no way to tell whether an
+   * assessment still describes the text it was written against.
+   */
+  entryUpdatedAt: timestamp("entry_updated_at", { withTimezone: true }),
+
+  /**
+   * What was actually judged. Snapshots rather than references because a
+   * re-summarise overwrites the live summary, and an assessment pointing at it
+   * would silently come to describe something nobody ever read.
+   */
+  encryptedEntrySnapshot: text("encrypted_entry_snapshot"),
+  encryptedSummarySnapshot: text("encrypted_summary_snapshot"),
+  /** Set when an admin destroyed the snapshots. Distinguishes from never captured. */
+  snapshotsClearedAt: timestamp("snapshots_cleared_at", { withTimezone: true }),
+
+  /** Free-form correction or notes, in the writer's own words. */
+  encryptedNotes: text("encrypted_notes"),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (t) => [
+  /** The admin log reads newest first; the purge paths look up by entry. */
+  index("summary_evaluations_created_idx").on(desc(t.createdAt)),
+  index("summary_evaluations_entry_idx").on(t.journalEntryId),
+]);
+
+/**
+ * Operational flags an admin can change at runtime.
+ *
+ * **Never user data.** This exists because `eval_snapshots_enabled` has to be
+ * switchable from the admin UI, and an environment variable would need a
+ * redeploy. Anything about a person belongs in that person's own tables.
+ *
+ * Keys in use:
+ *   eval_snapshots_enabled  boolean — capture entry/summary snapshots with new
+ *                           assessments. Off does not touch existing ones.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -16,6 +16,7 @@ import {
 } from "@/lib/summaries/read";
 import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
+import { AssessSummary } from "./assess-summary";
 import { CompletionNotice } from "./completion-notice";
 import { type ArchiveSearchParams } from "../records";
 
@@ -285,6 +286,24 @@ export default async function ReflectionDetailPage({
               unreadable: summaryUnreadable,
             }}
           />
+
+          {/* Assessing the summary against the entry. Only offered when there
+              is genuinely something to judge: a readable summary and a readable
+              body. Nothing submitted here changes this person's own future
+              summaries — see ./assess-summary.tsx.
+
+              `aiOriginal`, never `summary`. Where the writer has corrected the
+              summary, `summary` is their own words — judging that would measure
+              their edit rather than the summariser, which is the one thing this
+              log exists to measure. The API snapshots the same version. */}
+          {resolved && !summaryUnreadable && !decryptFailed && body && (
+            <AssessSummary
+              entryId={entry.id}
+              summary={resolved.aiOriginal}
+              corrected={resolved.source === "user"}
+              body={body}
+            />
+          )}
 
           {arrival && entry.tierClassification !== null && (
             <CrisisResourcePanel tier={entry.tierClassification} />

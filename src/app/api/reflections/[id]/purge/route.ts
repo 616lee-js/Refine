@@ -1,7 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { journalEntries, journalEntrySummaries } from "@/lib/db/schema";
+import {
+  journalEntries,
+  journalEntrySummaries,
+  summaryEvaluations,
+} from "@/lib/db/schema";
 
 /**
  * Permanently destroy an entry's content.
@@ -19,6 +23,11 @@ import { journalEntries, journalEntrySummaries } from "@/lib/db/schema";
  *
  * Cabinet 2 summaries derive from the body, so they are hard-deleted here. A
  * summary of destroyed content is still that content.
+ *
+ * Summarisation assessments hold snapshots of the entry and its summary, plus
+ * the writer's note — the same kind of derived content, and destroyed the same
+ * way. The assessment row itself survives with its rubric intact: it describes
+ * what the model did and holds nothing of the person's.
  *
  * Every list query must exclude rows with `purged_at` set — they are bookkeeping,
  * not entries.
@@ -48,6 +57,16 @@ export async function DELETE(
     await tx
       .delete(journalEntrySummaries)
       .where(eq(journalEntrySummaries.journalEntryId, id));
+
+    await tx
+      .update(summaryEvaluations)
+      .set({
+        encryptedEntrySnapshot: null,
+        encryptedSummarySnapshot: null,
+        encryptedNotes: null,
+        snapshotsClearedAt: now,
+      })
+      .where(eq(summaryEvaluations.journalEntryId, id));
 
     await tx
       .update(journalEntries)

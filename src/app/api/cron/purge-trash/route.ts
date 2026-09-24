@@ -1,6 +1,10 @@
 import { and, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { journalEntries, journalEntrySummaries } from "@/lib/db/schema";
+import {
+  journalEntries,
+  journalEntrySummaries,
+  summaryEvaluations,
+} from "@/lib/db/schema";
 import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
 import { requireCronSecret } from "@/lib/cron-auth";
 
@@ -10,7 +14,10 @@ import { requireCronSecret } from "@/lib/cron-auth";
  *
  * ── What it does and does not delete ──────────────────────────────────────────
  * Nulls `encrypted_body`, stamps `purged_at`, and hard-deletes any Cabinet 2
- * summary (a summary of destroyed content is still that content).
+ * summary (a summary of destroyed content is still that content). Also destroys
+ * the snapshots and notes held by any summarisation assessment of that entry,
+ * for the same reason; the assessment's rubric survives, holding nothing of the
+ * person's.
  *
  * The `journal_entries` row itself SURVIVES, empty. `safety_log` references it,
  * and the safety log has to outlive the content it describes — it is the record
@@ -51,6 +58,16 @@ export async function GET(req: Request) {
         await tx
           .delete(journalEntrySummaries)
           .where(eq(journalEntrySummaries.journalEntryId, id));
+
+        await tx
+          .update(summaryEvaluations)
+          .set({
+            encryptedEntrySnapshot: null,
+            encryptedSummarySnapshot: null,
+            encryptedNotes: null,
+            snapshotsClearedAt: now,
+          })
+          .where(eq(summaryEvaluations.journalEntryId, id));
 
         await tx
           .update(journalEntries)

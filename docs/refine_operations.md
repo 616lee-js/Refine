@@ -193,6 +193,57 @@ default.
 
 ---
 
+## Checking the summaries are any good
+
+After reading an entry, a tester can press **Assess this summary** and answer
+five short questions about what Refine took from it. Their answers go to you, in
+one place, and change nothing about how their own entries are summarised.
+
+Open **Admin → Summary evals** to read them.
+
+### What you'll see
+
+A table at the top counts the **problems** for each version of the summarising
+instructions — how many times someone said it made something up, missed
+something, misquoted them, or judged them, plus the average score out of five.
+A version with more problems than the one before it is a step backwards.
+
+Below that, every assessment in full: the five answers, anything the person typed,
+and a copy of both the summary and the entry they were comparing.
+
+### The copies, and switching them off
+
+By default each assessment stores a copy of the entry and the summary as they
+were at that moment. Without it you'd be reading someone's verdict on text that
+has since been rewritten.
+
+Two buttons on that page:
+
+- **Stop storing content** — new assessments record only the answers from then
+  on. Copies already taken are untouched.
+- **Destroy all stored content** — deletes every stored copy and every typed
+  note. **Permanent. There is no undo and no recovery.** The answers and scores
+  survive, because those are about the software, not about anyone.
+
+Deleting someone's entry for good also destroys the copies attached to any
+assessment of it, automatically. You don't have to do anything.
+
+### Taking the data away
+
+Two download links on the same page:
+
+- **Export CSV** — the answers and scores only. No one's writing is in it, so it
+  is safe to open in a spreadsheet anywhere.
+- **Export JSON** — the same, plus every stored entry, summary and note. This is
+  people's private writing in a file on your computer, outside everything the app
+  protects. Treat it like the backups: don't email it, don't put it in a shared
+  folder, delete it when you're done.
+
+Both the page and the downloads are recorded in the access log, the same as any
+other time content is unlocked.
+
+---
+
 ## Removing someone
 
 There's no button for this yet. Ask and it can be done directly against the
@@ -344,6 +395,9 @@ existing journal entries can't be read. They should never be edited.
   database structure is managed by one tool only.
 - **Don't commit `.env.local`** to GitHub. It's already excluded — leave it that
   way.
+- **Don't press "Destroy all stored content"** on the Summary evals page to tidy
+  up. It permanently deletes every stored entry copy and every note anyone wrote
+  there. Take a backup first if you're unsure.
 
 ---
 

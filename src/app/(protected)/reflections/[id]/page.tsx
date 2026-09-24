@@ -24,9 +24,10 @@ import { type ArchiveSearchParams } from "../records";
  *
  * ── The completed state ───────────────────────────────────────────────────────
  * Completing an entry lands here. It is not editable here — editing is the
- * explicit "edit" action, which reopens the writing surface at /reflection/[id]
- * and returns here on save or cancel. An entry is therefore either being
- * written or being read, never both at once.
+ * explicit "edit" action, which opens the writing surface at
+ * /reflections/[id]/edit, in this same main view beside the record list, and
+ * returns here on save or cancel. An entry is therefore either being written or
+ * being read, never both at once.
  *
  * The exception is the title, which is editable in place. See ./entry-title.tsx
  * for why naming belongs to re-reading rather than to finishing.
@@ -252,7 +253,7 @@ export default async function ReflectionDetailPage({
 
             <div className="flex shrink-0 items-center gap-3">
               <Link
-                href={`/reflection/${entry.id}`}
+                href={`/reflections/${entry.id}/edit`}
                 className="rounded-full transition-colors"
                 style={{
                   padding: "7px 14px",

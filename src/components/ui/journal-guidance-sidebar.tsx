@@ -150,12 +150,27 @@ export function JournalGuidanceSidebar({
   onClose,
   onOpen,
   itemCount,
+  overlayOnly = false,
 }: {
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
   itemCount: number;
+  /**
+   * Never take a column of the layout, at any width — the edge tab and its
+   * overlay at every size.
+   *
+   * Used when the writing surface sits beside the archive's record list. A
+   * column here would put a rail on both sides of the text, and the writing
+   * surface holding width priority is the one rule that outranks visual
+   * consistency.
+   */
+  overlayOnly?: boolean;
 }) {
+  // Below `lg` these are always the overlay; `overlayOnly` extends that upward.
+  const columnAt = overlayOnly ? "hidden" : "hidden lg:block";
+  const overlayAt = overlayOnly ? "" : "lg:hidden";
+
   return (
     <>
       {/* lg and up, open: a 306px column. */}
@@ -163,7 +178,7 @@ export function JournalGuidanceSidebar({
         <aside
           id="journal-guidance"
           aria-label={COPY.regionAria}
-          className="hidden shrink-0 overflow-y-auto px-[26px] pb-5 pt-[22px] lg:block"
+          className={`${columnAt} shrink-0 overflow-y-auto px-[26px] pb-5 pt-[22px]`}
           style={{
             width: 306,
             borderLeft: "1px solid var(--rf-border)",
@@ -177,7 +192,7 @@ export function JournalGuidanceSidebar({
       {!open && (
         <aside
           aria-label={COPY.spineAria}
-          className="hidden shrink-0 lg:block"
+          className={`${columnAt} shrink-0`}
           style={{ width: 48, borderLeft: "1px solid var(--rf-border)" }}
         >
           <button
@@ -230,7 +245,7 @@ export function JournalGuidanceSidebar({
           aria-expanded={false}
           aria-controls="journal-guidance-overlay"
           aria-label={COPY.spineAria}
-          className="fixed right-0 top-1/2 z-30 flex -translate-y-1/2 items-center gap-2 py-3 pl-2 pr-[9px] transition-colors lg:hidden print:hidden"
+          className={`fixed right-0 top-1/2 z-30 flex -translate-y-1/2 items-center gap-2 py-3 pl-2 pr-[9px] transition-colors print:hidden ${overlayAt}`}
           style={{
             background: "var(--rf-paper)",
             border: "1px solid var(--rf-paper-edge)",
@@ -258,7 +273,7 @@ export function JournalGuidanceSidebar({
 
       {/* Below lg, open: an overlay. Never squeezes the writing surface. */}
       {open && (
-        <div className="fixed inset-0 z-40 flex lg:hidden">
+        <div className={`fixed inset-0 z-40 flex ${overlayAt}`}>
           <button
             type="button"
             aria-label={COPY.overlayClose}

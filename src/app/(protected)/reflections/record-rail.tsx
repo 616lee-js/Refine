@@ -230,7 +230,9 @@ function selectedIdFrom(pathname: string): string | undefined {
   const parts = pathname.split("/").filter(Boolean);
   // /reflections/<id> · /reflections/checkin/<id> · /reflections/framework/<id>
   if (parts[0] !== "reflections" || parts.length < 2) return undefined;
-  return parts[parts.length - 1];
+  // /reflections/<id>/edit — the entry stays selected while it is being edited.
+  const last = parts[parts.length - 1];
+  return last === "edit" ? parts[parts.length - 2] : last;
 }
 
 export function RecordRail({

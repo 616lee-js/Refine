@@ -114,13 +114,24 @@ export default function JournalEntry({
   initialText,
   initialCompletedAt,
   initialGuidanceOpen,
+  embedded = false,
 }: {
   /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
-  admin: React.ReactNode;
+  admin?: React.ReactNode;
   entryId: string;
   initialText: string;
   initialCompletedAt: string | null;
   initialGuidanceOpen: boolean;
+  /**
+   * Rendered inside the archive's main view, beside the record list, rather
+   * than as a screen of its own.
+   *
+   * Brings no page chrome — the archive layout already supplies the background
+   * and the nav — and pushes the footholds into their overlay, so the text does
+   * not end up with a rail on either side of it. A brand-new entry still opens
+   * on its own screen, where a blank page has nothing to sit beside.
+   */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initialText);
@@ -337,18 +348,16 @@ export default function JournalEntry({
   const dirty = text !== savedTextRef.current;
   const started = new Date();
 
-  return (
-    <PageBg>
-      {/* No foothold toggle in the nav (removed 2026-09-21). The rail is
-          reached only from its own right-hand edge, at every width. */}
-      <TopNav active="today" admin={admin} />
-
+  const surface = (
+    <>
       <div className="flex min-h-0 flex-1">
         {/* Bottom room appears only once the sheet has grown past its opening
             height. A fresh page keeps its visible bottom edge and no scrollbar;
             a long entry gets somewhere for the caret to scroll into. */}
         <div
-          className="flex min-w-0 flex-1 flex-col items-center px-4 pt-[38px] sm:px-6"
+          className={`flex min-w-0 flex-1 flex-col items-center ${
+            embedded ? "" : "px-4 sm:px-6"
+          } pt-[38px]`}
           style={{ paddingBottom: grown ? "35vh" : 30 }}
         >
           <div className="w-full" style={{ maxWidth: 620 }}>
@@ -540,8 +549,21 @@ export default function JournalEntry({
           onOpen={() => toggleGuidance(true)}
           onClose={() => toggleGuidance(false)}
           itemCount={guidanceCount}
+          overlayOnly={embedded}
         />
       </div>
+    </>
+  );
+
+  // Embedded, the archive layout has already drawn the background and the nav.
+  if (embedded) return surface;
+
+  return (
+    <PageBg>
+      {/* No foothold toggle in the nav (removed 2026-09-21). The rail is
+          reached only from its own right-hand edge, at every width. */}
+      <TopNav active="today" admin={admin} />
+      {surface}
     </PageBg>
   );
 }

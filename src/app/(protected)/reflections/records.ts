@@ -250,7 +250,13 @@ export async function loadRecords(
       const categories = categoriesByEntry.get(e.id) ?? [];
       return {
         id: e.id,
-        href: e.completedAt ? `/reflections/${e.id}` : `/reflection/${e.id}`,
+        // Both stay inside the archive: a finished entry opens to read, an
+        // unfinished one opens straight into the editor. Home's "pick it back
+        // up" still uses the standalone screen — resuming a blank-ish draft is
+        // closer to starting one than to editing something that exists.
+        href: e.completedAt
+          ? `/reflections/${e.id}`
+          : `/reflections/${e.id}/edit`,
         at: e.completedAt ?? e.updatedAt,
         kind: "open",
         kindLabel: "Writing",

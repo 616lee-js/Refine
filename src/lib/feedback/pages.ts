@@ -30,6 +30,7 @@ const KNOWN_ROUTES = [
   "/reflection/[id]",
   "/reflections",
   "/reflections/[id]",
+  "/reflections/[id]/edit",
   // Records open inside the archive now. The old standalone routes redirect
   // here, so they cannot be the page a submission comes from.
   "/reflections/checkin/[id]",
@@ -51,6 +52,7 @@ export const PAGE_LABELS: Record<string, string> = {
   "/reflection/[id]": "Writing an entry",
   "/reflections": "Archive",
   "/reflections/[id]": "Reading an entry",
+  "/reflections/[id]/edit": "Editing an entry",
   "/reflections/checkin/[id]": "Daily check-in",
   "/reflections/framework/[id]": "Framework questionnaire",
   "/mirror": "Mirror",

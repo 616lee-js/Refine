@@ -289,72 +289,47 @@ or edited in flight. Recorded here because there was nowhere else tracking them.
   it shapes what every downstream synthesis says about a person.
 - The tonal-context conflict recorded at the top of this file.
 
-### Summariser v2 — DRAFTED 2026-09-23, NOT APPLIED
+### Summariser v2 — APPLIED 2026-09-24
 
-Categories come back too specific ("the promotion" rather than "work"), which
-makes them useless as buckets and makes the archive's category filter weaker
-than it should be. The cause is a rule in the prompt, not a bug.
+Categories were coming back as one-off phrases ("the promotion", "Tuesday's
+argument") because v1 told the model to use *the writer's own words*. A tag that
+fits one entry groups nothing, so the archive's category filter never narrowed
+anything.
 
-This diff is recorded verbatim so the review can approve or rewrite text that
-already exists rather than re-deriving it. **It has not been applied.** Prompt
-wording is copy, and copy is deferred to the full review pass.
+Shipped:
 
-```diff
--# Version: v1 — 2026-07-30
-+# Version: v2 — 2026-09-23
+- **A fixed vocabulary of nine life domains** — work, relationships, health,
+  money, purpose, rest, community, personal growth, faith — defined once in
+  `src/lib/summaries/categories.ts` and **interpolated into the prompt at call
+  time**, so the markdown cannot drift from the code.
+- **Enforced, not merely requested.** `refineCategories()` in
+  `src/lib/summaries/parse.ts` resolves the model's output against the list
+  (case-insensitive, deduped) and discards anything else before storage. The
+  closed list is a guarantee rather than an instruction.
+- **No hard cap per entry.** The prompt asks for restraint — most entries want
+  one or two — but a long entry that genuinely ranges across six may carry six.
+  `MAX_TOPICS` is now 9, the size of the vocabulary itself.
+- **`[]` is a correct answer** when none of the nine fits. Forcing a domain onto
+  an entry that has none is worse than leaving it uncategorised.
+- **The writer is not constrained.** The correction UI offers the nine as
+  toggles *plus* a free-text field. The machine is held to the list so its
+  output groups; a person editing their own entry is not.
+- **Changing the list re-summarises everything.** `SUMMARISER_VERSION` folds in
+  a fingerprint of the vocabulary (`v2@2026-09-24+c9-wrhmprcpf`), so editing
+  `categories.ts` is self-announcing. Without that, the model would be told
+  something new while the version stayed identical, and the archive would hold
+  two incompatible vintages with no way to tell them apart.
 
--- **Use the writer's own words for topics and names.** If they wrote "the
--  promotion", the topic is "the promotion" — not "career advancement". If they
--  wrote "Dad", it is "Dad", not "a parental relationship". Their vocabulary is
--  the point: it is what makes this recognisable to them later.
-+- **Use the writer's own words for names.** If they wrote "Dad", it is "Dad",
-+  not "a parental relationship". Their vocabulary is the point for people.
-+- **Categories are the opposite: general, not specific.** A category is a
-+  bucket an entry sorts into alongside other entries, so it must be a term that
-+  will recur. "The promotion" is a topic; "work" is a category. Prefer a term
-+  you would expect to apply to many entries over one that fits only this entry.
-+  Two or three broad categories beat five narrow ones.
+**Consequences to expect:**
 
--- `topics` — up to 5 short noun phrases in the writer's own words. What the
--  entry is about. `[]` if nothing is identifiable.
-+- `topics` — up to 3 general, reusable categories. One or two words each,
-+  lowercase. Examples of the right level: work, sleep, family, health, money,
-+  friendship, grief. Wrong level: "the promotion", "Tuesday's argument",
-+  "feeling tired lately". `[]` if nothing is identifiable.
-```
+- Every summary became due on deploy and re-summarises at 25/day.
+- **Corrected summaries keep their old categories permanently.** The queue never
+  writes `encrypted_user_content`, by design — so any summary edited by hand
+  keeps whatever it was given, and those terms still appear in the category
+  filter alongside the nine. Honest, since it is the writer's own text.
 
-Consequences, established before deferral:
-
-- **The version bump reflows the whole archive**, 25 a day. Existing categories
-  change under the user. That is correct — Cabinet 2 is derived data and should
-  follow its deriver — but it is visible. User *corrections* survive it: they
-  live in `encrypted_user_content`, which the queue never writes.
-- **The vocabulary is now fixed — decided 2026-09-24.** This supersedes the
-  earlier open-vocabulary choice, and the diff above must be rewritten around it
-  before it is applied. Categories come from nine life domains:
-
-  **work · relationships · health · money · purpose · rest · community ·
-  personal growth · faith**
-
-  A fixed list is what makes categories groupable: "work" and "job" drifting
-  apart was the accepted cost of an open vocabulary, and a closed one removes it
-  entirely. It also makes the archive's category filter finite and the counts
-  meaningful.
-
-  Open questions for the item-4 session: whether the model may return nothing
-  when no domain fits (it should — forcing a domain onto an entry that has none
-  is worse than leaving it uncategorised), and whether more than one domain per
-  entry is allowed (almost certainly yes, capped low).
-- **`MAX_TOPICS` 5 → 3** in `src/lib/summaries/types.ts` is coupled to this.
-  It is code rather than copy, but it is pointless without the prompt change, so
-  it defers with it.
-
-**Quotes guidance is still owed** and should be drafted into this same v2 bump
-rather than a v3 — one version change means the archive reflows once instead of
-twice. The deterministic filter (`refineQuotes()` in
-`src/lib/summaries/parse.ts`) already removes the mechanical failures;
-the prompt is what decides whether a quote is *notable*, which is the part still
-wrong.
+**Still owed:** the quotes-guidance rewrite. It was going to ride in this same
+version bump and did not, so doing it later costs a second full re-summarise.
 
 ### Live mismatch: the label shipped ahead of the behaviour
 

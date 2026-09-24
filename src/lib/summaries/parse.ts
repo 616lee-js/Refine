@@ -1,3 +1,4 @@
+import { canonicalCategory } from "./categories";
 import {
   MAX_PEOPLE,
   MAX_QUOTES,
@@ -106,6 +107,31 @@ export function refineQuotes(quotes: SummaryQuote[], body: string): SummaryQuote
   return kept;
 }
 
+/**
+ * Model categories, resolved against the fixed vocabulary.
+ *
+ * This is what makes the closed list a guarantee rather than an instruction:
+ * anything the model invents is dropped here, before storage, so a one-off
+ * phrase can never reach the database however the prompt is interpreted.
+ *
+ * Case and surrounding space are forgiven and mapped to the canonical spelling
+ * — failing an otherwise-correct category over a capital letter would be
+ * pedantry, and "Work" and "work" splitting into two buckets is the exact
+ * problem this exists to prevent.
+ *
+ * Order is preserved and duplicates collapse.
+ */
+export function refineCategories(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  for (const value of raw) {
+    const canonical = canonicalCategory(value);
+    if (canonical) seen.add(canonical);
+  }
+  return [...seen].slice(0, MAX_TOPICS);
+}
+
 export function parse(raw: string, body: string): EntrySummary {
   let parsed: unknown;
   try {
@@ -128,7 +154,7 @@ export function parse(raw: string, body: string): EntrySummary {
 
   return {
     summary: obj.summary.trim().slice(0, MAX_SUMMARY_CHARS),
-    topics: asStringArray(obj.topics, MAX_TOPICS),
+    topics: refineCategories(obj.topics),
     people: asStringArray(obj.people, MAX_PEOPLE),
     // Located, then refined, then capped — the cap applies after the weak
     // picks are gone, so a bad first pick does not cost a good fourth one.

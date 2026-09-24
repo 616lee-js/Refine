@@ -45,7 +45,12 @@ export type RawSummary = {
   thin: boolean;
 };
 
-export const MAX_TOPICS = 5;
+/**
+ * The cap is the vocabulary itself — see src/lib/summaries/categories.ts. There
+ * is no arbitrary limit per entry: the prompt asks for restraint, and a long
+ * entry that genuinely ranges across most of the domains may carry them.
+ */
+export const MAX_TOPICS = 9;
 export const MAX_PEOPLE = 5;
 /** What the model may pick. */
 export const MAX_QUOTES = 3;

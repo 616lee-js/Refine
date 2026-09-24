@@ -8,6 +8,7 @@ import summariserPrompt from "@/lib/layer2/entry-summariser.md";
 
 import type { EntrySummary } from "./types";
 import { parse, SummaryGenerationError } from "./parse";
+import { CATEGORY_FINGERPRINT, categoryPromptBlock } from "./categories";
 
 export { SummaryGenerationError };
 
@@ -15,8 +16,28 @@ export { SummaryGenerationError };
  * Recorded against every summary row. Derived from the prompt's own header, so
  * editing the prompt makes old and new summaries distinguishable without anyone
  * remembering to bump a literal.
+ *
+ * The category fingerprint is folded in because the vocabulary lives in
+ * TypeScript, not in the markdown. Without it, editing that list would change
+ * what the model is told while leaving the version identical — nothing would be
+ * regenerated, and the archive would hold two incompatible vintages with no way
+ * to tell them apart. Changing the list is now self-announcing: every summary
+ * becomes due, exactly as a prompt edit does.
  */
-export const SUMMARISER_VERSION = promptVersion(summariserPrompt);
+export const SUMMARISER_VERSION = `${promptVersion(
+  summariserPrompt
+)}+${CATEGORY_FINGERPRINT}`;
+
+/**
+ * The prompt with the category list substituted in.
+ *
+ * Interpolated rather than pasted into the markdown so the two cannot drift.
+ * Built once at module load — the list is static.
+ */
+const SYSTEM_PROMPT = summariserPrompt.replace(
+  "{{CATEGORIES}}",
+  categoryPromptBlock()
+);
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -47,7 +68,7 @@ export async function generateSummary(body: string): Promise<EntrySummary> {
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 700,
-    system: summariserPrompt,
+    system: SYSTEM_PROMPT,
     messages: [
       {
         role: "user",

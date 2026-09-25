@@ -75,7 +75,7 @@ function Row({
               color: row.type === "bug" ? "var(--color-error)" : "var(--rf-accent-2)",
               background:
                 row.type === "bug"
-                  ? "rgba(163, 58, 37, 0.08)"
+                  ? "var(--rf-error-soft)"
                   : "var(--rf-accent-2-soft)",
             }}
           >

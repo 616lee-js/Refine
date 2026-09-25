@@ -57,7 +57,7 @@ export function ReadBack({
               fontSize: "13.5px",
               lineHeight: 1.7,
               color: "var(--color-error)",
-              background: "rgba(163, 58, 37, 0.08)",
+              background: "var(--rf-error-soft)",
             }}
           >
             {COPY.decryptFailed}

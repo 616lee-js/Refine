@@ -114,7 +114,7 @@ function Answer({ label, value }: { label: string; value: boolean | null }) {
           ? "transparent"
           : value
             ? "var(--rf-accent-2-soft)"
-            : "rgba(163, 58, 37, 0.08)",
+            : "var(--rf-error-soft)",
         boxShadow: none ? "inset 0 0 0 1px var(--rf-border)" : "none",
       }}
     >

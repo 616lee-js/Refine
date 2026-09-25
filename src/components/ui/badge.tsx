@@ -1,8 +1,16 @@
 import { type ReactNode } from "react";
 
 /**
- * NOTE: this component is currently unreferenced. Kept because the tier
- * variants pair with admin/safety-log, which may adopt it.
+ * A small mono pill.
+ *
+ * ── Two families, and they do not mix ─────────────────────────────────────────
+ * The product variants read palette tokens, so they move with Dawn, Dusk and
+ * Slate and with light or dark.
+ *
+ * The tier variants are Tailwind stone/yellow/orange/red and stay that way. They
+ * belong to admin/safety-log, which is an internal review tool: a tier has to be
+ * unambiguous at a glance rather than harmonious with the paper, and admin pins
+ * itself to Dawn light anyway. Do not "fix" them to tokens.
  *
  * The `source-claude` variant was removed 2026-07-30 along with its token —
  * nothing in the product is authored by Claude any more, so there is no such
@@ -16,17 +24,42 @@ type BadgeVariant =
   | "status-active"
   | "status-ended"
   | "source-user"
+  | "accent"
   | "neutral";
 
-const VARIANT_CLASSES: Record<BadgeVariant, string> = {
+/** Product variants: tokens only. */
+const VARIANT_STYLES: Partial<Record<BadgeVariant, React.CSSProperties>> = {
+  "status-active": {
+    color: "var(--rf-accent-2)",
+    background: "var(--rf-accent-2-soft)",
+  },
+  "status-ended": {
+    color: "var(--rf-text-3)",
+    background: "var(--rf-surface)",
+    boxShadow: "inset 0 0 0 1px var(--rf-border)",
+  },
+  accent: {
+    color: "var(--rf-accent)",
+    background: "var(--rf-accent-soft)",
+  },
+  "source-user": {
+    color: "var(--rf-text-3)",
+    background: "transparent",
+    boxShadow: "inset 0 0 0 1px var(--rf-border)",
+  },
+  neutral: {
+    color: "var(--rf-text-3)",
+    background: "transparent",
+    boxShadow: "inset 0 0 0 1px var(--rf-border)",
+  },
+};
+
+/** Admin tier variants: deliberately off-palette. See the note above. */
+const TIER_CLASSES: Partial<Record<BadgeVariant, string>> = {
   "tier-0": "bg-stone-100 text-stone-500",
   "tier-1": "bg-yellow-100 text-yellow-700",
   "tier-2": "bg-orange-100 text-orange-700",
   "tier-3": "bg-red-100 text-red-700",
-  "status-active": "bg-green-50 text-green-600",
-  "status-ended": "bg-stone-100 text-stone-400",
-  "source-user": "bg-stone-100 text-stone-500",
-  neutral: "bg-stone-100 text-stone-500",
 };
 
 export function tierVariant(tier: number): BadgeVariant {
@@ -45,9 +78,17 @@ export function Badge({
   children: ReactNode;
   className?: string;
 }) {
+  const tierClass = TIER_CLASSES[variant];
+
   return (
     <span
-      className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${VARIANT_CLASSES[variant]} ${className}`}
+      className={`inline-block rounded-full font-mono uppercase ${tierClass ?? ""} ${className}`}
+      style={{
+        padding: "2px 8px",
+        fontSize: "9px",
+        letterSpacing: "0.14em",
+        ...(tierClass ? {} : VARIANT_STYLES[variant]),
+      }}
     >
       {children}
     </span>

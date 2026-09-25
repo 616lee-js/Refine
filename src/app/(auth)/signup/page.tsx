@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Notice } from "@/components/ui/notice";
 import { MIN_PASSWORD_LENGTH } from "@/lib/auth";
 
 // COPY REVIEW: all of it — headings, labels, placeholders and every error.
@@ -117,9 +118,7 @@ export default async function SignupPage({
           </div>
 
           {errorMessage && (
-            <p className="text-sm text-red-600" role="alert">
-              {errorMessage}
-            </p>
+            <Notice tone="error">{errorMessage}</Notice>
           )}
 
           <button

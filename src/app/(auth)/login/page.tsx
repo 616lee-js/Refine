@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Notice } from "@/components/ui/notice";
 
 // COPY REVIEW: all of it — headings, labels, placeholders and errors.
 const COPY = {
@@ -61,9 +62,7 @@ export default async function LoginPage({
           </div>
 
           {error && (
-            <p className="text-sm text-red-600" role="alert">
-              {COPY.error}
-            </p>
+            <Notice tone="error">{COPY.error}</Notice>
           )}
 
           <button

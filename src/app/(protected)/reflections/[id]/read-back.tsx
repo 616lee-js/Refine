@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { Notice } from "@/components/ui/notice";
 import { EntrySummaryPanel, type EntrySummaryPanelProps } from "./entry-summary";
 import { EntryBody } from "./entry-body";
 
@@ -51,17 +52,7 @@ export function ReadBack({
 
       <Sheet className="px-9 py-9 sm:px-12 sm:py-11">
         {decryptFailed ? (
-          <p
-            className="rounded-[10px] px-5 py-4"
-            style={{
-              fontSize: "13.5px",
-              lineHeight: 1.7,
-              color: "var(--color-error)",
-              background: "var(--rf-error-soft)",
-            }}
-          >
-            {COPY.decryptFailed}
-          </p>
+          <Notice tone="error">{COPY.decryptFailed}</Notice>
         ) : body ? (
           <EntryBody body={body} onQuote={setPendingQuote} />
         ) : (

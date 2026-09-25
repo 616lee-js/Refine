@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
+import { Badge } from "@/components/ui/badge";
+import { Notice } from "@/components/ui/notice";
 import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/summaries/types";
 import { CATEGORY_VALUES, canonicalCategory } from "@/lib/summaries/categories";
 
@@ -299,21 +301,9 @@ export function EntrySummaryPanel({
           style={{ color: "var(--rf-text-3)" }}
         >
           <span style={{ fontSize: "13px" }}>{COPY.heading}</span>
+          {/* Was a hand-drawn pill with Badge's exact values copied inline. */}
           {source === "user" && (
-            <span
-              className="rounded-full"
-              style={{
-                padding: "2px 8px",
-                fontSize: "9px",
-                letterSpacing: "0.14em",
-                fontFamily: "var(--font-mono)",
-                textTransform: "uppercase",
-                color: "var(--rf-accent-2)",
-                background: "var(--rf-accent-2-soft)",
-              }}
-            >
-              {COPY.yourVersion}
-            </span>
+            <Badge variant="status-active">{COPY.yourVersion}</Badge>
           )}
           {generationVersion && (
             <span style={{ ...mono, color: "var(--rf-text-4)" }}>
@@ -332,18 +322,10 @@ export function EntrySummaryPanel({
           }}
         >
           {stale && (
-            <p
-              className="mb-3 rounded-[4px] px-3 py-2"
-              style={{
-                fontSize: "12px",
-                lineHeight: 1.5,
-                color: "var(--rf-warn)",
-                background: "var(--rf-warn-soft)",
-              }}
-            >
+            <Notice tone="warn" className="mb-3">
               {COPY.stale}
               {source === "user" && COPY.staleKept}.
-            </p>
+            </Notice>
           )}
 
           {shown.thin && !editing && (

@@ -124,6 +124,10 @@ export default function OnboardingPage() {
   }
 
   return (
+    /* Dawn light, like the sign-up screen it follows. Onboarding is the first
+       thing a new account sees and no appearance has been chosen yet; a
+       returning visitor's cookie must not recolour it. */
+    <div data-palette="dawn" data-mode="light">
     <PageBg>
       <div className="grid min-h-0 flex-1 lg:grid-cols-2">
         {/* Explainer. Below lg it stacks above the fields, so the framing is
@@ -286,5 +290,6 @@ export default function OnboardingPage() {
         </div>
       </div>
     </PageBg>
+    </div>
   );
 }

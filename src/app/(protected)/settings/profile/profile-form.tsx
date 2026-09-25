@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
+import { Preferences } from "./preferences";
+import type { Mode, Palette } from "@/lib/appearance";
 
 type Profile = { tendencies: string; goals: string; background: string };
 
@@ -50,7 +52,15 @@ const COPY = {
   saveError: "[COPY] Didn't save — your text is still here",
 } as const;
 
-export function ProfileForm({ admin }: { admin: React.ReactNode }) {
+export function ProfileForm({
+  admin,
+  initialPalette,
+  initialMode,
+}: {
+  admin: React.ReactNode;
+  initialPalette: Palette;
+  initialMode: Mode;
+}) {
   const [draft, setDraft] = useState<Profile>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -195,6 +205,10 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
               </div>
             </form>
           )}
+
+          {/* Outside the form above, because it saves on pick rather than on
+              Save. See ./preferences.tsx. */}
+          <Preferences initialPalette={initialPalette} initialMode={initialMode} />
 
           {/*
             A link to the app's instructions to Claude sat here until

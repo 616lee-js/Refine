@@ -80,6 +80,15 @@ export interface AuthUser {
   id: string;
   displayName: string;
   email: string;
+  /**
+   * The stored preferences blob, as-is and unvalidated.
+   *
+   * Here so the login route can write the appearance cookies onto the device
+   * being signed in from — the row is already selected in full, so carrying it
+   * costs nothing and saves a second query. Callers validate what they read;
+   * see `readPalette` / `readMode` in src/lib/appearance.ts.
+   */
+  preferences: unknown;
 }
 
 /**
@@ -115,7 +124,12 @@ export async function loginUser(
   const valid = await verifyPassword(password, row.passwordHash);
   if (!valid) return null;
 
-  return { id: row.id, displayName: row.displayName, email: storedEmail };
+  return {
+    id: row.id,
+    displayName: row.displayName,
+    email: storedEmail,
+    preferences: row.preferences,
+  };
 }
 
 /** Minimum password length. Raised from 8 when the app moved off local-only hosting. */
@@ -206,6 +220,13 @@ export async function registerUser(
       .set({ usedAt: new Date(), usedByUserId: id })
       .where(eq(inviteCodes.id, invite.id));
 
-    return { id, displayName: displayName.trim(), email: email.trim() };
+    // A new account has chosen nothing yet, so the cookies written after signup
+    // resolve to the defaults — Dawn, light.
+    return {
+      id,
+      displayName: displayName.trim(),
+      email: email.trim(),
+      preferences: {},
+    };
   });
 }

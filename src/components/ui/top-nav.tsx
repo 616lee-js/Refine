@@ -66,7 +66,7 @@ export function TopNav({
 
   return (
     <header
-      className="flex shrink-0 items-center justify-between gap-6 px-6 py-4 sm:px-10"
+      className="flex shrink-0 items-center justify-between gap-6 px-5 py-4"
       style={{ borderBottom: "1px solid var(--rf-border)" }}
     >
       <Wordmark />

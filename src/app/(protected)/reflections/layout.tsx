@@ -47,11 +47,14 @@ export default async function ReflectionsLayout({
     <PageBg>
       <TopNav active="reflections" admin={<AdminNav />} />
 
-      <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
-        <div
-          className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-9"
-          style={{ maxWidth: 1440 }}
-        >
+      {/* Full width and left-aligned, deliberately.
+          It was centred inside a 1440px cap, which on a wide screen pushed the
+          record list away from the left edge and into the middle of the window
+          while the wordmark above it stayed put. Nothing lined up with anything.
+          Now the row starts on the same 20px edge as the nav, and the main view
+          takes whatever is left. */}
+      <div className="flex min-h-0 flex-1 px-5 pt-5">
+        <div className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-7">
           <RecordRail
             initial={{
               records: rail.records,

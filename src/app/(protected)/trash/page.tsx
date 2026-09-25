@@ -94,8 +94,8 @@ export default async function TrashPage() {
     <PageBg>
       <TopNav active="mirror" admin={<AdminNav />} />
 
-      <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
-        <div className="w-full pb-14" style={{ maxWidth: 700 }}>
+      <div className="flex min-h-0 flex-1 justify-center px-5 pt-[26px]">
+        <div className="w-full pb-14" style={{ maxWidth: 820 }}>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-[14px]">
             <div>
               <Eyebrow>

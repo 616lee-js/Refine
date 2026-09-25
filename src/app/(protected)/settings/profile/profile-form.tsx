@@ -91,8 +91,8 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
     <PageBg>
       <TopNav active="profile" admin={admin} />
 
-      <div className="flex min-h-0 flex-1 justify-center px-4 pt-[26px] sm:px-6">
-        <div className="w-full pb-14" style={{ maxWidth: 640 }}>
+      <div className="flex min-h-0 flex-1 justify-center px-5 pt-[26px]">
+        <div className="w-full pb-14" style={{ maxWidth: 820 }}>
           <Eyebrow>{COPY.eyebrow}</Eyebrow>
           <h1
             className="mb-[8px] mt-[9px]"

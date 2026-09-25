@@ -160,7 +160,7 @@ export function ScreenHome({
     <PageBg>
       <TopNav active="today" admin={admin} />
 
-      <main className="flex-1 px-4 pb-14 pt-9 sm:px-6">
+      <main className="flex-1 px-5 pb-14 pt-9">
         <div className="mx-auto w-full" style={{ maxWidth: 780 }}>
           <div className="mb-[26px]">
             <Eyebrow>{greeting}</Eyebrow>

@@ -356,7 +356,7 @@ export default function JournalEntry({
             a long entry gets somewhere for the caret to scroll into. */}
         <div
           className={`flex min-w-0 flex-1 flex-col items-center ${
-            embedded ? "" : "px-4 sm:px-6"
+            embedded ? "" : "px-5"
           } pt-[38px]`}
           style={{ paddingBottom: grown ? "35vh" : 30 }}
         >

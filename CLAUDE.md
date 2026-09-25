@@ -34,6 +34,31 @@ Reasoning behind decisions: `docs/refine_brainstorm_summary.md`
      iterate based on real use."
    - Decisions that look two-way but carry one-way implications once data
      accumulates: call out the asymmetry explicitly.
+9. **Write to the product owner, who is a PM and not an engineer.** This has
+   been raised repeatedly and repeatedly ignored, so it is a rule here rather
+   than a preference.
+
+   The test: could he verify or reject the claim without asking what a word
+   means? If not, rewrite it.
+
+   - Describe **what is on screen and what happens**, not the mechanism.
+     "The page changes as soon as you click, and if the save fails it goes back
+     and says so" — not "optimistic dataset write, reverted on a non-ok
+     response."
+   - Real failures from this project, all of which had to be re-explained:
+     *chips, rail, reflow, hydration, cookie jar, optional chaining, selectors
+     resolve, widen the type, mutation result, server-side, verdicts,
+     proposal/rejection.*
+   - **Never invent vocabulary.** If the product already has a word for it, use
+     the product's word — Mirror says *Keep* and *Remove*, so do not write
+     "confirm" or "reject". If a term is genuinely needed, define it once in
+     plain words at first use.
+   - Never invent process either. Check `docs/` for what already exists before
+     describing how something will be done.
+   - File paths, function names and commit messages are exempt — those are
+     addresses, and precision matters more there. Prose about them is not.
+   - A list of unfamiliar terms is not a summary. If the recap cannot be read
+     without a glossary, it has failed regardless of how accurate it is.
 
 ## Naming conventions
 

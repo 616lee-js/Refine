@@ -657,7 +657,7 @@ export function RecordRail({
               key={`${r.kind}-${r.id}`}
               href={r.href}
               kindLabel={r.kindLabel}
-              at={r.at}
+              dateLabel={r.dateLabel}
               detail={r.detail}
               accent={r.kind === "framework"}
               selected={r.id === selectedId}

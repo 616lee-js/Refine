@@ -10,6 +10,7 @@ import { decrypt } from "@/lib/crypto";
 import { authoritativeSummary } from "@/lib/summaries/read";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { ScreenHome, type RecentRow } from "./home";
+import { formatRecordDate } from "./reflections/records";
 import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
@@ -157,6 +158,7 @@ export default async function HomePage() {
         id: `entry-${e.id}`,
         href: `/reflections/${e.id}`,
         at: at.toISOString(),
+        dateLabel: formatRecordDate(at),
         detail: [] as string[],
         kindLabel: "Writing",
         framework: false,
@@ -175,6 +177,7 @@ export default async function HomePage() {
           ? `/reflections/checkin/${r.id}`
           : `/reflections/framework/${r.id}`,
         at: at.toISOString(),
+        dateLabel: formatRecordDate(at),
         detail: [] as string[],
         kindLabel: q?.shortName ?? r.slug,
         framework: !tracker,

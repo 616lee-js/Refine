@@ -58,6 +58,18 @@ export type ArchiveRecord = {
   id: string;
   href: string;
   at: Date;
+  /**
+   * The date as the card prints it, formatted HERE and never on the client.
+   *
+   * RecordCard is rendered by the record rail, which is a client component, so
+   * anything it formats runs twice — once on the server and once at hydration.
+   * `toLocaleDateString` resolves the host's locale and timezone, and those
+   * differ between a server in UTC and a browser anywhere else, so the two
+   * passes produced different text and React threw a hydration error that took
+   * down the whole route. Formatting once, server-side, and sending the string
+   * is what the check-in page already does with `today`.
+   */
+  dateLabel: string;
   kind: RecordKind;
   /** "Writing", "Check-in", "GAD-7" — what the card is titled with. */
   kindLabel: string;
@@ -70,6 +82,15 @@ export type ArchiveRecord = {
   draft: boolean;
   awaitingSummary: boolean;
 };
+
+/** Server-side only. See the note on `dateLabel`. */
+export function formatRecordDate(at: Date): string {
+  return at.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
 
 export type RecordFilters = {
   kind: RecordKind | "all";
@@ -258,6 +279,7 @@ export async function loadRecords(
           ? `/reflections/${e.id}`
           : `/reflections/${e.id}/edit`,
         at: e.completedAt ?? e.updatedAt,
+        dateLabel: formatRecordDate(e.completedAt ?? e.updatedAt),
         kind: "open",
         kindLabel: "Writing",
         detail: categories,
@@ -291,6 +313,7 @@ export async function loadRecords(
           ? `/reflections/checkin/${r.id}`
           : `/reflections/framework/${r.id}`,
         at: r.completedAt ?? r.createdAt,
+        dateLabel: formatRecordDate(r.completedAt ?? r.createdAt),
         kind: tracker ? "checkin" : "framework",
         kindLabel: q?.shortName ?? r.slug,
         detail,

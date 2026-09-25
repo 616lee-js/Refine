@@ -81,7 +81,14 @@ const INSTRUMENTS = listStartable().filter((q) => q.kind === "likert");
 export type RecentRow = {
   id: string;
   href: string;
-  /** ISO string — the card formats it. */
+  /**
+   * Already formatted, server-side. This screen is a client component, so a
+   * date formatted here would render once on the server and again at hydration
+   * with a different locale and timezone. See formatRecordDate in
+   * reflections/records.ts.
+   */
+  dateLabel: string;
+  /** ISO string. Kept for sorting and keys, never for display. */
   at: string;
   /** Categories, or a check-in's values. The card's subheader. */
   detail: string[];
@@ -421,7 +428,7 @@ export function ScreenHome({
                     key={r.id}
                     href={r.href}
                     kindLabel={r.kindLabel}
-                    at={new Date(r.at)}
+                    dateLabel={r.dateLabel}
                     detail={r.detail}
                     accent={r.framework}
                   />

@@ -30,7 +30,14 @@ export type RecordCardProps = {
   href: string;
   /** "Writing", "Check-in", "GAD-7" — the mechanism, not the content. */
   kindLabel: string;
-  at: Date;
+  /**
+   * The date, already formatted. A string rather than a Date on purpose: this
+   * component is rendered inside the record rail, which is a client component,
+   * so formatting here would run on the server and again at hydration and the
+   * two would disagree about locale and timezone. See `formatRecordDate` in
+   * reflections/records.ts.
+   */
+  dateLabel: string;
   /** Categories, or a check-in's values. Joined with · and clamped to 2 lines. */
   detail?: string[];
   /** The record open in the main view. */
@@ -48,7 +55,7 @@ export type RecordCardProps = {
 export function RecordCard({
   href,
   kindLabel,
-  at,
+  dateLabel,
   detail = [],
   selected = false,
   accent = false,
@@ -98,11 +105,7 @@ export function RecordCard({
               color: "var(--rf-text-2)",
             }}
           >
-            {at.toLocaleDateString(undefined, {
-              weekday: "short",
-              day: "numeric",
-              month: "short",
-            })}
+            {dateLabel}
           </span>
         </div>
 

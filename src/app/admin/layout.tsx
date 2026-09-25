@@ -42,7 +42,19 @@ export default async function AdminLayout({
   await requireAdmin();
 
   return (
-    <PageBg>
+    /*
+     * Pinned to Dawn, light, whatever the person browsing has chosen.
+     *
+     * Admin is a set of review tools, not part of the reflective surface, and
+     * two of its screens show other people's journal content. Its colours are
+     * load-bearing: the cool slate chrome says "you are somewhere else", and the
+     * tier badges have to be unambiguous at a glance. Let a user's palette reach
+     * in here and the chrome stops being the only cool thing on the page, while
+     * the tier badges — which are Tailwind colours, not tokens — would sit on a
+     * dark sheet unchanged and unreadable.
+     */
+    <div data-palette="dawn" data-mode="light">
+      <PageBg>
       <TopNav admin={<AdminNav active />} />
 
       {/* A standing reminder of where you are. Admin surfaces decrypt other
@@ -78,7 +90,8 @@ export default async function AdminLayout({
       {/* Admin pages are reviewed by the same people who report on them. The
           route patterns it records (/admin/safety-log, /admin/feedback) carry no
           identifier, so nothing about the submission changes here. */}
-      <FeedbackWidget />
-    </PageBg>
+        <FeedbackWidget />
+      </PageBg>
+    </div>
   );
 }

@@ -74,7 +74,6 @@ export async function GET(req: Request) {
           .set({
             encryptedBody: null,
             purgedAt: now,
-            extractionStatus: null,
             updatedAt: now,
           })
           .where(eq(journalEntries.id, id));

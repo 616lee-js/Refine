@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { randomUUID } from "crypto";
-import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { contentAccessLog, questionnaireResponses } from "@/lib/db/schema";
+import {
+  contentAccessLog,
+  mirrorReviews,
+  questionnaireResponses,
+} from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import {
@@ -19,9 +23,24 @@ import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
 import { MemoryPanel } from "./memory-panel";
 import { TrendsPanel } from "./trends-panel";
+import {
+  ReportPanel,
+  type CurrentReport,
+  type ReportPeriod,
+} from "./report-panel";
+import { authoritativeReport, periodNote } from "@/lib/mirror/read";
 
 /**
- * Mirror — Memory, and Trends once there is anything to plot.
+ * Mirror — the Report, with Memory and Trends behind it.
+ *
+ * ── The report leads ──────────────────────────────────────────────────────────
+ * Mirror is a report describing what Refine has noticed across someone's writing
+ * over time (decided 2026-09-24). Memory and Trends are what it draws on, so
+ * they sit behind it rather than beside it.
+ *
+ * Until the first report exists, Mirror opens on Memory as it always did — an
+ * empty report is not worth landing someone on when there is a populated page
+ * one tab away.
  *
  * ── Why the tab is a URL parameter ────────────────────────────────────────────
  * Trends decrypts every check-in in the window. If the tab were client state,
@@ -48,11 +67,12 @@ const COPY = {
     "[COPY] Everything here came from your own writing and check-ins. Confirm it, correct it, or take it out.",
   tabMemory: "[COPY] Memory",
   tabTrends: "[COPY] Trends",
+  tabReport: "[COPY] Report",
 } as const;
 
 export const dynamic = "force-dynamic";
 
-type Tab = "memory" | "trends";
+type Tab = "report" | "memory" | "trends";
 
 export default async function MirrorPage({
   searchParams,
@@ -89,11 +109,36 @@ export default async function MirrorPage({
     return n >= Math.min(MIN_LINE_READINGS, MIN_MATRIX_DAYS);
   });
 
-  const tab: Tab = rawTab === "trends" && trendsAvailable ? "trends" : "memory";
+  // Cheap: one row, no ciphertext read, just "is there a report at all".
+  const [newest] = await db
+    .select({ id: mirrorReviews.id })
+    .from(mirrorReviews)
+    .where(eq(mirrorReviews.userId, userId))
+    .orderBy(desc(mirrorReviews.createdAt))
+    .limit(1);
+
+  const reportAvailable = Boolean(newest);
+
+  const tab: Tab =
+    rawTab === "trends" && trendsAvailable
+      ? "trends"
+      : rawTab === "memory"
+        ? "memory"
+        : reportAvailable
+          ? "report"
+          : "memory";
 
   let trends: Trends | null = null;
   if (tab === "trends") {
     trends = await loadTrends(userId);
+  }
+
+  let report: { current: CurrentReport | null; history: ReportPeriod[] } = {
+    current: null,
+    history: [],
+  };
+  if (tab === "report") {
+    report = await loadReport(userId);
   }
 
   return (
@@ -138,22 +183,30 @@ export default async function MirrorPage({
             </p>
           </div>
 
-          {trendsAvailable && (
+          {(trendsAvailable || reportAvailable) && (
             <nav
               className="mt-[18px] flex gap-[26px]"
               style={{ borderBottom: "1px solid var(--rf-border)" }}
             >
               {(
                 [
+                  // Each tab appears only once it holds something. A tab
+                  // arriving is itself the signal — same rule Trends has always
+                  // followed.
+                  ...(reportAvailable
+                    ? ([["report", COPY.tabReport]] as const)
+                    : []),
                   ["memory", COPY.tabMemory],
-                  ["trends", COPY.tabTrends],
+                  ...(trendsAvailable
+                    ? ([["trends", COPY.tabTrends]] as const)
+                    : []),
                 ] as const
               ).map(([key, label]) => {
                 const on = tab === key;
                 return (
                   <Link
                     key={key}
-                    href={key === "memory" ? "/mirror" : "/mirror?tab=trends"}
+                    href={`/mirror?tab=${key}`}
                     aria-current={on ? "page" : undefined}
                     style={{
                       paddingBottom: 11,
@@ -172,7 +225,9 @@ export default async function MirrorPage({
           )}
 
           <div className="pt-[22px]">
-            {tab === "trends" && trends ? (
+            {tab === "report" ? (
+              <ReportPanel current={report.current} history={report.history} />
+            ) : tab === "trends" && trends ? (
               <TrendsPanel trends={trends} />
             ) : (
               <MemoryPanel />
@@ -197,6 +252,80 @@ export default async function MirrorPage({
  * `questionnaireResponseId` stays null for the same reason: this access is not
  * about any one response.
  */
+/**
+ * Reads the current report and the notes from every run before it.
+ *
+ * ── One audit row, not one per report ─────────────────────────────────────────
+ * Opening the report is one deliberate act by the owner of the data. It
+ * decrypts the current report and every past period note, so the row carries
+ * the count — the same shape Trends and the archive use, for the same reason:
+ * a row per record buries the log in the noise it exists to make visible.
+ *
+ * ── Everything reads through the resolver ─────────────────────────────────────
+ * `authoritativeReport()` decides which version counts, so a report the person
+ * rewrote is shown as they wrote it. Reading the columns directly here would be
+ * a second implementation of that rule, and the one that quietly disagrees.
+ *
+ * An unreadable row is dropped rather than failing the page: a key problem
+ * should cost the history, not the whole of Mirror.
+ */
+async function loadReport(
+  userId: string
+): Promise<{ current: CurrentReport | null; history: ReportPeriod[] }> {
+  const rows = await db
+    .select()
+    .from(mirrorReviews)
+    .where(eq(mirrorReviews.userId, userId))
+    .orderBy(desc(mirrorReviews.createdAt));
+
+  if (rows.length === 0) return { current: null, history: [] };
+
+  let decrypted = 0;
+  let current: CurrentReport | null = null;
+
+  const [newest] = rows;
+  try {
+    const resolved = authoritativeReport(newest);
+    decrypted++;
+    current = {
+      id: newest.id,
+      text: resolved.report,
+      edited: resolved.source === "user",
+      createdAt: newest.createdAt.toISOString(),
+      windowStart: newest.windowStart.toISOString(),
+      entriesRead: newest.entriesRead,
+    };
+  } catch (err) {
+    console.error(
+      `Mirror report decrypt failed for user ${userId}:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  const history: ReportPeriod[] = [];
+  for (const row of rows) {
+    try {
+      history.push({
+        id: row.id,
+        note: periodNote(row),
+        windowStart: row.windowStart.toISOString(),
+        windowEnd: row.windowEnd.toISOString(),
+      });
+      decrypted++;
+    } catch {
+      // Dropped from the history rather than taking the page down.
+    }
+  }
+
+  await db.insert(contentAccessLog).values({
+    id: randomUUID(),
+    userId,
+    context: `mirror_report_view (${decrypted} records read)`,
+  });
+
+  return { current, history };
+}
+
 async function loadTrends(userId: string): Promise<Trends> {
   const rows = await db
     .select({

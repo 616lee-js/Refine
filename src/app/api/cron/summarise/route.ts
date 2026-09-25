@@ -1,4 +1,5 @@
 import { runSummaryQueue, SUMMARY_BATCH_SIZE } from "@/lib/summaries/queue";
+import { runMirrorReviews } from "@/lib/mirror/review";
 import { requireCronSecret } from "@/lib/cron-auth";
 
 /**
@@ -20,6 +21,17 @@ import { requireCronSecret } from "@/lib/cron-auth";
  * FREQUENCY at once per day. Raising it is a one-line schedule edit if the
  * backlog ever justifies one — the queue is derived, so running it more often is
  * simply running it more often.
+ *
+ * ── Mirror's review rides along ───────────────────────────────────────────────
+ * It wants a weekly or fortnightly cadence, not a daily one, and it does not
+ * need a schedule of its own to get one: it checks how long it has been since
+ * each person's last review and skips anyone not yet due. Riding the nightly run
+ * keeps the cadence a value in the database rather than a line in vercel.json,
+ * which is what makes weekly-vs-fortnightly changeable without a deploy.
+ *
+ * Summaries run FIRST and are awaited. The review reads summaries, so running it
+ * against an archive with a day's worth missing would quietly review less than
+ * everything.
  *
  * ── Batch bound ───────────────────────────────────────────────────────────────
  * SUMMARY_BATCH_SIZE entries per run at concurrency 3. Leftovers stay due and
@@ -49,5 +61,18 @@ export async function GET(req: Request) {
     })
   );
 
-  return Response.json(result);
+  // Never fails the run. Summarising is the job this endpoint exists for, and a
+  // broken review must not make it look as though summaries did not happen.
+  let mirror: Awaited<ReturnType<typeof runMirrorReviews>> | null = null;
+  try {
+    mirror = await runMirrorReviews();
+    console.log(JSON.stringify({ event: "mirror_review_run", ...mirror }));
+  } catch (err) {
+    console.error(
+      "mirror review run failed:",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  return Response.json({ ...result, mirror });
 }

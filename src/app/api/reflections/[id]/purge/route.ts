@@ -76,7 +76,6 @@ export async function DELETE(
         // Keep deletedAt set so the entry stays out of the active list even if
         // purgedAt filtering is ever missed somewhere.
         deletedAt: now,
-        extractionStatus: null,
         updatedAt: now,
       })
       .where(eq(journalEntries.id, id));

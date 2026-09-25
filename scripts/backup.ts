@@ -45,11 +45,16 @@ const TABLES = [
   "journal_entries",
   "journal_entry_summaries",
   "questionnaire_responses",
+  // Before user_memory: a memory row points back at the review that caught it.
+  "mirror_reviews",
   "user_memory",
   "safety_log",
   "content_access_log",
-  // No foreign keys, so position is free — it is last because it is the newest.
+  // Points at users and journal_entries, so it follows both.
+  "summary_evaluations",
+  // No foreign keys, so position is free.
   "feedback",
+  "app_settings",
 ] as const;
 
 type Dump = {
@@ -74,8 +79,19 @@ function connect(): Client {
   });
 }
 
-/** Guards against a dump that silently misses a table added in a later migration. */
-async function assertTableListComplete(c: Client) {
+/**
+ * Guards against a dump that silently misses a table added in a later migration.
+ *
+ * Only one direction is dangerous. A live table absent from TABLES means rows
+ * exist that this file will not contain, while the file still looks complete —
+ * that is refused. The reverse, a name in TABLES with no table behind it yet,
+ * loses nothing: it happens for the length of one backup taken between writing a
+ * migration and applying it, which is exactly when a backup is most wanted.
+ * Those are reported and skipped.
+ *
+ * Returns the tables to actually read.
+ */
+async function liveTables(c: Client): Promise<string[]> {
   const { rows } = await c.query<{ table_name: string }>(
     `SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`
@@ -91,16 +107,23 @@ async function assertTableListComplete(c: Client) {
         `A backup that silently omits a table is worse than no backup, because it looks like one.`
     );
   }
+
+  const notYetCreated = known.filter((t) => !live.includes(t));
+  for (const t of notYetCreated) {
+    console.log(`  ${t.padEnd(26)} not created yet — skipped`);
+  }
+
+  return known.filter((t) => live.includes(t));
 }
 
 async function dump() {
   const c = connect();
   await c.connect();
   try {
-    await assertTableListComplete(c);
+    const present = await liveTables(c);
 
     const tables: Dump["tables"] = {};
-    for (const t of TABLES) {
+    for (const t of present) {
       const { rows } = await c.query(`SELECT * FROM "${t}"`);
       tables[t] = rows;
       console.log(`  ${t.padEnd(26)} ${rows.length} rows`);
@@ -124,7 +147,7 @@ async function dump() {
 
     const total = Object.values(tables).reduce((n, r) => n + r.length, 0);
     console.log(`\nWrote ${file}`);
-    console.log(`${total} rows across ${TABLES.length} tables.`);
+    console.log(`${total} rows across ${present.length} tables.`);
     console.log(
       "\nThis file is ciphertext. Back up ENCRYPTION_KEY and EMAIL_HMAC_KEY separately,\n" +
         "or it cannot be read back."
@@ -134,33 +157,53 @@ async function dump() {
   }
 }
 
-function load(file: string): Dump {
+/**
+ * Reads a backup file and says which tables it does not contain.
+ *
+ * Absence used to be fatal. It cannot be, now that a dump legitimately skips a
+ * table that does not exist yet — and more to the point, every backup taken
+ * before a table was added is absent it, which is most of them. The file cannot
+ * tell you whether a table is missing because it never existed or because
+ * something truncated the file.
+ *
+ * So it is reported, loudly, every time the file is read, and restore lands
+ * those tables empty. Loud and honest beats a refusal that would block a
+ * legitimate restore from an older file.
+ */
+function load(file: string): { dump: Dump; absent: string[] } {
   const parsed = JSON.parse(readFileSync(file, "utf-8")) as Dump;
   if (!parsed.tables) throw new Error("Not a Refine backup: no `tables` key.");
-  for (const t of TABLES) {
-    if (!(t in parsed.tables)) {
-      throw new Error(
-        `Backup is incomplete: "${t}" is absent. Restoring it would silently lose that table.`
-      );
-    }
+  const absent = TABLES.filter((t) => !(t in parsed.tables));
+  if (absent.length > 0) {
+    console.log(
+      `\nNot in this file: ${absent.join(", ")}.\n` +
+        `Either taken before those tables existed, or the file is incomplete.\n` +
+        `A restore would leave them empty.\n`
+    );
   }
-  return parsed;
+  return { dump: parsed, absent };
 }
 
 /** Reads a backup without touching the database. Safe to run any time. */
 function verify(file: string) {
-  const d = load(file);
+  const { dump: d, absent } = load(file);
   console.log(`Backup taken   : ${d.takenAt}`);
   console.log(`Source database: ${d.database}\n`);
   let total = 0;
   for (const t of TABLES) {
-    const n = d.tables[t].length;
-    total += n;
-    console.log(`  ${t.padEnd(26)} ${n} rows`);
+    const rows = d.tables[t];
+    if (!rows) {
+      console.log(`  ${t.padEnd(26)} absent`);
+      continue;
+    }
+    total += rows.length;
+    console.log(`  ${t.padEnd(26)} ${rows.length} rows`);
   }
-  console.log(`\n${total} rows. All ${TABLES.length} tables present.`);
+  console.log(
+    `\n${total} rows across ${TABLES.length - absent.length} of ${TABLES.length} tables.`
+  );
 
-  const entries = d.tables["journal_entries"];
+  const entries = d.tables["journal_entries"] ?? [];
   const withBody = entries.filter((e) => e["encrypted_body"]).length;
   console.log(
     `journal_entries with content: ${withBody}/${entries.length} (the rest are drafts or purged shells)`
@@ -179,14 +222,16 @@ function verify(file: string) {
  * accident, and merging two divergent copies is a decision, not a default.
  */
 async function restore(file: string) {
-  const d = load(file);
+  const { dump: d } = load(file);
   const c = connect();
   await c.connect();
 
   try {
-    await assertTableListComplete(c);
+    // Restore targets a migrated database, so every table must exist here —
+    // unlike a dump, where one can legitimately be a migration behind.
+    const present = await liveTables(c);
 
-    for (const t of TABLES) {
+    for (const t of present) {
       const { rows } = await c.query<{ count: string }>(
         `SELECT count(*)::int AS count FROM "${t}"`
       );
@@ -203,7 +248,10 @@ async function restore(file: string) {
     let total = 0;
 
     for (const t of TABLES) {
-      const rows = d.tables[t];
+      // A file written before this table existed simply has no key for it.
+      // Restoring an older backup into a newer schema is a legitimate thing to
+      // want, and the table lands empty, which is what it was.
+      const rows = d.tables[t] ?? [];
       if (rows.length === 0) {
         console.log(`  ${t.padEnd(26)} 0 rows`);
         continue;

@@ -177,8 +177,17 @@ export const journalEntries = pgTable("journal_entries", {
   classifiedAt: timestamp("classified_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   purgedAt: timestamp("purged_at", { withTimezone: true }),
-  /** Phase 6 memory-extraction lifecycle: null → pending → running → succeeded/failed. */
-  extractionStatus: text("extraction_status"),
+  /*
+   * `extraction_status` was here — a per-entry null → pending → running →
+   * succeeded/failed lifecycle, added in Phase 5 and never written to by
+   * anything. Dropped 2026-09-24, NULL on every row at the time.
+   *
+   * It is not coming back. The summariser queue settled the same question
+   * better: derive the work by joining entries against what they produced, so a
+   * run that dies halfway leaves work due rather than rows stuck in "running"
+   * that something has to clean up. Mirror's weekly review follows that, and it
+   * is cross-entry anyway — a status per entry describes the wrong unit.
+   */
   /**
    * Consecutive failed summarisation attempts.
    *
@@ -375,6 +384,70 @@ export const questionnaireResponses = pgTable("questionnaire_responses", {
 // ── Layer 4 memory ───────────────────────────────────────────────────────────
 
 /**
+ * One row per run of Mirror's report.
+ *
+ * ── What Mirror is ────────────────────────────────────────────────────────────
+ * A report describing insights and trends across someone's entries over time —
+ * something they read, not a list they sort. Settled 2026-09-24, superseding an
+ * earlier direction where each run dropped individual facts and threads into
+ * Memory for one-by-one approval. Nothing is written into `user_memory` by
+ * anything but the person themselves.
+ *
+ * ── Two timeframes in one row ─────────────────────────────────────────────────
+ * `encrypted_report` is the running whole-picture report, rewritten each run and
+ * always describing everything written so far. `encrypted_period_note` is the
+ * short account of what changed in this window alone. Mirror shows the newest
+ * row's report; the history is every row's period note, read back in order.
+ *
+ * Both in one row because they are produced by one call about one window.
+ * Splitting them would allow a report with no period behind it.
+ *
+ * ── The person's edit wins ────────────────────────────────────────────────────
+ * Same rule and the same shape as a corrected summary: `encrypted_user_report`
+ * holds their rewrite when they have made one, the generated version is kept
+ * beside it, and everything downstream reads through the resolver rather than
+ * picking a column. A report is Refine's account of a person, so their
+ * correction to it is the authoritative one.
+ *
+ * ── Purging an entry does NOT clear these ─────────────────────────────────────
+ * Deliberate, and a departure from the rule that destroys an entry's summary and
+ * its assessment copies. The product owner's decision (2026-09-24): reports
+ * stand, and the edit control above is how unwanted content is removed. Worth
+ * knowing when reading the Trash copy, which says "removed for good".
+ *
+ * ── Why the text is encrypted blobs ───────────────────────────────────────────
+ * All of it is about the person, so none of it is queryable whatever the shape.
+ * `entries_read` is the one countable thing and is plaintext. Same reasoning as
+ * `questionnaire_responses.encrypted_answers`.
+ */
+export const mirrorReviews = pgTable("mirror_reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** The stretch of writing this run looked at. */
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  windowEnd: timestamp("window_end", { withTimezone: true }).notNull(),
+  /** How many entries, never which — a count needs no decryption to read. */
+  entriesRead: integer("entries_read").notNull(),
+  /** The running whole-picture report as generated. Never read directly — see read.ts. */
+  encryptedReport: text("encrypted_report").notNull(),
+  /** The person's rewrite, when they have made one. Theirs wins. */
+  encryptedUserReport: text("encrypted_user_report"),
+  userEditedAt: timestamp("user_edited_at", { withTimezone: true }),
+  /** What changed in this window alone. The history is these, read in order. */
+  encryptedPeriodNote: text("encrypted_period_note").notNull(),
+  /** Extraction prompt version, derived from its header as summaries are. */
+  modelVersion: text("model_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (t) => [
+  /** The history view, and the next run reading what previous ones found. */
+  index("mirror_reviews_user_created_idx").on(t.userId, desc(t.createdAt)),
+]);
+
+/**
  * Persistent user memory, assembled into prompt context (Layer 4).
  *
  * State model: last_confirmed_at NULL + is_active true = proposed (awaiting the
@@ -396,6 +469,13 @@ export const userMemory = pgTable("user_memory", {
   journalEntryId: text("journal_entry_id").references(() => journalEntries.id, {
     onDelete: "set null",
   }),
+  /*
+   * `mirror_review_id` was here for a few hours on 2026-09-24 — a link back to
+   * the run that caught a row. Removed the same day, unused and empty on every
+   * row: Mirror became a report to read rather than lines to approve, so
+   * nothing but the person writes here. If anything ever proposes memory again,
+   * that is a decision, not a column to restore.
+   */
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

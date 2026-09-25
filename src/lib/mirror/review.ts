@@ -13,6 +13,7 @@ import {
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
+import { replyText } from "@/lib/model-reply";
 import { authoritativeSummary } from "@/lib/summaries/read";
 import { buildTrends, type DecryptedResponse } from "@/lib/trends";
 import type { Answers } from "@/lib/questionnaires";
@@ -367,8 +368,19 @@ export function parseReport(raw: string): RawReport {
   return { report: report.trim(), periodNote: periodNote.trim() };
 }
 
-/** Runs one person's report and stores it. Returns whether one was written. */
-export async function reviewUser(userId: string): Promise<boolean> {
+/**
+ * Runs one person's report and stores it. Returns whether one was written.
+ *
+ * `force` skips the "nothing written since last time" check. The scheduled run
+ * never forces — a report on a fortnight in which nobody wrote anything says
+ * nothing and still costs a call. Manual runs during the closed beta do force,
+ * because otherwise a prompt change cannot be tested twice against the same
+ * account without writing a new entry in between.
+ */
+export async function reviewUser(
+  userId: string,
+  { force = false }: { force?: boolean } = {}
+): Promise<boolean> {
   if (PROMPT_UNWRITTEN) {
     throw new ReviewError(
       "The Mirror report prompt has not been written — see src/lib/layer2/memory-extraction.md"
@@ -388,7 +400,9 @@ export async function reviewUser(userId: string): Promise<boolean> {
   const { summaries, recent, memory, profile } = await gather(userId, since);
 
   // Nothing written since the last run: no call, no record, nothing charged.
-  if (recent.length === 0) return false;
+  // A forced run continues anyway — the summaries are still the long view, so
+  // it can still rewrite the running report even with an empty window.
+  if (recent.length === 0 && !force) return false;
 
   const [checkins, prior] = await Promise.all([
     checkinLines(userId),
@@ -426,9 +440,8 @@ export async function reviewUser(userId: string): Promise<boolean> {
     ],
   });
 
-  const raw =
-    response.content[0]?.type === "text" ? response.content[0].text : "";
-  const parsed = parseReport(raw);
+  // Not content[0] — Sonnet puts a thinking block there. See lib/model-reply.ts.
+  const parsed = parseReport(replyText(response));
 
   /*
    * The check-in lines are appended verbatim rather than left to the model, so
@@ -451,6 +464,63 @@ export async function reviewUser(userId: string): Promise<boolean> {
   });
 
   return true;
+}
+
+/**
+ * Every account with at least one finished entry.
+ *
+ * Used by the admin's manual run, which deliberately ignores both the schedule
+ * and who is due. During the closed beta the product owner triggers reports by
+ * hand for everyone; the cadence is what takes over when that stops.
+ */
+export async function accountsWithEntries(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ userId: journalEntries.userId })
+    .from(journalEntries)
+    .where(
+      and(
+        isNotNull(journalEntries.completedAt),
+        isNull(journalEntries.deletedAt),
+        isNull(journalEntries.purgedAt)
+      )
+    );
+  return rows.map((r) => r.userId);
+}
+
+/**
+ * Produces a report for every account, ignoring the schedule.
+ *
+ * One account failing must not stop the rest. Returns what happened per
+ * account so the admin page can say so rather than leaving the result to the
+ * server log.
+ */
+export async function reviewEveryone(): Promise<{
+  ran: number;
+  failed: number;
+  errors: string[];
+}> {
+  if (PROMPT_UNWRITTEN) {
+    return { ran: 0, failed: 0, errors: ["The instructions have not been written."] };
+  }
+
+  const users = await accountsWithEntries();
+  let ran = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const userId of users) {
+    try {
+      if (await reviewUser(userId, { force: true })) ran++;
+    } catch (err) {
+      failed++;
+      const message = err instanceof Error ? err.message : String(err);
+      // Account identified by prefix only. This string is shown on a screen.
+      errors.push(`${userId.slice(0, 8)}: ${message}`);
+      console.error(`mirror report failed for user ${userId}:`, message);
+    }
+  }
+
+  return { ran, failed, errors };
 }
 
 /**

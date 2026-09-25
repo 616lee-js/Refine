@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { desc, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth/admin";
 import { db } from "@/lib/db";
 import { mirrorReviews } from "@/lib/db/schema";
@@ -13,7 +13,8 @@ import {
   DEFAULT_INTERVAL_DAYS,
   PROMPT_UNWRITTEN,
   PROMPT_VERSION,
-  reviewUser,
+  accountsWithEntries,
+  reviewEveryone,
 } from "@/lib/mirror/review";
 
 /**
@@ -56,29 +57,31 @@ async function setCadence(formData: FormData) {
 }
 
 /**
- * Produces a report for the admin's own account, now.
+ * Produces a report for every account, now.
  *
- * Calls `reviewUser` directly rather than the nightly runner, which means it
- * deliberately ignores the cadence — waiting fourteen days to find out whether
- * a change worked is not a test loop.
+ * ── Why this covers everyone, not just the caller ─────────────────────────────
+ * The product owner triggers reports by hand throughout the closed beta and
+ * judges them across accounts, not only their own. The cadence exists and works;
+ * it is what takes over when manual triggering stops. Until then, waiting a
+ * fortnight to see whether a wording change helped is not a test loop.
  *
- * Only ever the caller's own account. Generating a report about someone else on
- * demand is not a thing this page should be able to do.
+ * It ignores the schedule and the "nothing written since last time" skip, so
+ * pressing it twice produces two reports for the same person. That is the point
+ * — a prompt change has to be testable against the same writing.
+ *
+ * It generates reports ABOUT other people and does not show them. Someone
+ * opening their Mirror will find a report they did not ask for, which is
+ * correct during a beta they consented to and would not be afterwards.
  */
 async function runNow() {
   "use server";
-  const adminId = await requireAdmin();
+  await requireAdmin();
 
-  try {
-    await reviewUser(adminId);
-  } catch (err) {
-    // Surfaced through the page's own state rather than thrown: the most likely
-    // cause is the prompt still being unwritten, which is a state, not a crash.
-    console.error(
-      "manual mirror report failed:",
-      err instanceof Error ? err.message : err
-    );
-  }
+  const result = await reviewEveryone();
+
+  console.log(
+    JSON.stringify({ event: "mirror_manual_run", ran: result.ran, failed: result.failed })
+  );
 
   revalidatePath("/admin/mirror");
   revalidatePath("/mirror");
@@ -86,26 +89,23 @@ async function runNow() {
 
 export default async function AdminMirrorPage() {
   // Gate BEFORE any query runs.
-  const adminId = await requireAdmin();
+  await requireAdmin();
 
-  const [intervalDays, rows, mine] = await Promise.all([
+  const [intervalDays, rows, accounts] = await Promise.all([
     getNumberSetting(MIRROR_REVIEW_INTERVAL_DAYS, DEFAULT_INTERVAL_DAYS),
     db
       .select({
         userId: mirrorReviews.userId,
         n: sql<number>`count(*)::int`,
+        last: sql<Date>`max(${mirrorReviews.createdAt})`,
       })
       .from(mirrorReviews)
       .groupBy(mirrorReviews.userId),
-    db
-      .select({ createdAt: mirrorReviews.createdAt, entriesRead: mirrorReviews.entriesRead })
-      .from(mirrorReviews)
-      .where(eq(mirrorReviews.userId, adminId))
-      .orderBy(desc(mirrorReviews.createdAt))
-      .limit(1),
+    accountsWithEntries(),
   ]);
 
   const total = rows.reduce((n, r) => n + r.n, 0);
+  const byUser = new Map(rows.map((r) => [r.userId, r]));
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-8 sm:px-10">
@@ -204,41 +204,66 @@ export default async function AdminMirrorPage() {
       </Sheet>
 
       <Sheet className="px-5 py-4">
-        <Eyebrow size={9.5}>Run one now</Eyebrow>
+        <Eyebrow size={9.5}>Run for every account</Eyebrow>
         <p
           className="mt-2"
           style={{ fontSize: "12.5px", lineHeight: 1.55, color: "var(--rf-text-3)" }}
         >
-          Produces a report for your own account immediately, ignoring the
-          schedule above. It still does nothing if you have written nothing
-          since your last one.
+          Produces a report for every account with at least one finished entry,
+          immediately. It ignores the schedule above and runs even for people who
+          have written nothing since their last report, so pressing it twice
+          gives the same person two reports.
+        </p>
+        <p
+          className="mt-2"
+          style={{ fontSize: "12px", lineHeight: 1.55, color: "var(--rf-text-4)" }}
+        >
+          These reports are about other people and appear in their Mirror, not
+          yours. They can delete them. This is a closed-beta control — the
+          schedule is what takes over when it stops being pressed by hand.
         </p>
 
-        {mine[0] ? (
-          <p
-            className="mt-2"
-            style={{ fontSize: "12px", color: "var(--rf-text-4)" }}
-          >
-            Your last report:{" "}
-            {mine[0].createdAt.toLocaleString(undefined, {
-              day: "numeric",
-              month: "short",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-            , covering {mine[0].entriesRead}{" "}
-            {mine[0].entriesRead === 1 ? "entry" : "entries"}.
-          </p>
-        ) : (
-          <p
-            className="mt-2"
-            style={{ fontSize: "12px", color: "var(--rf-text-4)" }}
-          >
-            You have no reports yet.
-          </p>
-        )}
+        {/* Per account, so the result of pressing it is visible rather than
+            left in a server log. Prefixes only: enough to tell rows apart. */}
+        <div className="mt-3 overflow-x-auto">
+          <table style={{ fontSize: "12px", width: "100%" }}>
+            <thead>
+              <tr style={{ color: "var(--rf-text-4)" }}>
+                <th className="pb-1 pr-4 text-left font-normal">Account</th>
+                <th className="pb-1 pr-4 text-right font-normal">Reports</th>
+                <th className="pb-1 text-left font-normal">Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((id) => {
+                const r = byUser.get(id);
+                return (
+                  <tr key={id} style={{ borderTop: "1px solid var(--rf-rule)" }}>
+                    <td
+                      className="py-[6px] pr-4 font-mono"
+                      style={{ fontSize: "11px", color: "var(--rf-text-2)" }}
+                    >
+                      {id.slice(0, 8)}
+                    </td>
+                    <td className="py-[6px] pr-4 text-right">{r?.n ?? 0}</td>
+                    <td className="py-[6px]" style={{ color: "var(--rf-text-4)" }}>
+                      {r?.last
+                        ? new Date(r.last).toLocaleString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : "none yet"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-        <form action={runNow} className="mt-3">
+        <form action={runNow} className="mt-4">
           <button
             type="submit"
             disabled={PROMPT_UNWRITTEN}
@@ -251,7 +276,8 @@ export default async function AdminMirrorPage() {
               color: "var(--rf-paper)",
             }}
           >
-            Run now
+            Run for all {accounts.length}{" "}
+            {accounts.length === 1 ? "account" : "accounts"}
           </button>
         </form>
       </Sheet>

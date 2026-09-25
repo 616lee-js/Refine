@@ -4,6 +4,7 @@ import { getAnthropicApiKey } from "@/lib/env";
 // Bundled at build time, not read from disk. See next.config.ts.
 import classifierPrompt from "@/lib/layer3/tier-classifier-prompt.md";
 import { promptVersion } from "./prompt-version";
+import { replyText } from "@/lib/model-reply";
 
 /**
  * Recorded against every safety_log row. Derived from the classifier prompt's
@@ -31,8 +32,10 @@ export async function classifyMessage(message: string): Promise<Tier> {
     messages: [{ role: "user", content: message }],
   });
 
-  const raw =
-    response.content[0].type === "text" ? response.content[0].text.trim() : "";
+  // Not content[0]: a reply can lead with a thinking block and the text is not
+  // guaranteed to be first. Here that would have meant every entry silently
+  // classified as Tier 1 by the fallback below. See src/lib/model-reply.ts.
+  const raw = replyText(response).trim();
 
   try {
     const parsed = JSON.parse(raw) as { tier?: string };

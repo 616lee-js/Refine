@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
+import { replyText } from "@/lib/model-reply";
 
 // Bundled at build time, not read from disk — see next.config.ts for why a
 // runtime readFileSync of a prompt cannot survive the serverless bundler.
@@ -79,8 +80,7 @@ export async function generateSummary(body: string): Promise<EntrySummary> {
     ],
   });
 
-  const raw =
-    response.content[0]?.type === "text" ? response.content[0].text : "";
-
-  return parse(raw, body);
+  // Not content[0]: a reply can lead with a thinking block and the text is not
+  // guaranteed to be first. See src/lib/model-reply.ts.
+  return parse(replyText(response), body);
 }

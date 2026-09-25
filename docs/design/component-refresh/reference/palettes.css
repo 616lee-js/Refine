@@ -1,0 +1,350 @@
+/*
+ * Refine palettes — generated from reference/theme.jsx + reference/theme-ext.jsx.
+ * Do not hand-edit values; regenerate. Paste into globals.css in place of the
+ * current :root Dawn block (keep --rf-admin* in :root).
+ */
+
+:root,
+[data-palette="dawn"][data-mode="light"],
+[data-palette="dawn"]:not([data-mode]) {
+  --rf-bg: #efe9dd;
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #f8ecd8 0%, transparent 55%), radial-gradient(80% 80% at 0% 100%, #e6e3d4 0%, transparent 60%), linear-gradient(180deg, #f1ebe0 0%, #e8e2d5 100%);
+  --rf-surface: #fbf7ef;
+  --rf-paper: #fffdf7;
+  --rf-paper-edge: rgba(90,70,45,0.10);
+  --rf-rule: rgba(90,70,45,0.09);
+  --rf-border: rgba(80,62,40,0.15);
+  --rf-border-strong: rgba(80,62,40,0.30);
+  --rf-text: #1e1a14;
+  --rf-text-2: #514a3e;
+  --rf-text-3: #8b8377;
+  --rf-text-4: #b8b1a4;
+  --rf-accent: #b0603a;
+  --rf-accent-soft: rgba(176,96,58,0.13);
+  --rf-accent-2: #5f7f68;
+  --rf-accent-2-soft: rgba(95,127,104,0.14);
+  --rf-warn: #a2701f;
+  --rf-warn-soft: rgba(162,112,31,0.14);
+  --rf-grain-opacity: 0.4;
+  --rf-error: #a33a25;
+  --rf-error-soft: rgba(163,58,37,0.08);
+  --rf-scrim: rgba(40,28,12,0.18);
+  --rf-sheet-shadow: 0 1px 2px rgba(40,28,12,0.04), 0 14px 40px -18px rgba(40,28,12,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+[data-palette="dawn"][data-mode="dark"] {
+  --rf-bg: #161310;
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #2e2118 0%, transparent 55%), radial-gradient(80% 80% at 0% 100%, #15181a 0%, transparent 60%), linear-gradient(180deg, #171410 0%, #0e0c09 100%);
+  --rf-surface: #1f1b16;
+  --rf-paper: #221e18;
+  --rf-paper-edge: rgba(255,240,210,0.08);
+  --rf-rule: rgba(255,240,210,0.07);
+  --rf-border: rgba(250,240,220,0.12);
+  --rf-border-strong: rgba(250,240,220,0.26);
+  --rf-text: #f2ebdd;
+  --rf-text-2: #c6bda9;
+  --rf-text-3: #8a8172;
+  --rf-text-4: #55503f;
+  --rf-accent: #dd8f5e;
+  --rf-accent-soft: rgba(221,143,94,0.15);
+  --rf-accent-2: #93b39a;
+  --rf-accent-2-soft: rgba(147,179,154,0.14);
+  --rf-warn: #d5a45f;
+  --rf-warn-soft: rgba(213,164,95,0.15);
+  --rf-grain-opacity: 0.22;
+  --rf-error: #e58a6f;
+  --rf-error-soft: rgba(229,138,111,0.13);
+  --rf-scrim: rgba(0,0,0,0.45);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+[data-palette="dusk"][data-mode="light"],
+[data-palette="dusk"]:not([data-mode]) {
+  --rf-bg: #ece6da;
+  --rf-bg-gradient: radial-gradient(60% 80% at 82% 12%, #f0d8b8 0%, transparent 45%), radial-gradient(70% 100% at 6% 92%, #c7cbe2 0%, transparent 52%), linear-gradient(180deg, #ece6da 0%, #dad4cc 100%);
+  --rf-surface: rgba(255,253,247,0.80);
+  --rf-paper: #fffdf8;
+  --rf-paper-edge: rgba(60,50,80,0.10);
+  --rf-rule: rgba(60,50,80,0.08);
+  --rf-border: rgba(70,58,48,0.16);
+  --rf-border-strong: rgba(70,58,48,0.32);
+  --rf-text: #1a1822;
+  --rf-text-2: #4a4358;
+  --rf-text-3: #857d92;
+  --rf-text-4: #b4adbe;
+  --rf-accent: #c07348;
+  --rf-accent-soft: rgba(192,115,72,0.15);
+  --rf-accent-2: #5f6ca0;
+  --rf-accent-2-soft: rgba(95,108,160,0.14);
+  --rf-warn: #a36a1f;
+  --rf-warn-soft: rgba(163,106,31,0.14);
+  --rf-grain-opacity: 0.3;
+  --rf-error: #a4372f;
+  --rf-error-soft: rgba(164,55,47,0.08);
+  --rf-scrim: rgba(26,22,40,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(30,24,50,0.04), 0 14px 40px -18px rgba(30,24,50,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.52  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+[data-palette="dusk"][data-mode="dark"] {
+  --rf-bg: #0d0b14;
+  --rf-bg-gradient: radial-gradient(60% 80% at 82% 12%, #462c21 0%, transparent 46%), radial-gradient(80% 100% at 6% 92%, #1e1f4c 0%, transparent 55%), linear-gradient(180deg, #0d0b14 0%, #060509 100%);
+  --rf-surface: rgba(30,26,42,0.62);
+  --rf-paper: #191527;
+  --rf-paper-edge: rgba(240,234,216,0.09);
+  --rf-rule: rgba(240,234,216,0.07);
+  --rf-border: rgba(240,234,216,0.13);
+  --rf-border-strong: rgba(240,234,216,0.27);
+  --rf-text: #f0ead8;
+  --rf-text-2: #c2bba8;
+  --rf-text-3: #7c7466;
+  --rf-text-4: #4d4639;
+  --rf-accent: #e9b27a;
+  --rf-accent-soft: rgba(233,178,122,0.15);
+  --rf-accent-2: #8b95cf;
+  --rf-accent-2-soft: rgba(139,149,207,0.14);
+  --rf-warn: #d8a763;
+  --rf-warn-soft: rgba(216,167,99,0.16);
+  --rf-grain-opacity: 0.2;
+  --rf-error: #ea8c78;
+  --rf-error-soft: rgba(234,140,120,0.13);
+  --rf-scrim: rgba(0,0,0,0.50);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.52  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+[data-palette="slate"][data-mode="light"],
+[data-palette="slate"]:not([data-mode]) {
+  --rf-bg: #eeefed;
+  --rf-bg-gradient: radial-gradient(90% 70% at 85% 0%, #f6f7f5 0%, transparent 55%), linear-gradient(180deg, #f1f2f0 0%, #e7e9e7 100%);
+  --rf-surface: #fafbfa;
+  --rf-paper: #ffffff;
+  --rf-paper-edge: rgba(30,40,45,0.10);
+  --rf-rule: rgba(30,40,45,0.08);
+  --rf-border: rgba(30,40,45,0.14);
+  --rf-border-strong: rgba(30,40,45,0.28);
+  --rf-text: #16191b;
+  --rf-text-2: #464c50;
+  --rf-text-3: #838a8e;
+  --rf-text-4: #b2b8bb;
+  --rf-accent: #3f6b6a;
+  --rf-accent-soft: rgba(63,107,106,0.13);
+  --rf-accent-2: #7a6a4e;
+  --rf-accent-2-soft: rgba(122,106,78,0.14);
+  --rf-warn: #8a6a2a;
+  --rf-warn-soft: rgba(138,106,42,0.13);
+  --rf-grain-opacity: 0.28;
+  --rf-error: #a13a30;
+  --rf-error-soft: rgba(161,58,48,0.08);
+  --rf-scrim: rgba(15,20,24,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(15,22,26,0.04), 0 14px 40px -18px rgba(15,22,26,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.44  0 0 0 0 0.46  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+[data-palette="slate"][data-mode="dark"] {
+  --rf-bg: #111314;
+  --rf-bg-gradient: radial-gradient(90% 70% at 85% 0%, #1b1f21 0%, transparent 55%), linear-gradient(180deg, #131516 0%, #0b0c0d 100%);
+  --rf-surface: #191c1e;
+  --rf-paper: #1c1f21;
+  --rf-paper-edge: rgba(230,240,240,0.08);
+  --rf-rule: rgba(230,240,240,0.07);
+  --rf-border: rgba(230,240,240,0.12);
+  --rf-border-strong: rgba(230,240,240,0.26);
+  --rf-text: #eaeeef;
+  --rf-text-2: #b6bcbe;
+  --rf-text-3: #7d8487;
+  --rf-text-4: #4b5153;
+  --rf-accent: #7fb2ae;
+  --rf-accent-soft: rgba(127,178,174,0.14);
+  --rf-accent-2: #c0ab84;
+  --rf-accent-2-soft: rgba(192,171,132,0.14);
+  --rf-warn: #c9a35f;
+  --rf-warn-soft: rgba(201,163,95,0.15);
+  --rf-grain-opacity: 0.2;
+  --rf-error: #e08a7c;
+  --rf-error-soft: rgba(224,138,124,0.13);
+  --rf-scrim: rgba(0,0,0,0.45);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.44  0 0 0 0 0.46  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-palette="dawn"][data-mode="system"] {
+  --rf-bg: #161310;
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #2e2118 0%, transparent 55%), radial-gradient(80% 80% at 0% 100%, #15181a 0%, transparent 60%), linear-gradient(180deg, #171410 0%, #0e0c09 100%);
+  --rf-surface: #1f1b16;
+  --rf-paper: #221e18;
+  --rf-paper-edge: rgba(255,240,210,0.08);
+  --rf-rule: rgba(255,240,210,0.07);
+  --rf-border: rgba(250,240,220,0.12);
+  --rf-border-strong: rgba(250,240,220,0.26);
+  --rf-text: #f2ebdd;
+  --rf-text-2: #c6bda9;
+  --rf-text-3: #8a8172;
+  --rf-text-4: #55503f;
+  --rf-accent: #dd8f5e;
+  --rf-accent-soft: rgba(221,143,94,0.15);
+  --rf-accent-2: #93b39a;
+  --rf-accent-2-soft: rgba(147,179,154,0.14);
+  --rf-warn: #d5a45f;
+  --rf-warn-soft: rgba(213,164,95,0.15);
+  --rf-grain-opacity: 0.22;
+  --rf-error: #e58a6f;
+  --rf-error-soft: rgba(229,138,111,0.13);
+  --rf-scrim: rgba(0,0,0,0.45);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+  [data-palette="dusk"][data-mode="system"] {
+  --rf-bg: #0d0b14;
+  --rf-bg-gradient: radial-gradient(60% 80% at 82% 12%, #462c21 0%, transparent 46%), radial-gradient(80% 100% at 6% 92%, #1e1f4c 0%, transparent 55%), linear-gradient(180deg, #0d0b14 0%, #060509 100%);
+  --rf-surface: rgba(30,26,42,0.62);
+  --rf-paper: #191527;
+  --rf-paper-edge: rgba(240,234,216,0.09);
+  --rf-rule: rgba(240,234,216,0.07);
+  --rf-border: rgba(240,234,216,0.13);
+  --rf-border-strong: rgba(240,234,216,0.27);
+  --rf-text: #f0ead8;
+  --rf-text-2: #c2bba8;
+  --rf-text-3: #7c7466;
+  --rf-text-4: #4d4639;
+  --rf-accent: #e9b27a;
+  --rf-accent-soft: rgba(233,178,122,0.15);
+  --rf-accent-2: #8b95cf;
+  --rf-accent-2-soft: rgba(139,149,207,0.14);
+  --rf-warn: #d8a763;
+  --rf-warn-soft: rgba(216,167,99,0.16);
+  --rf-grain-opacity: 0.2;
+  --rf-error: #ea8c78;
+  --rf-error-soft: rgba(234,140,120,0.13);
+  --rf-scrim: rgba(0,0,0,0.50);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.52  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+  [data-palette="slate"][data-mode="system"] {
+  --rf-bg: #111314;
+  --rf-bg-gradient: radial-gradient(90% 70% at 85% 0%, #1b1f21 0%, transparent 55%), linear-gradient(180deg, #131516 0%, #0b0c0d 100%);
+  --rf-surface: #191c1e;
+  --rf-paper: #1c1f21;
+  --rf-paper-edge: rgba(230,240,240,0.08);
+  --rf-rule: rgba(230,240,240,0.07);
+  --rf-border: rgba(230,240,240,0.12);
+  --rf-border-strong: rgba(230,240,240,0.26);
+  --rf-text: #eaeeef;
+  --rf-text-2: #b6bcbe;
+  --rf-text-3: #7d8487;
+  --rf-text-4: #4b5153;
+  --rf-accent: #7fb2ae;
+  --rf-accent-soft: rgba(127,178,174,0.14);
+  --rf-accent-2: #c0ab84;
+  --rf-accent-2-soft: rgba(192,171,132,0.14);
+  --rf-warn: #c9a35f;
+  --rf-warn-soft: rgba(201,163,95,0.15);
+  --rf-grain-opacity: 0.2;
+  --rf-error: #e08a7c;
+  --rf-error-soft: rgba(224,138,124,0.13);
+  --rf-scrim: rgba(0,0,0,0.45);
+  --rf-sheet-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 14px 40px -18px rgba(0,0,0,0.60);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.44  0 0 0 0 0.46  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: dark;
+}
+
+}
+@media (prefers-color-scheme: light) {
+  [data-palette="dawn"][data-mode="system"] {
+  --rf-bg: #efe9dd;
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #f8ecd8 0%, transparent 55%), radial-gradient(80% 80% at 0% 100%, #e6e3d4 0%, transparent 60%), linear-gradient(180deg, #f1ebe0 0%, #e8e2d5 100%);
+  --rf-surface: #fbf7ef;
+  --rf-paper: #fffdf7;
+  --rf-paper-edge: rgba(90,70,45,0.10);
+  --rf-rule: rgba(90,70,45,0.09);
+  --rf-border: rgba(80,62,40,0.15);
+  --rf-border-strong: rgba(80,62,40,0.30);
+  --rf-text: #1e1a14;
+  --rf-text-2: #514a3e;
+  --rf-text-3: #8b8377;
+  --rf-text-4: #b8b1a4;
+  --rf-accent: #b0603a;
+  --rf-accent-soft: rgba(176,96,58,0.13);
+  --rf-accent-2: #5f7f68;
+  --rf-accent-2-soft: rgba(95,127,104,0.14);
+  --rf-warn: #a2701f;
+  --rf-warn-soft: rgba(162,112,31,0.14);
+  --rf-grain-opacity: 0.4;
+  --rf-error: #a33a25;
+  --rf-error-soft: rgba(163,58,37,0.08);
+  --rf-scrim: rgba(40,28,12,0.18);
+  --rf-sheet-shadow: 0 1px 2px rgba(40,28,12,0.04), 0 14px 40px -18px rgba(40,28,12,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+  [data-palette="dusk"][data-mode="system"] {
+  --rf-bg: #ece6da;
+  --rf-bg-gradient: radial-gradient(60% 80% at 82% 12%, #f0d8b8 0%, transparent 45%), radial-gradient(70% 100% at 6% 92%, #c7cbe2 0%, transparent 52%), linear-gradient(180deg, #ece6da 0%, #dad4cc 100%);
+  --rf-surface: rgba(255,253,247,0.80);
+  --rf-paper: #fffdf8;
+  --rf-paper-edge: rgba(60,50,80,0.10);
+  --rf-rule: rgba(60,50,80,0.08);
+  --rf-border: rgba(70,58,48,0.16);
+  --rf-border-strong: rgba(70,58,48,0.32);
+  --rf-text: #1a1822;
+  --rf-text-2: #4a4358;
+  --rf-text-3: #857d92;
+  --rf-text-4: #b4adbe;
+  --rf-accent: #c07348;
+  --rf-accent-soft: rgba(192,115,72,0.15);
+  --rf-accent-2: #5f6ca0;
+  --rf-accent-2-soft: rgba(95,108,160,0.14);
+  --rf-warn: #a36a1f;
+  --rf-warn-soft: rgba(163,106,31,0.14);
+  --rf-grain-opacity: 0.3;
+  --rf-error: #a4372f;
+  --rf-error-soft: rgba(164,55,47,0.08);
+  --rf-scrim: rgba(26,22,40,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(30,24,50,0.04), 0 14px 40px -18px rgba(30,24,50,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.52  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+  [data-palette="slate"][data-mode="system"] {
+  --rf-bg: #eeefed;
+  --rf-bg-gradient: radial-gradient(90% 70% at 85% 0%, #f6f7f5 0%, transparent 55%), linear-gradient(180deg, #f1f2f0 0%, #e7e9e7 100%);
+  --rf-surface: #fafbfa;
+  --rf-paper: #ffffff;
+  --rf-paper-edge: rgba(30,40,45,0.10);
+  --rf-rule: rgba(30,40,45,0.08);
+  --rf-border: rgba(30,40,45,0.14);
+  --rf-border-strong: rgba(30,40,45,0.28);
+  --rf-text: #16191b;
+  --rf-text-2: #464c50;
+  --rf-text-3: #838a8e;
+  --rf-text-4: #b2b8bb;
+  --rf-accent: #3f6b6a;
+  --rf-accent-soft: rgba(63,107,106,0.13);
+  --rf-accent-2: #7a6a4e;
+  --rf-accent-2-soft: rgba(122,106,78,0.14);
+  --rf-warn: #8a6a2a;
+  --rf-warn-soft: rgba(138,106,42,0.13);
+  --rf-grain-opacity: 0.28;
+  --rf-error: #a13a30;
+  --rf-error-soft: rgba(161,58,48,0.08);
+  --rf-scrim: rgba(15,20,24,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(15,22,26,0.04), 0 14px 40px -18px rgba(15,22,26,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.44  0 0 0 0 0.46  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+
+}

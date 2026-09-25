@@ -279,7 +279,9 @@ export function JournalGuidanceSidebar({
             aria-label={COPY.overlayClose}
             onClick={onClose}
             className="flex-1"
-            style={{ background: "rgba(40,28,12,0.18)" }}
+            // Per palette: each one dims to its own depth, and the dark ramps
+            // go much further than Dawn's warm 18%.
+            style={{ background: "var(--rf-scrim)" }}
           />
           <div
             id="journal-guidance-overlay"

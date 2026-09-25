@@ -1,56 +1,123 @@
 @import "tailwindcss";
 
 /*
- * ── Dawn ──────────────────────────────────────────────────────────────────────
- * Warm paper, early light. The palette is defined once here as raw --rf-* custom
- * properties, and the semantic layer below points at them. Two consequences:
+ * ── Palettes ──────────────────────────────────────────────────────────────────
+ * Three palettes — Dawn, Dusk, Slate — each with a light and a dark ramp. Every
+ * one defines the same set of raw --rf-* custom properties; the semantic layer
+ * in @theme below points at those names and never at a value. Two consequences:
  *
- *   1. Swapping palette (Dusk, Slate) or adding the dark ramp is a change to
- *      this block alone — nothing downstream moves.
+ *   1. Adding or changing a palette is a change to these blocks alone. Nothing
+ *      downstream moves.
  *   2. Every existing `text-text-secondary` / `bg-surface` style keeps working
  *      while the whole app changes colour.
  *
- * LIGHT ONLY for this pass, by decision. The dark ramp exists in the design's
- * theme file and drops in as a `@media (prefers-color-scheme: dark)` block
- * against these same names when it is in scope — deliberately not half-shipped.
+ * GENERATED. These blocks come from docs/design/component-refresh/reference/
+ * palettes.css, which is produced from the design's theme.jsx + theme-ext.jsx.
+ * Do not hand-edit the values — regenerate, or the canvas and the app drift.
+ *
+ * :root carries Dawn so an element with no data-palette is Dawn, which is the
+ * default for new accounts and the fixed appearance of the signed-out screens.
+ * --rf-admin* deliberately lives outside these blocks: admin chrome is identical
+ * in every palette. See below.
  */
-:root {
+:root,
+[data-palette="dawn"][data-mode="light"],
+[data-palette="dawn"]:not([data-mode]) {
   --rf-bg: #efe9dd;
-  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #f8ecd8 0%, transparent 55%),
-    radial-gradient(80% 80% at 0% 100%, #e6e3d4 0%, transparent 60%),
-    linear-gradient(180deg, #f1ebe0 0%, #e8e2d5 100%);
+  --rf-bg-gradient: radial-gradient(90% 70% at 88% 0%, #f8ecd8 0%, transparent 55%), radial-gradient(80% 80% at 0% 100%, #e6e3d4 0%, transparent 60%), linear-gradient(180deg, #f1ebe0 0%, #e8e2d5 100%);
   --rf-surface: #fbf7ef;
   --rf-paper: #fffdf7;
-  --rf-paper-edge: rgba(90, 70, 45, 0.1);
-  --rf-rule: rgba(90, 70, 45, 0.09);
-  --rf-border: rgba(80, 62, 40, 0.15);
-  --rf-border-strong: rgba(80, 62, 40, 0.3);
+  --rf-paper-edge: rgba(90,70,45,0.10);
+  --rf-rule: rgba(90,70,45,0.09);
+  --rf-border: rgba(80,62,40,0.15);
+  --rf-border-strong: rgba(80,62,40,0.30);
   --rf-text: #1e1a14;
   --rf-text-2: #514a3e;
   --rf-text-3: #8b8377;
   --rf-text-4: #b8b1a4;
   --rf-accent: #b0603a;
-  --rf-accent-soft: rgba(176, 96, 58, 0.13);
+  --rf-accent-soft: rgba(176,96,58,0.13);
   --rf-accent-2: #5f7f68;
-  --rf-accent-2-soft: rgba(95, 127, 104, 0.14);
+  --rf-accent-2-soft: rgba(95,127,104,0.14);
   --rf-warn: #a2701f;
-  --rf-warn-soft: rgba(162, 112, 31, 0.14);
+  --rf-warn-soft: rgba(162,112,31,0.14);
+  --rf-grain-opacity: 0.4;
+  --rf-error: #a33a25;
+  --rf-error-soft: rgba(163,58,37,0.08);
+  --rf-scrim: rgba(40,28,12,0.18);
+  --rf-sheet-shadow: 0 1px 2px rgba(40,28,12,0.04), 0 14px 40px -18px rgba(40,28,12,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+[data-palette="dusk"][data-mode="light"],
+[data-palette="dusk"]:not([data-mode]) {
+  --rf-bg: #ece6da;
+  --rf-bg-gradient: radial-gradient(60% 80% at 82% 12%, #f0d8b8 0%, transparent 45%), radial-gradient(70% 100% at 6% 92%, #c7cbe2 0%, transparent 52%), linear-gradient(180deg, #ece6da 0%, #dad4cc 100%);
+  --rf-surface: rgba(255,253,247,0.80);
+  --rf-paper: #fffdf8;
+  --rf-paper-edge: rgba(60,50,80,0.10);
+  --rf-rule: rgba(60,50,80,0.08);
+  --rf-border: rgba(70,58,48,0.16);
+  --rf-border-strong: rgba(70,58,48,0.32);
+  --rf-text: #1a1822;
+  --rf-text-2: #4a4358;
+  --rf-text-3: #857d92;
+  --rf-text-4: #b4adbe;
+  --rf-accent: #c07348;
+  --rf-accent-soft: rgba(192,115,72,0.15);
+  --rf-accent-2: #5f6ca0;
+  --rf-accent-2-soft: rgba(95,108,160,0.14);
+  --rf-warn: #a36a1f;
+  --rf-warn-soft: rgba(163,106,31,0.14);
+  --rf-grain-opacity: 0.3;
+  --rf-error: #a4372f;
+  --rf-error-soft: rgba(164,55,47,0.08);
+  --rf-scrim: rgba(26,22,40,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(30,24,50,0.04), 0 14px 40px -18px rgba(30,24,50,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.52  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
+[data-palette="slate"][data-mode="light"],
+[data-palette="slate"]:not([data-mode]) {
+  --rf-bg: #eeefed;
+  --rf-bg-gradient: radial-gradient(90% 70% at 85% 0%, #f6f7f5 0%, transparent 55%), linear-gradient(180deg, #f1f2f0 0%, #e7e9e7 100%);
+  --rf-surface: #fafbfa;
+  --rf-paper: #ffffff;
+  --rf-paper-edge: rgba(30,40,45,0.10);
+  --rf-rule: rgba(30,40,45,0.08);
+  --rf-border: rgba(30,40,45,0.14);
+  --rf-border-strong: rgba(30,40,45,0.28);
+  --rf-text: #16191b;
+  --rf-text-2: #464c50;
+  --rf-text-3: #838a8e;
+  --rf-text-4: #b2b8bb;
+  --rf-accent: #3f6b6a;
+  --rf-accent-soft: rgba(63,107,106,0.13);
+  --rf-accent-2: #7a6a4e;
+  --rf-accent-2-soft: rgba(122,106,78,0.14);
+  --rf-warn: #8a6a2a;
+  --rf-warn-soft: rgba(138,106,42,0.13);
+  --rf-grain-opacity: 0.28;
+  --rf-error: #a13a30;
+  --rf-error-soft: rgba(161,58,48,0.08);
+  --rf-scrim: rgba(15,20,24,0.20);
+  --rf-sheet-shadow: 0 1px 2px rgba(15,22,26,0.04), 0 14px 40px -18px rgba(15,22,26,0.18);
+  --rf-grain-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.44  0 0 0 0 0.46  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  color-scheme: light;
+}
 
-  /*
-   * Admin chrome. Cool slate against Dawn's warm paper, and deliberately not
-   * the accent: an admin surface reads other people's journal content, and it
-   * must never look like part of the reflective surface. This is the only
-   * cool hue in the palette, which is the point.
-   */
+/*
+ * Admin chrome. Cool slate against warm paper, and deliberately not the accent:
+ * an admin surface reads other people's journal content, and it must never look
+ * like part of the reflective surface.
+ *
+ * In :root only, on purpose. It does not vary by palette, and admin pins itself
+ * to Dawn light anyway — see src/app/admin/layout.tsx.
+ */
+:root {
   --rf-admin: #4a5568;
   --rf-admin-soft: rgba(74, 85, 104, 0.09);
   --rf-admin-border: rgba(74, 85, 104, 0.26);
-
-  --rf-grain-opacity: 0.4;
-
-  /* Sheet shadow — one definition, used by every paper surface. */
-  --rf-sheet-shadow: 0 1px 2px rgba(40, 28, 12, 0.04),
-    0 14px 40px -18px rgba(40, 28, 12, 0.18);
 }
 
 @theme {
@@ -101,7 +168,7 @@
   --color-status-active-text: var(--rf-accent-2);
   --color-status-ended-bg: var(--rf-surface);
   --color-status-ended-text: var(--rf-text-4);
-  --color-error: #a33a25;  /* terracotta-leaning red; AA on paper */
+  --color-error: var(--rf-error); /* per-palette; see the palette blocks above */
 
   /*
    * ── Tier classification badges ──

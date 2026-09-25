@@ -48,6 +48,11 @@ const COPY = {
   disclaimer:
     "[COPY] This is Refine's reading of what you have written, not an assessment of you. Where it notes a pattern resembling something, that is a resemblance and nothing more. It can be wrong, and you can change it.",
 
+  delete: "[COPY] Delete this report",
+  deleteConfirm: "[COPY] Delete for good?",
+  deleteCancel: "[COPY] Keep it",
+  deleteError: "[COPY] Couldn't delete that",
+
   historyHeading: (n: number) =>
     `[COPY] Earlier reports (${n})`,
   historyPeriod: (start: string, end: string) => `[COPY] ${start} – ${end}`,
@@ -98,6 +103,28 @@ export function ReportPanel({
   const [toast, setToast] = useState<string | null>(null);
   const [edited, setEdited] = useState(current?.edited ?? false);
   const [shown, setShown] = useState(current?.text ?? "");
+  // Two presses, not a browser dialog. Deleting a report is permanent and the
+  // confirm should sit in the page rather than in a box that gets dismissed
+  // reflexively.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function remove() {
+    if (!current) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/user/mirror/${current.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      // Whatever is newest now — the previous report, or the empty state.
+      window.location.reload();
+    } catch {
+      setError(COPY.deleteError);
+      setBusy(false);
+      setConfirmDelete(false);
+    }
+  }
 
   async function save(next: string) {
     if (!current) return;
@@ -166,24 +193,58 @@ export function ReportPanel({
                 {COPY.edited}
               </span>
             )}
-            {!editing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setText(shown);
-                  setEditing(true);
-                }}
-                className="rounded-full transition-colors"
-                style={{
-                  padding: "5px 12px",
-                  fontSize: "12px",
-                  color: "var(--rf-text-2)",
-                  boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-                }}
-              >
-                {COPY.edit}
-              </button>
-            )}
+            {!editing &&
+              (confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void remove()}
+                    disabled={busy}
+                    className="rounded-full transition-colors disabled:opacity-40"
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: "12px",
+                      color: "var(--rf-paper)",
+                      background: "var(--color-error)",
+                    }}
+                  >
+                    {COPY.deleteConfirm}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    style={{ fontSize: "12px", color: "var(--rf-text-3)" }}
+                  >
+                    {COPY.deleteCancel}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setText(shown);
+                      setEditing(true);
+                    }}
+                    className="rounded-full transition-colors"
+                    style={{
+                      padding: "5px 12px",
+                      fontSize: "12px",
+                      color: "var(--rf-text-2)",
+                      boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+                    }}
+                  >
+                    {COPY.edit}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    style={{ fontSize: "12px", color: "var(--rf-text-4)" }}
+                  >
+                    {COPY.delete}
+                  </button>
+                </>
+              ))}
           </div>
         </div>
 

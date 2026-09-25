@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
@@ -49,9 +48,6 @@ const COPY = {
   saving: "[COPY] Saving…",
   save: "[COPY] Save",
   saveError: "[COPY] Didn't save — your text is still here",
-  systemPromptLink: "[COPY] The system prompt →",
-  systemPromptNote:
-    "[COPY] The standing instructions Claude is given, readable in full.",
 } as const;
 
 export function ProfileForm({ admin }: { admin: React.ReactNode }) {
@@ -200,32 +196,18 @@ export function ProfileForm({ admin }: { admin: React.ReactNode }) {
             </form>
           )}
 
-          <div
-            className="mt-10 pt-5"
-            style={{ borderTop: "1px solid var(--rf-rule)" }}
-          >
-            <Link
-              href="/settings/system-prompt"
-              className="font-mono uppercase"
-              style={{
-                fontSize: "9.5px",
-                letterSpacing: "0.14em",
-                color: "var(--rf-text-3)",
-              }}
-            >
-              {COPY.systemPromptLink}
-            </Link>
-            <p
-              className="mt-[6px] max-w-[420px]"
-              style={{
-                fontSize: "11.5px",
-                lineHeight: 1.55,
-                color: "var(--rf-text-4)",
-              }}
-            >
-              {COPY.systemPromptNote}
-            </p>
-          </div>
+          {/*
+            A link to the app's instructions to Claude sat here until
+            2026-09-25. Taken down, not deleted: what it showed described a
+            conversational presence the app does not have and that no AI has
+            ever received, so it told the reader something untrue about how
+            Refine works.
+
+            The spec's "system prompt visible to the user, read-only" is
+            therefore unmet on purpose rather than by omission. What replaces it
+            is the Mirror report's instructions, once they are written and worth
+            showing. See src/lib/layer2/memory-extraction.md.
+          */}
         </div>
       </div>
     </PageBg>

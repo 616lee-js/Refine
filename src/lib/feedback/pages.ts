@@ -37,10 +37,14 @@ const KNOWN_ROUTES = [
   "/reflections/framework/[id]",
   "/mirror",
   "/settings/profile",
-  "/settings/system-prompt",
+  // "/settings/system-prompt" was here. The page came down 2026-09-25, so
+  // nothing can submit from it any more. Its label is kept below so feedback
+  // recorded while it existed still reads correctly.
   "/trash",
   "/admin/safety-log",
   "/admin/feedback",
+  "/admin/summary-evals",
+  "/admin/mirror",
 ] as const;
 
 export type KnownRoute = (typeof KNOWN_ROUTES)[number];
@@ -57,10 +61,13 @@ export const PAGE_LABELS: Record<string, string> = {
   "/reflections/framework/[id]": "Framework questionnaire",
   "/mirror": "Mirror",
   "/settings/profile": "Profile settings",
+  // Retired route, label retained for feedback submitted before it came down.
   "/settings/system-prompt": "System prompt",
   "/trash": "Trash",
   "/admin/safety-log": "Admin · Safety log",
   "/admin/feedback": "Admin · Feedback",
+  "/admin/summary-evals": "Admin · Summary evals",
+  "/admin/mirror": "Admin · Mirror",
 };
 
 /**

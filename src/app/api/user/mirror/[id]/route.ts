@@ -71,3 +71,35 @@ export async function PATCH(
 
   return Response.json({ savedAt: new Date().toISOString(), edited: Boolean(trimmed) });
 }
+
+/**
+ * Deletes a report.
+ *
+ * ── Genuine deletion, not hiding ──────────────────────────────────────────────
+ * The row goes. The report text, the person's edit of it, and that window's
+ * note all go with it, because they are one row and all three are Refine's
+ * account of them. Nothing is archived and there is no undo.
+ *
+ * That is the right shape for this specific thing: a report is derived, it can
+ * be produced again from the writing it was drawn from, and the writing itself
+ * is untouched. Nothing else in the app references a report, so there is no log
+ * left pointing at a hole.
+ *
+ * Deleting the newest report reveals the one before it, if there is one.
+ */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const session = await getSession();
+  if (!session.userId) return new Response("Unauthorized", { status: 401 });
+
+  // Ownership is enforced in the delete itself, so a miss is either "not yours"
+  // or "does not exist" — neither of which this needs to distinguish.
+  await db
+    .delete(mirrorReviews)
+    .where(and(eq(mirrorReviews.id, id), eq(mirrorReviews.userId, session.userId)));
+
+  return new Response(null, { status: 204 });
+}

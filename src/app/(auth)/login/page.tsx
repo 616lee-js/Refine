@@ -1,5 +1,14 @@
 import Link from "next/link";
 import { Notice } from "@/components/ui/notice";
+import {
+  AuthField,
+  AuthFooter,
+  AuthHeading,
+  AuthSheet,
+  AuthShell,
+  AuthSubmit,
+  Wordmark,
+} from "../auth-ui";
 
 // COPY REVIEW: all of it — headings, labels, placeholders and errors.
 const COPY = {
@@ -23,63 +32,58 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-sm space-y-6 px-4">
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{COPY.wordmark}</h1>
-          <p className="text-sm text-stone-500">{COPY.lede}</p>
-        </div>
+    <AuthShell>
+      <Wordmark>{COPY.wordmark}</Wordmark>
 
-        <form action="/api/auth/login" method="POST" className="space-y-3">
-          <div>
-            <label htmlFor="email" className="sr-only">
-              {COPY.emailLabel}
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoFocus
-              autoComplete="email"
-              className="w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-400 focus:bg-white transition-colors"
-              placeholder={COPY.emailPlaceholder}
-            />
+      <AuthSheet>
+        <AuthHeading>{COPY.lede}</AuthHeading>
+
+        {/* The form's action, method and field names are what the API reads.
+            Nothing about this rebuild touched them. */}
+        <form
+          action="/api/auth/login"
+          method="POST"
+          className="mt-5 flex flex-col gap-[14px]"
+        >
+          <AuthField
+            id="email"
+            name="email"
+            type="email"
+            label={COPY.emailLabel}
+            placeholder={COPY.emailPlaceholder}
+            autoComplete="email"
+            autoFocus
+          />
+          <AuthField
+            id="password"
+            name="password"
+            type="password"
+            label={COPY.passwordLabel}
+            placeholder={COPY.passwordPlaceholder}
+            autoComplete="current-password"
+          />
+
+          {error && <Notice tone="error">{COPY.error}</Notice>}
+
+          <div className="mt-1">
+            <AuthSubmit>{COPY.submit}</AuthSubmit>
           </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
-              {COPY.passwordLabel}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              className="w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-400 focus:bg-white transition-colors"
-              placeholder={COPY.passwordPlaceholder}
-            />
-          </div>
-
-          {error && (
-            <Notice tone="error">{COPY.error}</Notice>
-          )}
-
-          <button
-            type="submit"
-            className="w-full rounded-md bg-stone-800 px-3 py-2 text-sm font-medium text-white hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 transition-colors"
-          >
-            {COPY.submit}
-          </button>
         </form>
+      </AuthSheet>
 
-        <p className="text-center text-sm text-stone-500">
-          {COPY.noAccount}{" "}
-          <Link href="/signup" className="font-medium text-stone-800 hover:underline">
-            {COPY.createOne}
-          </Link>
-        </p>
-      </div>
-    </main>
+      <AuthFooter>
+        {COPY.noAccount}{" "}
+        <Link
+          href="/signup"
+          style={{
+            color: "var(--rf-text-2)",
+            textDecoration: "underline",
+            textUnderlineOffset: "3px",
+          }}
+        >
+          {COPY.createOne}
+        </Link>
+      </AuthFooter>
+    </AuthShell>
   );
 }

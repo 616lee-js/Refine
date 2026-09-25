@@ -210,6 +210,55 @@
  * `--leading-message: 1.8` went with it — it styled assistant prose.
  */
 
+/*
+ * Text fields.
+ *
+ * A class rather than inline styles because the focus state cannot be written
+ * inline, and a field whose resting and focused appearance are defined in two
+ * different places drifts apart. Recessed surface at rest, paper plus an accent
+ * hairline when focused — the field comes forward as you type in it.
+ */
+.rf-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--rf-text);
+  background: var(--rf-surface);
+  box-shadow: inset 0 0 0 1px var(--rf-border);
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.rf-input:focus {
+  background: var(--rf-paper);
+  box-shadow: inset 0 0 0 1px var(--rf-accent);
+}
+
+.rf-input::placeholder {
+  color: var(--rf-text-4);
+}
+
+/* An invite code is a machine string: monospaced, spaced out, upper case. */
+.rf-input-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rf-input-mono::placeholder {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 /* Prose wraps evenly rather than leaving orphans. */
 body,
 p,

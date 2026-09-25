@@ -705,6 +705,78 @@ export const summaryEvaluations = pgTable("summary_evaluations", {
 ]);
 
 /**
+ * Structured assessments of Mirror reports, for system-level review.
+ *
+ * ── Why a separate table from summary_evaluations ─────────────────────────────
+ * They measure different promises. A summary describes one page and is judged
+ * on four questions; a report makes claims about a person and is judged on six,
+ * three of which have no counterpart in summarising. One table would mean six
+ * columns that are always null for one kind and four for the other, and an
+ * aggregate query that has to filter before it can count anything.
+ *
+ * ── Every boolean is worded so `true` means the report behaved ────────────────
+ * Same polarity rule as summaries, so a count of `false` is always a count of
+ * failures. Three of the six map one-to-one onto the rules in
+ * src/lib/layer2/memory-extraction.md that carry the most consequence when
+ * broken: not predicting, hedging correctly about conditions, and leaving the
+ * check-in figures alone.
+ *
+ * ── Two are nullable, and it matters which ────────────────────────────────────
+ * `hedging_right` is NULL when the report mentioned no condition, and
+ * `figures_untouched` is NULL when it carried no figures. Recording those as
+ * `true` would count a report with nothing to hedge as having hedged correctly,
+ * quietly inflating the pass rate on the riskiest rule in the app. Same
+ * reasoning as `quotes_verbatim` on summary_evaluations.
+ *
+ * ── The snapshot is the generated report, never the person's edit ─────────────
+ * Reports are editable from Mirror. Judging someone's own rewrite would measure
+ * them rather than the model, so the snapshot holds what was generated — the
+ * same decision as snapshotting `aiOriginal` for a corrected summary.
+ */
+export const reportEvaluations = pgTable("report_evaluations", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /**
+   * SET NULL, not cascade: the assessment outlives the report it judged, and a
+   * report can be deleted from Mirror by the person it is about at any time.
+   */
+  mirrorReviewId: text("mirror_review_id").references(() => mirrorReviews.id, {
+    onDelete: "set null",
+  }),
+
+  /** Everything it said is backed by their writing. */
+  supported: boolean("supported").notNull(),
+  /** It did not miss anything important from the period. */
+  complete: boolean("complete").notNull(),
+  /** It described rather than judged them. */
+  descriptiveOnly: boolean("descriptive_only").notNull(),
+  /** It did not say how they will be, or that a state is fixed. */
+  noPrediction: boolean("no_prediction").notNull(),
+  /** Spoke plainly only about a condition they had stated. NULL: none mentioned. */
+  hedgingRight: boolean("hedging_right"),
+  /** Left the check-in numbers as written. NULL: the report carried none. */
+  figuresUntouched: boolean("figures_untouched"),
+  /** 1–5. */
+  overallAccuracy: integer("overall_accuracy").notNull(),
+
+  /** Which instructions produced what was judged, e.g. "v1@2026-09-25". */
+  promptVersion: text("prompt_version").notNull(),
+  encryptedReportSnapshot: text("encrypted_report_snapshot"),
+  /** Set when an admin destroyed the snapshot. Distinguishes from never captured. */
+  snapshotsClearedAt: timestamp("snapshots_cleared_at", { withTimezone: true }),
+  encryptedNotes: text("encrypted_notes"),
+
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (t) => [
+  index("report_evaluations_created_idx").on(desc(t.createdAt)),
+  index("report_evaluations_review_idx").on(t.mirrorReviewId),
+]);
+
+/**
  * Operational flags an admin can change at runtime.
  *
  * **Never user data.** This exists because `eval_snapshots_enabled` has to be

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
+import { AssessReport } from "./assess-report";
 
 /**
  * Mirror · Report — what Refine has noticed across someone's writing.
@@ -236,6 +237,7 @@ export function ReportPanel({
                   >
                     {COPY.edit}
                   </button>
+                  <AssessReport reportId={current.id} edited={edited} />
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(true)}

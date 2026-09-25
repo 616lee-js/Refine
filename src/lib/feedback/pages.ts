@@ -43,7 +43,10 @@ const KNOWN_ROUTES = [
   "/trash",
   "/admin/safety-log",
   "/admin/feedback",
-  "/admin/summary-evals",
+  // Renamed from /admin/summary-evals 2026-09-25, when it grew a second
+  // section for Mirror reports. The old label is kept below so feedback filed
+  // from the old URL still reads correctly.
+  "/admin/evals",
   "/admin/mirror",
 ] as const;
 
@@ -67,6 +70,7 @@ export const PAGE_LABELS: Record<string, string> = {
   "/admin/safety-log": "Admin · Safety log",
   "/admin/feedback": "Admin · Feedback",
   "/admin/summary-evals": "Admin · Summary evals",
+  "/admin/evals": "Admin · Evaluations",
   "/admin/mirror": "Admin · Mirror",
 };
 

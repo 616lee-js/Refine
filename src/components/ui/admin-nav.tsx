@@ -32,7 +32,7 @@ import { isAdminUserId } from "@/lib/auth/admin";
 const LINKS: { href: string; label: string }[] = [
   { href: "/admin/safety-log", label: "Safety log" },
   { href: "/admin/feedback", label: "Feedback" },
-  { href: "/admin/summary-evals", label: "Summary evals" },
+  { href: "/admin/evals", label: "Evaluations" },
   { href: "/admin/mirror", label: "Mirror" },
 ];
 

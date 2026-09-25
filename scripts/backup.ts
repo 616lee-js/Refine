@@ -52,6 +52,8 @@ const TABLES = [
   "content_access_log",
   // Points at users and journal_entries, so it follows both.
   "summary_evaluations",
+  // Points at users and mirror_reviews, so it follows both.
+  "report_evaluations",
   // No foreign keys, so position is free.
   "feedback",
   "app_settings",

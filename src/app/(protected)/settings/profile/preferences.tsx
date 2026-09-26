@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet, Eyebrow } from "@/components/ui/sheet";
+import { Sheet } from "@/components/ui/sheet";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { ModeControl } from "@/components/ui/mode-control";
 import { PalettePicker } from "@/components/ui/palette-picker";
 import type { Mode, Palette } from "@/lib/appearance";
@@ -94,79 +95,68 @@ export function Preferences({
         borderTop: "1px solid var(--rf-border)",
       }}
     >
-      <Eyebrow>{COPY.eyebrow}</Eyebrow>
-      <p
-        style={{
-          margin: "8px 0 16px",
-          maxWidth: 460,
-          fontSize: "13px",
-          lineHeight: 1.6,
-          color: "var(--rf-text-3)",
-        }}
-      >
-        {COPY.lede}
-      </p>
-
-      <Sheet style={{ padding: "24px 32px 28px" }}>
-        <div className="flex items-baseline justify-between gap-4">
-          <span style={{ fontSize: "14px", color: "var(--rf-text)" }}>
-            {COPY.appearance}
-          </span>
-          <span
-            aria-live="polite"
-            className="font-mono uppercase"
+      <CollapsibleSection title={COPY.eyebrow} note={COPY.lede}>
+        <Sheet style={{ padding: "24px 32px 28px" }}>
+          <div className="flex items-baseline justify-between gap-4">
+            <span style={{ fontSize: "14px", color: "var(--rf-text)" }}>
+              {COPY.appearance}
+            </span>
+            <span
+              aria-live="polite"
+              className="font-mono uppercase"
+              style={{
+                fontSize: "9.5px",
+                letterSpacing: "0.14em",
+                color:
+                  status === "failed" ? "var(--color-error)" : "var(--rf-text-4)",
+              }}
+            >
+              {status === "saved"
+                ? COPY.saved
+                : status === "failed"
+                  ? COPY.failed
+                  : ""}
+            </span>
+          </div>
+          <p
             style={{
-              fontSize: "9.5px",
-              letterSpacing: "0.14em",
-              color:
-                status === "failed" ? "var(--color-error)" : "var(--rf-text-4)",
+              margin: "3px 0 12px",
+              fontSize: "11.5px",
+              color: "var(--rf-text-4)",
             }}
           >
-            {status === "saved"
-              ? COPY.saved
-              : status === "failed"
-                ? COPY.failed
-                : ""}
+            {COPY.appearanceNote}
+          </p>
+          <ModeControl
+            value={mode}
+            disabled={busy}
+            onChange={(m) => void save({ mode: m })}
+          />
+
+          <div
+            style={{ height: 1, background: "var(--rf-rule)", margin: "24px 0 20px" }}
+          />
+
+          <span style={{ fontSize: "14px", color: "var(--rf-text)" }}>
+            {COPY.palette}
           </span>
-        </div>
-        <p
-          style={{
-            margin: "3px 0 12px",
-            fontSize: "11.5px",
-            color: "var(--rf-text-4)",
-          }}
-        >
-          {COPY.appearanceNote}
-        </p>
-        <ModeControl
-          value={mode}
-          disabled={busy}
-          onChange={(m) => void save({ mode: m })}
-        />
-
-        <div
-          style={{ height: 1, background: "var(--rf-rule)", margin: "24px 0 20px" }}
-        />
-
-        <span style={{ fontSize: "14px", color: "var(--rf-text)" }}>
-          {COPY.palette}
-        </span>
-        <p
-          style={{
-            margin: "3px 0 14px",
-            fontSize: "11.5px",
-            color: "var(--rf-text-4)",
-          }}
-        >
-          {COPY.paletteNote}
-        </p>
-        <PalettePicker
-          value={palette}
-          mode={mode}
-          disabled={busy}
-          onChange={(p) => void save({ palette: p })}
-        />
-      </Sheet>
+          <p
+            style={{
+              margin: "3px 0 14px",
+              fontSize: "11.5px",
+              color: "var(--rf-text-4)",
+            }}
+          >
+            {COPY.paletteNote}
+          </p>
+          <PalettePicker
+            value={palette}
+            mode={mode}
+            disabled={busy}
+            onChange={(p) => void save({ palette: p })}
+          />
+        </Sheet>
+      </CollapsibleSection>
     </div>
   );
 }

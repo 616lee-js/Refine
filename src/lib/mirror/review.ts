@@ -85,6 +85,19 @@ const PRIOR_REPORTS = 6;
 
 export class ReviewError extends Error {}
 
+/**
+ * A date as `YYYY-MM-DD`, UTC.
+ *
+ * Every date the model is shown goes through this, so the window boundaries and
+ * the per-entry prefixes are the same shape and cannot be read as two different
+ * calendars. UTC deliberately: this runs on a server whose timezone is not the
+ * writer's, and a date that shifts by one depending on where the function ran is
+ * worse than one that is consistently UTC.
+ */
+function day(at: Date): string {
+  return at.toISOString().slice(0, 10);
+}
+
 /** A user is due when they have written since their last report, long enough ago. */
 async function usersDue(intervalDays: number, limit: number) {
   const cutoff = new Date(Date.now() - intervalDays * 86_400_000);
@@ -179,7 +192,24 @@ async function checkinLines(userId: string): Promise<CheckinLines> {
   const trends = buildTrends(decrypted);
   const lines = trends.cards.map((c) => `${c.label} — ${c.meta}`);
   if (trends.plainly) lines.push(trends.plainly);
-  return lines;
+  return lines.map(stripCopyMarker);
+}
+
+/**
+ * Removes the `[COPY]` draft marker from a Trends string.
+ *
+ * Those strings are screen copy awaiting the owner's review, and the marker is
+ * how unreviewed wording stays visible on screen. But these same strings are
+ * appended verbatim to the report text, so the marker was appearing inside
+ * something the reader treats as finished — and inside the prompt, where it means
+ * nothing to the model.
+ *
+ * Stripping here rather than editing `lib/trends` keeps the marker doing its job
+ * on screen. The wording itself is still the owner's to review; this only stops
+ * the scaffolding travelling with it.
+ */
+function stripCopyMarker(line: string): string {
+  return line.replace(/\[COPY\]\s*/g, "");
 }
 
 /** Everything the model is shown, assembled from what is already stored. */
@@ -215,7 +245,7 @@ async function gather(userId: string, since: Date | null) {
       // Through authoritativeSummary: a summary the writer corrected is read as
       // they corrected it, never as the superseded original.
       const s = authoritativeSummary(row).summary;
-      const date = row.completedAt?.toISOString().slice(0, 10) ?? "undated";
+      const date = row.completedAt ? day(row.completedAt) : "undated";
       summaries.push(
         [
           `${date}: ${s.summary}`,
@@ -248,7 +278,7 @@ async function gather(userId: string, since: Date | null) {
     try {
       recent.push({
         id: row.id,
-        date: row.completedAt?.toISOString().slice(0, 10) ?? "undated",
+        date: row.completedAt ? day(row.completedAt) : "undated",
         body: decrypt(row.encryptedBody).slice(0, MAX_ENTRY_CHARS),
       });
     } catch {
@@ -306,7 +336,28 @@ async function gather(userId: string, since: Date | null) {
     }
   }
 
-  return { summaries, recent, memory, profile };
+  /*
+   * When the first entry was written, used as the window start on a first report.
+   *
+   * Queried rather than taken from `recent[0]` so that an entry whose body will
+   * not decrypt still counts towards when the record begins. `recent` drops those
+   * silently, and a window that starts after the person's first entry because one
+   * row failed to decrypt would be wrong in a way nothing would surface.
+   */
+  const [earliest] = await db
+    .select({ completedAt: journalEntries.completedAt })
+    .from(journalEntries)
+    .where(and(...base))
+    .orderBy(asc(journalEntries.completedAt))
+    .limit(1);
+
+  return {
+    summaries,
+    recent,
+    memory,
+    profile,
+    earliestEntryAt: earliest?.completedAt ?? null,
+  };
 }
 
 /** What previous reports said, so this run does not repeat itself. */
@@ -331,7 +382,7 @@ async function priorReports(userId: string): Promise<string[]> {
       // what the next run builds on. Showing it the superseded version would
       // rebuild an account they had already corrected.
       const r = authoritativeReport(row);
-      out.push(`${row.createdAt.toISOString().slice(0, 10)}: ${r.report}`);
+      out.push(`${day(row.createdAt)}: ${r.report}`);
     } catch {
       // Unreadable history degrades the run; it does not stop it.
     }
@@ -397,7 +448,24 @@ export async function reviewUser(
   const since = last?.windowEnd ?? null;
   const windowEnd = new Date();
 
-  const { summaries, recent, memory, profile } = await gather(userId, since);
+  const { summaries, recent, memory, profile, earliestEntryAt } = await gather(
+    userId,
+    since
+  );
+
+  /*
+   * Where this report's window begins.
+   *
+   * Was `since ?? new Date(0)`, which on a first report stored the zero point of
+   * computer time — 1 Jan 1970 UTC, rendered as "31 Dec 1969" to any viewer west
+   * of UTC, in the line above the report and in every history row thereafter.
+   *
+   * A first report genuinely does cover everything, so its window starts at the
+   * first entry. The final fallback is `windowEnd`, giving a zero-length window:
+   * only reachable on a forced run for an account with no readable entries, where
+   * a window of no length is the honest answer and a 56-year one is not.
+   */
+  const windowStart = since ?? earliestEntryAt ?? windowEnd;
 
   // Nothing written since the last run: no call, no record, nothing charged.
   // A forced run continues anyway — the summaries are still the long view, so
@@ -418,19 +486,40 @@ export async function reviewUser(
       {
         role: "user",
         content: [
+          /*
+           * The window and the count, stated.
+           *
+           * The model used to be sent neither, while the prompt asked it to say
+           * how many entries a pattern appears in and over what span. It had no
+           * choice but to tally the blocks of text in front of it, which is how a
+           * report came to say "twelve entries" when `entriesRead` was ten. The
+           * one authoritative count existed but never left the server.
+           *
+           * Same treatment as the check-in figures below: given, and not to be
+           * recomputed.
+           */
+          "## This report's window — given figures, do not recount",
+          `Window begins: ${day(windowStart)}`,
+          `Window ends: ${day(windowEnd)}`,
+          `Entries written in this window: ${recent.length}`,
+          "Use these exact figures when referring to how much this report covers.",
+          "",
           "## What they have told Refine about themselves",
           profile || "(nothing)",
           "",
           "## Confirmed in their Mirror",
           memory.join("\n") || "(nothing)",
           "",
-          "## Summaries of everything written so far",
+          // Each section says how far back it reaches. Without that, everything
+          // below reads as though it belonged to the window above, and a figure
+          // spanning a year gets described as recent.
+          "## Summaries of everything written so far — ALL of their history, not this window",
           summaries.join("\n\n") || "(none)",
           "",
-          "## Entries written since the last report, in full",
-          recent.map((r) => `### ${r.date}\n${r.body}`).join("\n\n"),
+          "## Entries written in this window, in full",
+          recent.map((r) => `### ${r.date}\n${r.body}`).join("\n\n") || "(none)",
           "",
-          "## Check-in figures — stated wording, do not restate in your own words",
+          "## Check-in figures — ALL of their history. Stated wording, do not restate in your own words",
           checkins.join("\n") || "(none)",
           "",
           "## What previous reports said",
@@ -454,7 +543,7 @@ export async function reviewUser(
   await db.insert(mirrorReviews).values({
     id: randomUUID(),
     userId,
-    windowStart: since ?? new Date(0),
+    windowStart,
     windowEnd,
     entriesRead: recent.length,
     encryptedReport: encrypt(reportText),

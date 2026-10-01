@@ -19,6 +19,41 @@ Entries below are written when a change actually lands, so these are pointers on
 
 ---
 
+## `memory-extraction.md` v2 — 2026-10-01
+
+**The window and the entry count are now given to the model.** v1 asked it to say
+how many entries a pattern appeared in and over what span, while the software sent
+it neither — so it tallied the blocks of text in its own context. That is how the
+first real report said "twelve entries" when the stored count was ten. The one
+authoritative figure, `entriesRead`, never left the server and appeared only in
+the line above the report.
+
+The window start, window end and entry count now arrive at the top of the message,
+marked as given and not to be recounted — the same treatment the check-in figures
+already had.
+
+**Each section now says how far back it reaches**, because they do not all reach
+the same distance: summaries and check-in figures are all-time, only the full entry
+text is limited to the window. Unlabelled, a figure drawn from a year of check-ins
+invited being described as recent.
+
+**The current window leads.** The report remains the running account of everything
+written — the product owner's decision, so continuity is kept — but what happened
+in this window is what it is for, opens the report, and gets the most room. The
+longer history is context behind it, not the subject.
+
+The two counts are now distinguished: how much the report covers is given and must
+never be recounted; how many entries a particular pattern appears in is the model's
+own observation and must name what was counted ("in four of the entries this
+fortnight"), because a bare number cannot be checked by the person reading it.
+
+Also in this change, outside the prompt: the `[COPY]` draft markers that were
+appearing at the bottom of every report are stripped where the check-in lines are
+built. They are screen copy awaiting review, and the marker was travelling into
+the report text and into the prompt. The wording itself is still unreviewed.
+
+---
+
 ## `entry-summariser.md` v3 — 2026-10-01
 
 **The summary length ceiling is removed.** Reported by the product owner: a long

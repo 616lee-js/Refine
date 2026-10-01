@@ -103,6 +103,17 @@ async function main() {
     const entryFilter = `user_id = $1 AND completed_at IS NOT NULL
        AND deleted_at IS NULL AND purged_at IS NULL`;
 
+    // When the record begins, for a first report's window start. Mirrors
+    // gather() in src/lib/mirror/review.ts.
+    const { rows: earliestRows } = await c.query<{ completed_at: Date }>(
+      `SELECT completed_at FROM journal_entries
+        WHERE ${entryFilter} ORDER BY completed_at ASC LIMIT 1`,
+      [userId]
+    );
+    const windowEnd = new Date();
+    const windowStart: Date =
+      since ?? earliestRows[0]?.completed_at ?? windowEnd;
+
     const { rows: summaryRows } = await c.query(
       `SELECT j.completed_at, s.encrypted_content, s.encrypted_user_content,
               s.user_edited_at, s.generated_at, s.generation_version
@@ -221,6 +232,9 @@ async function main() {
       const t = buildTrends(responses);
       checkins = t.cards.map((card) => `${card.label} — ${card.meta}`);
       if (t.plainly) checkins.push(t.plainly);
+      // Trends strings carry the [COPY] draft marker for the screen. It must not
+      // travel into the report or the prompt. Same strip as review.ts.
+      checkins = checkins.map((l) => l.replace(/\[COPY\]\s*/g, ""));
     }
 
     const { rows: priorRows } = await c.query(
@@ -247,20 +261,27 @@ async function main() {
     }
 
     // Same order and headings as src/lib/mirror/review.ts. See the note above.
+    const day = (at: Date) => at.toISOString().slice(0, 10);
     const message = [
+      "## This report's window — given figures, do not recount",
+      `Window begins: ${day(windowStart)}`,
+      `Window ends: ${day(windowEnd)}`,
+      `Entries written in this window: ${recent.length}`,
+      "Use these exact figures when referring to how much this report covers.",
+      "",
       "## What they have told Refine about themselves",
       profile || "(nothing)",
       "",
       "## Confirmed in their Mirror",
       memory.join("\n") || "(nothing)",
       "",
-      "## Summaries of everything written so far",
+      "## Summaries of everything written so far — ALL of their history, not this window",
       summaries.join("\n\n") || "(none)",
       "",
-      "## Entries written since the last report, in full",
+      "## Entries written in this window, in full",
       recent.map((r) => `### ${r.date}\n${r.body}`).join("\n\n") || "(none)",
       "",
-      "## Check-in figures — stated wording, do not restate in your own words",
+      "## Check-in figures — ALL of their history. Stated wording, do not restate in your own words",
       checkins.join("\n") || "(none)",
       "",
       "## What previous reports said",
@@ -270,6 +291,7 @@ async function main() {
     console.log("─".repeat(70));
     console.log(`account        ${userId}`);
     console.log(`prompt         ${version}`);
+    console.log(`window         ${day(windowStart)} to ${day(windowEnd)}`);
     console.log(`summaries      ${summaries.length}`);
     console.log(`entries in full ${recent.length}`);
     console.log(`memory items   ${memory.length}`);
@@ -321,8 +343,8 @@ async function main() {
       [
         id,
         userId,
-        since ?? new Date(0),
-        new Date(),
+        windowStart,
+        windowEnd,
         recent.length,
         encrypt(reportText),
         encrypt(parsed.periodNote),

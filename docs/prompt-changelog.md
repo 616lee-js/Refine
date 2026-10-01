@@ -42,6 +42,28 @@ it, matching how an over-long quote was already handled in the same route.
 "Do not pad" is unchanged and now carries the whole load — it is the only thing
 holding length down.
 
+**Also corrected in v3: a statement that had been false for two months.** The
+prompt told the model *"your prose summary is never shown to them"*, and its
+header said *"nothing here is shown as prose to the user"*. Both were copied from
+the v1 spec (*"Nothing from Cabinet 2 is surfaced to the user in v1"*) on
+2026-07-30. On 2026-08-04, five days later, `407ec75` shipped the read-back panel
+and the correction route — the summary became visible and editable — and the
+prompt was never revisited.
+
+So the model was being told to write for a machine-only audience while the writer
+was in fact reading its prose and correcting it. The product owner confirmed the
+intent was always that the summary be visible and correctable: it aggregates
+entries for Mirror, and there was never a reason to withhold it.
+
+The opening now states both audiences and that everything is correctable, while
+keeping the third-person past-tense register — being read is not the same as being
+addressed, and that register is what keeps a summary a record rather than a letter.
+*"No one reads this for support"* became an accurate version of the same rule.
+
+`docs/refine_v1_planning.md` lines 139 and 457 are struck through and dated.
+`docs/refine_testing_cadence.md:47` carries the same stale claim and was left
+alone, per the standing instruction not to modify that file unasked.
+
 **Consequence:** every stored summary became due and is rewritten at 25/day.
 Writers' own corrections are untouched; only the AI's version is replaced.
 

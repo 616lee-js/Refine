@@ -34,6 +34,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: "/admin/feedback", label: "Feedback" },
   { href: "/admin/evals", label: "Evaluations" },
   { href: "/admin/mirror", label: "Mirror" },
+  { href: "/admin/access", label: "Access" },
 ];
 
 export async function AdminNav({ active = false }: { active?: boolean } = {}) {

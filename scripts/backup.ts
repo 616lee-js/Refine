@@ -54,9 +54,19 @@ const TABLES = [
   "summary_evaluations",
   // Points at users and mirror_reviews, so it follows both.
   "report_evaluations",
+  // Points at users, so it follows them.
+  "password_reset_codes",
   // No foreign keys, so position is free.
   "feedback",
   "app_settings",
+  /*
+   * Keyed by an email hash with no foreign key, so position is free.
+   *
+   * Included because leaving it out would mean a restore silently clears every
+   * lockout — which is the one direction that matters here: a restore that unlocks
+   * an address someone was in the middle of guessing at.
+   */
+  "login_attempts",
 ] as const;
 
 type Dump = {

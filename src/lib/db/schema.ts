@@ -794,3 +794,86 @@ export const appSettings = pgTable("app_settings", {
     .notNull()
     .defaultNow(),
 });
+
+// ── Account recovery ─────────────────────────────────────────────────────────
+
+/**
+ * Password reset codes, issued by an admin and handed over out of band.
+ *
+ * ── Why a code and not an emailed link ────────────────────────────────────────
+ * This app cannot send email. There is no mail dependency, no SMTP settings, no
+ * sending domain — see `src/lib/env.ts`. A reset link would mean adding a mail
+ * provider, verifying a domain, and handing every resetting user's address to a
+ * third party. In a closed beta where invite codes are already read out by hand,
+ * a reset code is the same motion.
+ *
+ * ── Stored hashed, unlike invite codes ───────────────────────────────────────
+ * `code_hash` is a bcrypt hash and the code itself is shown once, at generation,
+ * and never again. Invite codes sit in the clear, which is defensible — the worst
+ * a stolen one does is create an account. A reset code changes the password on an
+ * account that already exists and has writing in it, so it is a credential, and a
+ * readable copy in the database is a spare key.
+ *
+ * Because bcrypt is deliberately not reversible or searchable, redemption looks up
+ * by `user_id` (resolved from the email the person types, through the existing
+ * HMAC) and compares against that account's few live codes. A deterministic hash
+ * would be indexable, but would also mean one leaked key turns every stored hash
+ * back into a working code.
+ *
+ * ── Bound to one account ──────────────────────────────────────────────────────
+ * `user_id` is not optional. A code that reset any account would be a master key,
+ * and the person redeeming it still has to know which email it belongs to.
+ */
+export const passwordResetCodes = pgTable(
+  "password_reset_codes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** bcrypt. The plaintext code exists only in the admin's hands. */
+    codeHash: text("code_hash").notNull(),
+    /** Why it was issued, for the admin's own records. Never shown to the user. */
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Not nullable, unlike invite codes: a reset code that never expires is a
+     *  permanent spare key to someone's journal. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    /** Redemption: this account's codes, newest first. */
+    index("password_reset_codes_user_idx").on(t.userId, desc(t.createdAt)),
+  ]
+);
+
+/**
+ * Failed sign-in attempts, so a password cannot be guessed indefinitely.
+ *
+ * ── There was no limit at all before this ─────────────────────────────────────
+ * A failed sign-in was a bare redirect to `/login?error=1`, with nothing counting
+ * and nothing slowing down. Adding a reset path to that would have widened a door
+ * already standing open.
+ *
+ * ── Keyed by the email hash, not by the account ───────────────────────────────
+ * Deliberately: attempts against an address that has no account must be counted
+ * too. Counting only real accounts turns the lockout itself into an oracle —
+ * "this one slows down, so it exists".
+ *
+ * Rows are per address rather than per attempt. The question is "is this address
+ * locked", not "what has it tried", and a row per attempt would be a log of
+ * guesses at real people's passwords sitting in the database.
+ */
+export const loginAttempts = pgTable("login_attempts", {
+  /** HMAC of the lowercased address, as `users.email_hmac` — never the address. */
+  emailHmac: text("email_hmac").primaryKey(),
+  failedCount: integer("failed_count").notNull().default(0),
+  lastFailedAt: timestamp("last_failed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Set once the count passes the threshold. Null means not locked. */
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+});

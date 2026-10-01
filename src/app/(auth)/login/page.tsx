@@ -22,6 +22,7 @@ const COPY = {
   submit: "[COPY] Sign in",
   noAccount: "[COPY] No account?",
   createOne: "[COPY] Create one",
+  forgot: "[COPY] Forgotten your password?",
 } as const;
 
 export default async function LoginPage({
@@ -69,6 +70,22 @@ export default async function LoginPage({
             <AuthSubmit>{COPY.submit}</AuthSubmit>
           </div>
         </form>
+
+        {/* Inside the sheet, under the button, rather than in the footer with
+            "Create one" — this is a way through this form, not a way to a
+            different one. */}
+        <p className="mt-[14px]" style={{ fontSize: "12.5px" }}>
+          <Link
+            href="/reset"
+            style={{
+              color: "var(--rf-text-3)",
+              textDecoration: "underline",
+              textUnderlineOffset: "3px",
+            }}
+          >
+            {COPY.forgot}
+          </Link>
+        </p>
       </AuthSheet>
 
       <AuthFooter>

@@ -10,7 +10,12 @@ v1 uses single-user passphrase auth. v2 needs proper per-user accounts before mo
 
 - User registration, login, session management per-user
 - Per-user encryption keys (v1 uses a single ENCRYPTION_KEY for all data)
-- Password reset, account recovery
+- ~~Password reset, account recovery~~ **Brought forward 2026-10-01.** An
+  admin-issued reset code, because the app still cannot send email; see
+  `docs/refine_operations.md`. Login attempt limiting shipped with it — there was
+  none before, and adding a reset path to an unlimited login would have widened a
+  door already open. **Still deferred:** self-service reset by emailed link, email
+  verification, and anything else needing a mail provider.
 
 ---
 

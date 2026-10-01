@@ -31,6 +31,18 @@ file is missing or damaged, nothing in this guide will work. Don't delete it.
 Nobody can create an account without an invite code. You generate the code, then
 give it to the person.
 
+**There are now two ways to do this.** Added 2026-10-01.
+
+- **In the app**, signed in as an admin: **Access** in the admin bar. Generate
+  codes, see which have been used, cancel one. Nothing to install, works from any
+  machine.
+- **From the command line**, below. Still here, still supported, and still the one
+  that works when the thing that is broken is signing in — including your own
+  ability to sign in. Keep this section.
+
+Both write to the same place. A code made in the app can be cancelled from the
+command line and the other way round.
+
 ### 1. Create a code
 
 ```
@@ -241,6 +253,53 @@ Two download links on the same page:
 
 Both the page and the downloads are recorded in the access log, the same as any
 other time content is unlocked.
+
+---
+
+## When someone forgets their password
+
+Added 2026-10-01.
+
+**Refine cannot send email.** There is no mail service connected to it, so there
+is no "reset link in your inbox" and there is not going to be one without adding a
+paid third party. Resets work by a code you give them, the same way invites do.
+
+### Giving someone a reset code
+
+1. Sign in as an admin and open **Access** in the admin bar.
+2. Under **Password reset codes**, type the email address on their account and
+   press **Issue reset code**.
+3. A code appears. **This is the only time you will ever see it** — it is stored
+   scrambled, so it cannot be looked up again. Copy it before leaving the page.
+4. Send them the code and this link: `https://refine-eta-rose.vercel.app/reset`
+5. They enter their email address, the code, and the password they want.
+
+### Things worth knowing
+
+- **It lasts 48 hours**, then stops working. Issue another one if they are slow.
+- **It works once.** After they use it, it is spent.
+- **Issuing a new one cancels the old one.** You cannot have two live codes for the
+  same account, which means a code someone has lost cannot be used by whoever finds
+  it once you have issued a replacement.
+- **It only works for that one account.** A code for one person cannot reset
+  anybody else.
+- **Setting a password does not sign them in.** They go to the sign-in page and use
+  the new password. That is deliberate: if a code ever reached the wrong person,
+  they would still have to do something visible rather than already being inside.
+- **If the address has no account, the page tells you.** The person's reset screen
+  never says whether an address exists — only your admin screen does.
+- **You cannot do this for yourself if you are locked out.** Use the command line,
+  or ask the other admin.
+
+### Wrong passwords are now limited
+
+Also added 2026-10-01. Eight wrong attempts within an hour locks that email
+address for fifteen minutes. The lock is per address, not per person, and it counts
+attempts on addresses that have no account too — otherwise the lock itself would
+quietly reveal which addresses are real. A successful sign-in clears the count.
+
+Someone locked out just sees the normal "invalid email or password" message. There
+is nothing to clear by hand; it expires on its own.
 
 ---
 

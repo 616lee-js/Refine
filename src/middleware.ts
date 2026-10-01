@@ -3,8 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 const PUBLIC_PATHS = [
   "/login",
   "/signup",
+  // Resetting a password is reachable without a session by definition — the
+  // person cannot sign in, which is why they are here. Without both of these the
+  // screen redirects to /login and the form posts into nothing.
+  "/reset",
   "/api/auth/login",
   "/api/auth/signup",
+  "/api/auth/reset",
   // Vercel Cron sends no session cookie. The matcher below catches everything,
   // so without these the cron jobs would be redirected to /login and silently do
   // nothing while reporting success. Both routes authenticate themselves with

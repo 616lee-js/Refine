@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { journalEntries, users } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { guidanceFor } from "@/lib/journal/personal-guidance";
 import JournalEntry from "../../journal-entry";
 import { AdminNav } from "@/components/ui/admin-nav";
 
@@ -76,6 +77,11 @@ export default async function JournalEntryPage({
   const initialGuidanceOpen =
     typeof prefs.guidanceOpen === "boolean" ? prefs.guidanceOpen : true;
 
+  // Footholds, including any drawn from this person's own record. Built here
+  // because the personal ones read the database and decrypt — see
+  // lib/journal/personal-guidance.ts.
+  const guidance = await guidanceFor(authSession.userId);
+
   return (
     <JournalEntry
       admin={<AdminNav />}
@@ -83,6 +89,7 @@ export default async function JournalEntryPage({
       initialText={initialText}
       initialCompletedAt={entry.completedAt?.toISOString() ?? null}
       initialGuidanceOpen={initialGuidanceOpen}
+      guidance={guidance}
     />
   );
 }

@@ -18,11 +18,14 @@
  *   rule, not a stylistic preference.
  *
  * ── Structure ─────────────────────────────────────────────────────────────────
- * `source` distinguishes generic guidance from the personal/trend-based prompts
- * that arrive later (v1.5+, once Cabinet 2 has data). The sidebar renders both
- * identically; only the origin differs. Personal items will be fetched, never
- * derived from what is currently being typed — the sidebar does not read the
- * entry.
+ * `source` distinguishes this generic guidance from items drawn from one person's
+ * own record. Those **arrived 2026-10-01** and are built in ./personal-guidance.ts,
+ * which runs on the server because it reads and decrypts. The sidebar renders both
+ * kinds identically; only the origin and the provenance label differ.
+ *
+ * Personal items are fetched, never derived from what is being typed. Neither this
+ * file nor that one has a parameter for the entry text, and the sidebar has no prop
+ * for it. That is structural rather than conventional.
  */
 
 export type GuidanceSource = "generic" | "personal";
@@ -60,6 +63,55 @@ export type GuidanceSection = {
 // person, never asks for a reply, no engagement mechanics) are product
 // rules and survive any rewording.
 const GENERIC_SECTIONS: GuidanceSection[] = [
+  {
+    /*
+     * Ways to write one, as opposed to advice about writing.
+     *
+     * Added 2026-10-01 at the product owner's request: "a few different options
+     * for recommendations how to write a reflection". Everything that already
+     * existed here is guidance *about* the practice — permission, reassurance,
+     * what not to worry about. None of it answers "what do I actually do with
+     * this blank page", which is the thing someone sitting in front of one wants.
+     *
+     * These are shapes to pick from, not steps to follow, and none of them is the
+     * recommended one. Each still obeys the constraints above: optional, about the
+     * writing rather than the writer, and never expecting a reply.
+     */
+    id: "approaches",
+    title: "[COPY] Ways to write one",
+    items: [
+      {
+        id: "approach-one-moment",
+        title: "[COPY] One moment, in detail",
+        body: "[COPY] Pick a single thing that happened and write only that — who was there, what was said, what you noticed. Narrower than a day and usually more revealing.",
+        source: "generic",
+      },
+      {
+        id: "approach-unsent",
+        title: "[COPY] The thing you won't say",
+        body: "[COPY] Write it to the person it concerns, knowing you will never send it. Being unfair on the page is allowed, and it is often where the real objection surfaces.",
+        source: "generic",
+      },
+      {
+        id: "approach-loose-ends",
+        title: "[COPY] What's still open",
+        body: "[COPY] List what is unresolved, without solving any of it. Naming the open things is a complete entry — the list is the point, not what you do about it.",
+        source: "generic",
+      },
+      {
+        id: "approach-plain-account",
+        title: "[COPY] Just what happened",
+        body: "[COPY] A plain account with no interpretation at all. Useful on a day you cannot find a feeling about, and it usually turns out to contain one.",
+        source: "generic",
+      },
+      {
+        id: "approach-changed-mind",
+        title: "[COPY] Something you've changed your mind about",
+        body: "[COPY] What you thought before, what you think now, and when it shifted. The shift is often more informative than either position.",
+        source: "generic",
+      },
+    ],
+  },
   {
     id: "starting",
     title: "[COPY] If you're not sure where to start",
@@ -129,12 +181,18 @@ const GENERIC_SECTIONS: GuidanceSection[] = [
 ];
 
 /**
- * Guidance for the sidebar.
+ * The practice guidance, identical for everyone.
  *
- * Takes no arguments today. When personal prompts arrive this becomes an async
- * lookup by user — but it will never take the entry text as a parameter, because
- * the sidebar does not respond to what is being written.
+ * Takes no arguments and never will. Anything drawn from a particular person's
+ * writing is built in ./personal-guidance.ts, which runs on the server because it
+ * reads and decrypts — and which still never receives the entry text. The sidebar
+ * does not respond to what is being written.
  */
-export function getGuidanceSections(): GuidanceSection[] {
+export function genericSections(): GuidanceSection[] {
   return GENERIC_SECTIONS;
+}
+
+/** Total items across sections, for the collapsed spine's count. */
+export function countItems(sections: GuidanceSection[]): number {
+  return sections.reduce((n, s) => n + s.items.length, 0);
 }

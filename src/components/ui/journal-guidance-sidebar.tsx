@@ -1,6 +1,6 @@
 "use client";
 
-import { getGuidanceSections } from "@/lib/journal/guidance";
+import { countItems, type GuidanceSection } from "@/lib/journal/guidance";
 import { Eyebrow } from "./sheet";
 
 /**
@@ -12,12 +12,18 @@ import { Eyebrow } from "./sheet";
  * convention: there is no prop through which the body could reach it.
  *
  * ── Content ───────────────────────────────────────────────────────────────────
- * v1 ships the repo's practice guidance — about the practice, not the person,
- * and it never asks for a reply. The design's question-shaped footholds ("Any
- * clearer today?") are drawn from previous entries and threads, which needs
- * Cabinet 2 and memory extraction — Phase 6, not built. When those arrive they
- * are `source: "personal"` items with a `sourceLabel`, and the item renderer
- * below already draws the provenance eyebrow for them. No component change.
+ * Practice guidance — about the practice, not the person, never asking for a
+ * reply — plus ways to actually write one, plus, since 2026-10-01, footholds drawn
+ * from the person's own record: a fact they have confirmed in Mirror, a category or
+ * a person recurring across recent summaries, where their last report left off.
+ *
+ * Those arrive as `source: "personal"` items carrying a `sourceLabel`, and the item
+ * renderer below drew that provenance eyebrow before they existed, so adding them
+ * needed no change here — only the `sections` prop, because they are read and
+ * decrypted on the server. See lib/journal/personal-guidance.ts.
+ *
+ * None of them is produced by a model. Having the AI write prompts is a separate
+ * decision that has not been made.
  *
  * ── Width ─────────────────────────────────────────────────────────────────────
  * 306px open, 48px collapsed, against the entry's `1fr`. Never an equal split.
@@ -44,8 +50,13 @@ const COPY = {
   regionAria: "Journaling guidance",
 } as const;
 
-function RailBody({ onCollapse }: { onCollapse: () => void }) {
-  const sections = getGuidanceSections();
+function RailBody({
+  sections,
+  onCollapse,
+}: {
+  sections: GuidanceSection[];
+  onCollapse: () => void;
+}) {
 
   return (
     <div className="flex h-full flex-col gap-[18px]">
@@ -149,13 +160,21 @@ export function JournalGuidanceSidebar({
   open,
   onClose,
   onOpen,
-  itemCount,
+  sections,
   overlayOnly = false,
 }: {
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
-  itemCount: number;
+  /**
+   * Built on the server and passed in, rather than read from a module here.
+   *
+   * The practice guidance is static and could have stayed an import. Footholds
+   * drawn from the person's own record cannot: they read the database and decrypt,
+   * which a client component cannot do. Both arrive the same way so there is one
+   * path rather than two — see lib/journal/personal-guidance.ts.
+   */
+  sections: GuidanceSection[];
   /**
    * Never take a column of the layout, at any width — the edge tab and its
    * overlay at every size.
@@ -184,7 +203,7 @@ export function JournalGuidanceSidebar({
             borderLeft: "1px solid var(--rf-border)",
           }}
         >
-          <RailBody onCollapse={onClose} />
+          <RailBody sections={sections} onCollapse={onClose} />
         </aside>
       )}
 
@@ -227,7 +246,7 @@ export function JournalGuidanceSidebar({
                 color: "var(--rf-accent)",
               }}
             >
-              {itemCount}
+              {countItems(sections)}
             </span>
           </button>
         </aside>
@@ -294,7 +313,7 @@ export function JournalGuidanceSidebar({
               borderLeft: "1px solid var(--rf-border)",
             }}
           >
-            <RailBody onCollapse={onClose} />
+            <RailBody sections={sections} onCollapse={onClose} />
           </div>
         </div>
       )}

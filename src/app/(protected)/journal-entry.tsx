@@ -7,7 +7,7 @@ import { JournalGuidanceSidebar } from "@/components/ui/journal-guidance-sidebar
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
-import { getGuidanceSections } from "@/lib/journal/guidance";
+import type { GuidanceSection } from "@/lib/journal/guidance";
 import { useDictation } from "./use-dictation";
 
 /**
@@ -116,6 +116,7 @@ export default function JournalEntry({
   initialText,
   initialCompletedAt,
   initialGuidanceOpen,
+  guidance,
   embedded = false,
 }: {
   /** Rendered admin entry points from the server parent — see admin-nav.tsx. */
@@ -124,6 +125,11 @@ export default function JournalEntry({
   initialText: string;
   initialCompletedAt: string | null;
   initialGuidanceOpen: boolean;
+  /**
+   * Footholds, built on the server because the personal ones read and decrypt.
+   * See lib/journal/personal-guidance.ts.
+   */
+  guidance: GuidanceSection[];
   /**
    * Rendered inside the archive's main view, beside the record list, rather
    * than as a screen of its own.
@@ -158,11 +164,6 @@ export default function JournalEntry({
   const savedTextRef = useRef(initialText);
   /** Whether any of this entry's words arrived by voice. See insertSpoken. */
   const spokenRef = useRef(false);
-
-  const guidanceCount = getGuidanceSections().reduce(
-    (n, s) => n + s.items.length,
-    0
-  );
 
   /**
    * A spoken utterance, placed where the caret is.
@@ -611,7 +612,7 @@ export default function JournalEntry({
           open={guidanceOpen}
           onOpen={() => toggleGuidance(true)}
           onClose={() => toggleGuidance(false)}
-          itemCount={guidanceCount}
+          sections={guidance}
           overlayOnly={embedded}
         />
       </div>

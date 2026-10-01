@@ -146,11 +146,38 @@ function Choice({
   );
 }
 
+/**
+ * The button that opens the assessment.
+ *
+ * Separate from the panel because the two no longer sit together: the button
+ * belongs beside the summary it judges, and the panel is a two-column comparison
+ * that needs the full width of the view. `ReadBack` owns the state between them.
+ */
+export function AssessSummaryTrigger({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-full transition-colors"
+      style={{
+        padding: "7px 14px",
+        fontSize: "12.5px",
+        color: "var(--rf-text-2)",
+        boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+      }}
+    >
+      {COPY.assess}
+    </button>
+  );
+}
+
 export function AssessSummary({
   entryId,
   summary,
   body,
   corrected = false,
+  open,
+  onClose,
 }: {
   entryId: string;
   /** Always the AI's original — see the call site for why, not the correction. */
@@ -158,8 +185,10 @@ export function AssessSummary({
   body: string;
   /** True when the writer has since corrected the summary shown on read-back. */
   corrected?: boolean;
+  /** Open state lives in ReadBack, which also renders the trigger. */
+  open: boolean;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState<YesNo>(null);
   const [complete, setComplete] = useState<YesNo>(null);
   const [quotes, setQuotes] = useState<QuoteAnswer>(null);
@@ -200,7 +229,7 @@ export function AssessSummary({
         }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      setOpen(false);
+      onClose();
       setToast(COPY.done);
       setSupported(null);
       setComplete(null);
@@ -215,27 +244,11 @@ export function AssessSummary({
     }
   }
 
+  // Closed: nothing but the toast, which must survive the panel closing so
+  // "Thanks — recorded" is still readable after a successful submit. The button
+  // that opens this lives beside the summary — see AssessSummaryTrigger.
   if (!open) {
-    return (
-      <>
-        <div className="mt-[14px]">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="rounded-full transition-colors"
-            style={{
-              padding: "7px 14px",
-              fontSize: "12.5px",
-              color: "var(--rf-text-2)",
-              boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-            }}
-          >
-            {COPY.assess}
-          </button>
-        </div>
-        <Toast message={toast} onDismiss={() => setToast(null)} />
-      </>
-    );
+    return <Toast message={toast} onDismiss={() => setToast(null)} />;
   }
 
   return (
@@ -259,7 +272,7 @@ export function AssessSummary({
           </div>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={onClose}
             className="font-mono uppercase"
             style={{
               fontSize: "9.5px",

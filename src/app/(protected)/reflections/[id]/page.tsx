@@ -16,7 +16,6 @@ import {
 } from "@/lib/summaries/read";
 import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
-import { AssessSummary } from "./assess-summary";
 import { CompletionNotice } from "./completion-notice";
 import { type ArchiveSearchParams } from "../records";
 
@@ -268,13 +267,33 @@ export default async function ReflectionDetailPage({
             </div>
           </div>
 
-          {/* Summary above the entry, then the entry. One client component so
-              text selected in the entry can become a quote in the summary —
-              see ./read-back.tsx. `topics` / `people` are flagged for a
-              consistency review: the vocabulary drifts entry to entry. */}
+          {/* Summary beside the entry, same height, the entry scrolling in its
+              own box. One client component so text selected in the entry can
+              become a quote in the summary — see ./read-back.tsx. `topics` /
+              `people` are flagged for a consistency review: the vocabulary
+              drifts entry to entry.
+
+              Assessing the summary is offered from inside it, and only when
+              there is genuinely something to judge: a readable summary and a
+              readable body. Nothing submitted there changes this person's own
+              future summaries — see ./assess-summary.tsx.
+
+              `aiOriginal`, never `summary`. Where the writer has corrected the
+              summary, `summary` is their own words — judging that would measure
+              their edit rather than the summariser, which is the one thing that
+              log exists to measure. The API snapshots the same version. */}
           <ReadBack
             body={body}
             decryptFailed={decryptFailed}
+            assess={
+              resolved && !summaryUnreadable && !decryptFailed && body
+                ? {
+                    entryId: entry.id,
+                    summary: resolved.aiOriginal,
+                    corrected: resolved.source === "user",
+                  }
+                : null
+            }
             summary={{
               entryId: entry.id,
               summary: resolved?.summary ?? null,
@@ -286,24 +305,6 @@ export default async function ReflectionDetailPage({
               unreadable: summaryUnreadable,
             }}
           />
-
-          {/* Assessing the summary against the entry. Only offered when there
-              is genuinely something to judge: a readable summary and a readable
-              body. Nothing submitted here changes this person's own future
-              summaries — see ./assess-summary.tsx.
-
-              `aiOriginal`, never `summary`. Where the writer has corrected the
-              summary, `summary` is their own words — judging that would measure
-              their edit rather than the summariser, which is the one thing this
-              log exists to measure. The API snapshots the same version. */}
-          {resolved && !summaryUnreadable && !decryptFailed && body && (
-            <AssessSummary
-              entryId={entry.id}
-              summary={resolved.aiOriginal}
-              corrected={resolved.source === "user"}
-              body={body}
-            />
-          )}
 
           {arrival && entry.tierClassification !== null && (
             <CrisisResourcePanel tier={entry.tierClassification} />

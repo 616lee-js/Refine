@@ -34,17 +34,63 @@ import type { LikertQuestionnaire } from "@/lib/questionnaires";
  */
 
 /**
- * Width of the answer column, scaled to how many options the instrument has.
+ * The *smallest* the answer column may get, scaled to how many options there are.
  *
- * Fixed at 260px this gave GAD-7 and PHQ-9's four options ~65px each, which is
- * comfortable, and SWLS's seven ~37px, which is not — the radios crowd and the
- * repeated labels under them on narrow screens have nowhere to go.
+ * This used to be the column's actual width, and that was the bug the product
+ * owner reported on the life-satisfaction form: the row was laid out `1fr Npx`,
+ * so the question text absorbed every spare pixel and the options stayed in a
+ * fixed strip no matter how wide the window. At 364px, SWLS's seven options got
+ * 52px each — enough for the radios, nowhere near enough for the labels, so
+ * "Neither agree nor disagree" wrapped to three lines of 8.5px capitals.
  *
- * Capped at 380 so a long scale does not squeeze the item text it sits beside;
- * the row stacks below `sm` regardless, where each option carries its own label.
+ * It is now the floor of a flexible track (see `answerColumns`). Keeping the old
+ * value as the floor means no width gets worse than it is today, while a wide
+ * window gives the labels room instead of giving it all to the question.
+ *
+ * Still capped at 380: below `sm` the row stacks and each option carries its own
+ * label, so a long scale never has to survive on this floor alone.
  */
-function answerColumnWidth(optionCount: number): number {
+function answerColumnFloor(optionCount: number): number {
   return Math.min(380, Math.max(260, optionCount * 52));
+}
+
+/**
+ * How wide the answer column would like to be, given what its labels say.
+ *
+ * The thing that was actually squeezed is the label text, not the radios, so the
+ * width is driven by the longest label rather than by the number of options. A
+ * four-point scale labelled "Nearly every day" needs room per option; an
+ * eleven-point 0–10 scale labelled with single digits needs almost none.
+ *
+ * ~6.2px per character is 8.5px mono capitals at 0.08em tracking, plus the
+ * `px-[3px]` either side. The 130px ceiling is where a label stops being worth
+ * more room and should wrap instead — "Neither agree nor disagree" cannot sit on
+ * one line without taking the whole row.
+ */
+function answerColumnIdeal(options: { label: string }[]): number {
+  const longest = Math.max(...options.map((o) => o.label.length));
+  const perOption = Math.min(130, Math.max(34, longest * 6.2 + 10));
+  return Math.round(options.length * perOption);
+}
+
+/**
+ * Question text beside answer options.
+ *
+ * `minmax(0, 1fr)` for the question and a definite-max track for the answers,
+ * which is what reverses the old behaviour: grid grows a non-flexible track to
+ * its maximum *before* handing what remains to a flexible one, so the answers now
+ * get the width their labels need and the question takes the rest. Previously the
+ * question was the flexible track and the answers were a fixed strip, so every
+ * spare pixel went to the question no matter how wide the window.
+ *
+ * `min(idealpx, 55%)` keeps a long scale from eating the row — the question is
+ * still the content. The floor stops the answers being squeezed narrower than
+ * they are today on a small window.
+ */
+function answerColumns(options: { label: string }[]): string {
+  const floor = answerColumnFloor(options.length);
+  const ideal = Math.max(floor, answerColumnIdeal(options));
+  return `minmax(0, 1fr) minmax(${floor}px, min(${ideal}px, 55%))`;
 }
 
 // COPY REVIEW: this screen's own strings. Instrument wording (GAD-7 items and
@@ -107,10 +153,11 @@ export function FrameworkRecord({
     (i) => typeof answers[i.key] === "number"
   ).length;
 
-  // Wider for a seven-point scale than for a four-point one. The Tailwind
-  // classes below cannot express this, so the rows carry it as a style.
-  const answerCol = answerColumnWidth(q.options.length);
-  const rowColumns = { gridTemplateColumns: `1fr ${answerCol}px` };
+  // One definition for the header row and every item row, so the radios cannot
+  // stop lining up under their labels. Tailwind classes cannot express a
+  // per-instrument track, so the rows carry it as a style.
+  const answerCols = answerColumns(q.options);
+  const rowColumns = { gridTemplateColumns: answerCols };
 
   function choose(key: string, value: number) {
     setAnswers((a) => ({ ...a, [key]: value }));
@@ -315,7 +362,7 @@ export function FrameworkRecord({
                 className="grid items-center gap-[22px] py-[10px] sm:[grid-template-columns:var(--answer-cols)]"
                 style={{
                   borderBottom: last ? "none" : "1px solid var(--rf-rule)",
-                  "--answer-cols": `1fr ${answerCol}px`,
+                  "--answer-cols": answerCols,
                 } as React.CSSProperties}
               >
                 <div className="flex gap-3">
@@ -340,7 +387,7 @@ export function FrameworkRecord({
               className="grid items-center gap-[22px] py-[6px] sm:[grid-template-columns:var(--answer-cols)]"
               style={{
                 borderBottom: last ? "none" : "1px solid var(--rf-rule)",
-                "--answer-cols": `1fr ${answerCol}px`,
+                "--answer-cols": answerCols,
               } as React.CSSProperties}
             >
               <legend className="sr-only">{item.text}</legend>

@@ -477,6 +477,32 @@ has to stay. Completing an entry uses an inline notice on the read-back page
 
 ---
 
+### Answer scale beside its question — ADDED 2026-10-01
+
+A questionnaire row is the question text beside its response options. Both tracks
+are sized from content; neither is a fixed strip.
+
+```css
+grid-template-columns: minmax(0, 1fr) minmax(<floor>px, min(<ideal>px, 55%));
+```
+
+- **The options track is the one with a definite maximum, not the question.** Grid
+  grows a non-flexible track to its maximum before handing what remains to a
+  flexible one, so the options get the width their labels need and the question
+  takes the rest. The previous `1fr <n>px` did the opposite: every spare pixel went
+  to the question and the options stayed in a strip at every window size.
+- **`ideal` comes from the longest option label, not the option count.** What gets
+  squeezed is label text. Four options reading "Nearly every day" need ~120px
+  each; eleven options reading `0`–`10` need ~35px. Count alone gets this backwards.
+- **`floor` is the width the column had before this pattern** — scaled by option
+  count, capped at 380px. Keeping it as the minimum means no window gets worse
+  than it was.
+- **`55%` so a long scale cannot eat the row.** The question is the content.
+- **One definition for the header row and every item row**, or the radios stop
+  lining up under their labels.
+- Below `sm` the row stacks and each option carries its own label, so the floor
+  never has to carry a long scale on its own.
+
 ### Record states: viewed, then edited — ADDED 2026-09-21
 
 A completed record is **read**. Editing it is a separate, deliberate action that
@@ -587,6 +613,40 @@ controls that narrow the choosing belong in it rather than above the results.
   paper tone. The cards keep the brighter paper so they still read as separate
   objects inside the panel rather than dissolving into a list. A column of loose
   pieces does not read as a section of the page.
+
+#### Two columns of matched height — ADDED 2026-10-01
+
+Where two things are read against each other, they are the same height and the
+longer one scrolls inside its own box. Used by the read-back page: summary left,
+the person's writing right.
+
+```html
+<!-- lg and up: two columns, equal height. Below: stacked, nothing capped. -->
+<div class="lg:grid lg:items-stretch lg:gap-7 lg:[grid-template-columns:0.8fr_1.2fr]"
+     style="min-height:420px">
+  <div class="min-w-0"><!-- sizes the row --></div>
+
+  <div class="relative min-w-0">
+    <div class="lg:absolute lg:inset-0 lg:flex lg:min-h-0 lg:flex-col">
+      <div class="lg:shrink-0"><!-- label --></div>
+      <div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto"><!-- scrolls --></div>
+    </div>
+  </div>
+</div>
+```
+
+- **The heights match without measuring anything.** The scrolling column's
+  contents are taken out of the flow, so they contribute no height and the row is
+  sized by the other column alone. No `ResizeObserver`, no layout effect, nothing
+  that runs after paint and moves the page under the reader.
+- **A minimum height on the row.** A thin entry produces a short summary, and
+  matching the writing to three lines of it would leave it unreadable.
+- **Below `lg` the cap is removed entirely**, not reduced. A scroll box inside a
+  page that already scrolls is two scrollbars competing on a phone.
+- **The person's words get the larger column** — `1.2fr` against `0.8fr`. The ratio
+  is not 50/50 because prose needs line length and a summary does not.
+- **Width is still capped inside the column** at 760px. A column can be wider than
+  prose should be.
 
 #### Records open in the main view — ADDED 2026-09-23
 
@@ -926,6 +986,25 @@ Streaming cursor and voice indicator animations suppressed for users with `prefe
 
 ---
 
+### OQ-006 — Entry summary panel: collapsed or open by default? — RESOLVED 2026-10-01
+
+**Resolved as (b), open by default, by the layout rather than by the argument.**
+
+The read-back page became two columns at `lg`: the summary beside the writing
+rather than above it, both the same height, the entry scrolling in its own box.
+The objection below was *positional* — a collapsed panel leading the page says
+nothing, an open one makes the summary the headline of someone's own entry. Beside
+the writing, an open summary displaces nothing; the entry is at the top either way.
+
+Still a `<details>`, so it closes.
+
+**Where the original objection still bites:** below `lg` the two stack and the
+summary does lead the page, now open. Accepted rather than solved. Changing the
+source order to put the writing first would break select-to-quote, which depends
+on the two being one component with the summary first.
+
+The original entry follows.
+
 ### OQ-006 — Entry summary panel: collapsed or open by default?
 
 Added 2026-09-21. "What Refine took from this" moved above the entry on the
@@ -992,4 +1071,4 @@ consistency between the two screens and nothing else.
 
 ---
 
-*Last updated: 2026-09-23. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*
+*Last updated: 2026-10-01. Add new patterns as they are built; surface new inconsistencies as OQ-### entries.*

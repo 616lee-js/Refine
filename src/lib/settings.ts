@@ -25,7 +25,7 @@ export const EVAL_SNAPSHOTS_ENABLED = "eval_snapshots_enabled";
  * How many days between Mirror reviews.
  *
  * A setting rather than a constant so the cadence can move between weekly and
- * fortnightly without a deploy — the product owner asked for exactly that
+ * 14 days without a deploy — the product owner asked for exactly that
  * choice, and which one is right is not knowable until reviews have run against
  * real writing.
  */

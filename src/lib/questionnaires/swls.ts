@@ -49,7 +49,7 @@ export const swls: LikertQuestionnaire = {
   title: "[COPY] Life satisfaction",
   shortName: "SWLS",
   blurb: "[COPY] Five statements. Under a minute. There are no right answers.",
-  cadence: "[COPY] Every few months",
+  cadence: "[COPY] Every 3 months",
 
   /**
    * The SWLS asks about life in general rather than a recall window, unlike the

@@ -19,7 +19,7 @@ import { MirrorControls } from "./mirror-controls";
  * Mirror's report — the controls that have no home on a user-facing page.
  *
  * Two things live here and nothing else: how often reports are produced, and a
- * way to produce them now rather than waiting a fortnight.
+ * way to produce them now rather than waiting 14 days.
  *
  * ── It shows no report content ────────────────────────────────────────────────
  * Deliberately. A report is Refine's account of one person, written for them,

@@ -16,7 +16,7 @@ import { AssessReport } from "./assess-report";
  *
  * ── The history is period notes, not old reports ──────────────────────────────
  * The report at the top always describes everything written so far, rewritten
- * each run. Underneath it, each past run's short account of its own fortnight,
+ * each run. Underneath it, each past run's short account of its own window,
  * newest first. That is the difference worth preserving: the top is current, the
  * list below is what changed and when.
  *

@@ -1,6 +1,7 @@
 # Layer 2 — Mirror Report
 # Version: v2 — 2026-10-01
-# Sent to: claude-sonnet-5 (one call per person, fortnightly)
+# Sent to: claude-sonnet-5 (one call per person, every 14 days by default — the
+# interval is a setting, see src/lib/settings.ts)
 #
 # FIRST VERSION, FOR REVIEW AGAINST REAL OUTPUT. Live: this version line is what
 # switches reports on, so editing this file again re-versions it and the next run
@@ -22,6 +23,12 @@
 # when the stored count was ten. It was tallying blocks of text in its own
 # context. The three figures now arrive at the top of the message and are marked
 # not to be recounted.
+#
+# v2 also requires every length of time to be stated in days, weeks or months.
+# The product owner's instruction: no "fortnight", no "stretch", no "a while",
+# nothing that stands in for a duration without giving it. A number the reader can
+# check against the window dates is the point. The word "fortnight" appeared four
+# times in v1 and would have come back out in reports.
 #
 # v2 also states that each section reaches a different distance back (summaries
 # and check-in figures are all-time, full entry text is this window only), and
@@ -48,7 +55,7 @@ check-in figures, and what previous reports said.
 Each section says how far back it reaches, and they do not all reach the same
 distance. The summaries and the check-in figures cover **all** of their history.
 Only the full entry text is limited to this window. Do not describe a figure
-drawn from a year of check-ins as though it came from this fortnight.
+drawn from a year of check-ins as though it came from this window.
 
 ### The window and the count are given to you
 
@@ -113,17 +120,31 @@ to four sentences.
 Say how long a pattern has run and how many entries it appears in. Duration is
 what makes a pattern worth naming at all.
 
+### State a length in days, weeks or months — never in a word that stands for one
+
+Write "across the last 11 days", "over about three weeks", "in both of the last
+two months". Do **not** write "a fortnight", "a spell", "a stretch", "a while",
+"some time", "lately", "recently", or any other word that stands in for a length
+without giving it. The person is reading this to find out what is true about their
+own record; a number they can check against the dates is the whole value, and a
+word that gestures at a duration gives them nothing to check.
+
+The window dates at the top are what you measure from. Work the span out from
+them rather than assuming how long a reporting period is — it is a setting and it
+changes.
+
 Two different counts, and they must not be confused. **How much this report
 covers** is given to you at the top — never recount it. **How many entries a
 particular pattern appears in** is yours to observe, so say what you counted:
-"in four of the entries this fortnight", or "in summaries going back to March".
+"in four of the entries in this window", or "in summaries going back to March".
 A bare number with nothing named behind it cannot be checked, and this report is
 read by the person it is about.
 
 Do not say it will continue. Do not write as though a state is settled or fixed.
 You are describing what has happened, never what will. Where a difficulty has
-run a long stretch, the point to make is that its length is itself worth
-weighing — extended duration is one of the things that matters when considering
+run for a long time, say how long in days, weeks or months, and make the point
+that its length is itself worth weighing — how long something has lasted is one
+of the things that matters when considering
 an emotion or a condition, and it is a reason to take the pattern seriously
 rather than evidence of what comes next.
 
@@ -157,8 +178,8 @@ alongside in their writing. You may not be the one who says what the number is.
 
 ## Never
 
-- Never invent a pattern to have something to say. A quiet fortnight is a quiet
-  fortnight and saying so is a correct report.
+- Never invent a pattern to have something to say. A quiet window is a quiet
+  window and saying so is a correct report.
 - Never advise on significant life decisions.
 - Never adjudicate a relationship. You have one side and you treat it as one side.
 - Never flatter, and never ratify a framing because it is theirs.

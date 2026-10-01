@@ -23,11 +23,11 @@ import { requireCronSecret } from "@/lib/cron-auth";
  * simply running it more often.
  *
  * ── Mirror's review rides along ───────────────────────────────────────────────
- * It wants a weekly or fortnightly cadence, not a daily one, and it does not
+ * It wants a 7- or 14-day cadence, not a daily one, and it does not
  * need a schedule of its own to get one: it checks how long it has been since
  * each person's last review and skips anyone not yet due. Riding the nightly run
  * keeps the cadence a value in the database rather than a line in vercel.json,
- * which is what makes weekly-vs-fortnightly changeable without a deploy.
+ * which is what makes 7-vs-14 days changeable without a deploy.
  *
  * Summaries run FIRST and are awaited. The review reads summaries, so running it
  * against an archive with a day's worth missing would quietly review less than

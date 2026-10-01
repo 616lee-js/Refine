@@ -32,7 +32,7 @@ import type { CheckinLines, RawReport } from "./types";
  * Mirror's report.
  *
  * ── What it is ────────────────────────────────────────────────────────────────
- * Every fortnight, read back across someone's writing and produce a report
+ * Every 14 days by default, read back across someone's writing and produce a report
  * describing what recurs and what has shifted — something they read, not a list
  * they sort. Each run rewrites the running whole-picture report and leaves a
  * short note about that window, which is what the history is made of.
@@ -71,7 +71,7 @@ export const PROMPT_VERSION = promptVersion(extractionPrompt);
  */
 export const PROMPT_UNWRITTEN = PROMPT_VERSION === "UNWRITTEN";
 
-/** Fortnightly, per the product owner. Changeable without a deploy. */
+/** 14 days, per the product owner. Changeable without a deploy. */
 export const DEFAULT_INTERVAL_DAYS = 14;
 
 /** Guards the long view against unbounded growth years from now. */
@@ -138,7 +138,7 @@ async function usersDue(intervalDays: number, limit: number) {
   return rows.filter((r) => {
     if (!r.lastAt) return true;
     if (r.lastAt > cutoff) return false;
-    // Due, but nothing new written: a report on an empty fortnight says
+    // Due, but nothing new written: a report on an empty window says
     // nothing and still costs a call. Skipped.
     return r.lastEnd === null || r.newest > r.lastEnd;
   });
@@ -423,7 +423,7 @@ export function parseReport(raw: string): RawReport {
  * Runs one person's report and stores it. Returns whether one was written.
  *
  * `force` skips the "nothing written since last time" check. The scheduled run
- * never forces — a report on a fortnight in which nobody wrote anything says
+ * never forces — a report on a window in which nobody wrote anything says
  * nothing and still costs a call. Manual runs during the closed beta do force,
  * because otherwise a prompt change cannot be tested twice against the same
  * account without writing a new entry in between.

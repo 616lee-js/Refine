@@ -60,6 +60,28 @@ Reasoning behind decisions: `docs/refine_brainstorm_summary.md`
    - A list of unfamiliar terms is not a summary. If the recap cannot be read
      without a glossary, it has failed regardless of how accurate it is.
 
+10. **Say how long in days, weeks or months. Never use a word that stands for a
+    length of time.** Added 2026-10-01 at the product owner's instruction.
+
+    Banned: *fortnight, a stretch, a spell, a while, some time, lately,
+    recently, a few weeks, every few months.* Write "every 14 days", "across the
+    last 11 days", "every 3 months", "in both of the last two months".
+
+    This applies to three places, and all three had the problem:
+    - **Prompts.** `memory-extraction.md` said "fortnight" four times, so reports
+      would have said it back. A report is read to find out what is true about a
+      person's own record; a duration they cannot check against a date is worth
+      nothing to them.
+    - **Screen copy**, including an instrument's `cadence` string.
+    - **Prose written to the product owner**, same as rule 9.
+
+    Code comments are **not** exempt here, unlike rule 9 — "fortnightly" is not
+    technical precision, and it is usually also wrong, since the report interval
+    is a setting (`MIRROR_REVIEW_INTERVAL_DAYS`) rather than a fixed period.
+
+    Exempt: the design package under `docs/design/`, which is a received
+    reference rather than product copy, and this rule's own list of banned words.
+
 ## Naming conventions
 
 Names throughout this codebase must reinforce the reflective journaling framing —

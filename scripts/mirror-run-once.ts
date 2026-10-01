@@ -15,8 +15,8 @@ import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
  * The report normally runs inside the nightly job, which needs CRON_SECRET, or
  * from the admin page, which needs ADMIN_USER_IDS. Neither is set in .env.local,
  * so neither can be triggered from a developer machine. Iterating on the
- * instructions needs a way to run one and read the result without waiting a
- * fortnight or deploying.
+ * instructions needs a way to run one and read the result without waiting
+ * 14 days or deploying.
  *
  *   npm run mirror:once -- <user-id-prefix>
  *   npm run mirror:once -- <user-id-prefix> --dry
@@ -27,7 +27,7 @@ import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
  * stores nothing.
  *
  * ── It deliberately ignores the schedule ──────────────────────────────────────
- * No fortnight check and no "has anything been written since last time" check.
+ * No interval check and no "has anything been written since last time" check.
  * Those are correct for the scheduled run and useless for testing a prompt.
  *
  * ── Where it duplicates, and where it must not drift ──────────────────────────

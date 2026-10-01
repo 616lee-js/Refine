@@ -694,6 +694,31 @@ outranks visual consistency (see Responsive conventions, rule 3). Reading an
 entry happens in the main view like every other record; only the editor is
 separate, and it returns to the archive on save or cancel.
 
+#### Starting something, from the panel — ADDED 2026-10-01
+
+The archive's panel opens with the ways to start a record, above the divider that
+separates them from the search controls and the list.
+
+This is the rule above — *actions first, then the list* — finally applied to the
+panel that stated it. Until now the panel opened with a search box, and the whole
+app had exactly two ways to begin a written entry: a button on Home, and "Save,
+then write" at the end of a check-in. The archive, which is the screen you are on
+when you are already thinking about your writing, had none.
+
+- **In the panel, not above the main view.** The panel is on screen on every
+  `/reflections` route; the main view is replaced by whatever record you open, so
+  actions placed there vanish as soon as you read something.
+- **One press where there is no choice to make, a picker where there is.** Writing
+  and the check-in are single buttons. A questionnaire is "which one", so it gets a
+  select and its own button on a second row.
+- **The empty list points upward, not elsewhere.** It used to offer a link to Home
+  to start something; with the buttons in the same panel, sending someone to
+  another screen to reach them is worse than saying nothing.
+- **The create calls are shared, not copied** — `use-start-record.ts`. Home and the
+  panel offer the same three, and the part that drifts silently is not the request
+  but where it lands afterwards, including the `?edit=1` that decides whether a
+  questionnaire opens ready to answer or read-only.
+
 ### Filters — ADDED 2026-09-22, restructured 2026-09-23
 
 Preset controls you pick from, not a box you type into. On the archive rail.

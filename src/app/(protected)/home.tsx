@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import { TopNav } from "@/components/ui/top-nav";
 import { listStartable } from "@/lib/questionnaires";
+import { useStartRecord } from "./use-start-record";
 
 /**
  * Home.
@@ -118,50 +118,13 @@ export function ScreenHome({
   checkedInToday: boolean;
   totalRecords: number;
 }) {
-  const router = useRouter();
-  const [loading, setLoading] = useState<
-    "entry" | "framework" | "checkin" | null
-  >(null);
   /** Which instrument the picker has selected. */
   const [instrument, setInstrument] = useState(INSTRUMENTS[0]?.slug ?? "");
-  const [error, setError] = useState<string | null>(null);
 
-  async function start(
-    kind: "entry" | "framework" | "checkin",
-    slug?: string
-  ) {
-    setLoading(kind);
-    setError(null);
-    try {
-      const res =
-        kind === "entry"
-          ? await fetch("/api/reflections", { method: "POST" })
-          : await fetch("/api/questionnaires", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ slug }),
-            });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as {
-        reflectionId?: string;
-        responseId?: string;
-      };
-      // Questionnaires open inside the archive; only the writing surface is a
-      // screen of its own. Linked straight there rather than through the old
-      // routes, which redirect — correct, but a wasted hop from here.
-      //
-      // `?edit=1`: starting a check-in from here means intending to fill it in.
-      // Without it an already-completed response opens read-only, which is
-      // right when arriving from the archive and wrong when pressing "Log".
-      if (kind === "entry") router.push(`/reflection/${data.reflectionId}`);
-      else if (kind === "checkin")
-        router.push(`/reflections/checkin/${data.responseId}?edit=1`);
-      else router.push(`/reflections/framework/${data.responseId}?edit=1`);
-    } catch {
-      setError(COPY.startError);
-      setLoading(null);
-    }
-  }
+  // The three create calls and where each one lands now live in one place,
+  // because the archive's record panel offers the same three. See
+  // ./use-start-record.ts.
+  const { start, starting: loading, failed } = useStartRecord();
 
   return (
     <PageBg>
@@ -393,12 +356,12 @@ export function ScreenHome({
             </button>
           </div>
 
-          {error && (
+          {failed && (
             <p
               className="mt-4 text-center"
               style={{ fontSize: "12.5px", color: "var(--color-error)" }}
             >
-              {error}
+              {COPY.startError}
             </p>
           )}
 

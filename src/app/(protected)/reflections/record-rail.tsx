@@ -4,7 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
+import { listStartable } from "@/lib/questionnaires";
+import { useStartRecord } from "../use-start-record";
 import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
+
+/**
+ * Questionnaires that can be started from here.
+ *
+ * Trackers are excluded: the only one is the daily check-in, which has its own
+ * button. Same filter as Home's picker.
+ */
+const INSTRUMENTS = listStartable().filter((q) => q.kind === "likert");
 
 /**
  * The archive's left column: how you find a record, and the records themselves.
@@ -109,9 +119,17 @@ const COPY = {
   chipCategory: (c: string) => `[COPY] Category: ${c}`,
   chipSearch: (q: string) => `[COPY] Search: ${q}`,
 
-  empty: "[COPY] Nothing here yet.",
   emptyFiltered: "[COPY] Nothing matches these filters.",
-  start: "[COPY] Start something",
+  /** Points at the buttons above rather than at another screen. */
+  emptyStart: "[COPY] Nothing here yet. Start above whenever you like.",
+
+  startHeading: "[COPY] Start",
+  startWrite: "[COPY] Write",
+  startCheckin: "[COPY] Check in",
+  startFrameworkLabel: "[COPY] Choose a framework",
+  startGo: "[COPY] Start",
+  startOpening: "[COPY] Opening…",
+  startError: "[COPY] Couldn't start that. Try again.",
 
   unfinished: "[COPY] Unfinished",
   summarising: "[COPY] Summarising…",
@@ -222,6 +240,116 @@ function ActiveChip({ label, href }: { label: string; href: string }) {
         <path d="M2 2 L8 8 M8 2 L2 8" />
       </svg>
     </Link>
+  );
+}
+
+/**
+ * Starting something, at the top of the panel.
+ *
+ * ── Why it is here at all ─────────────────────────────────────────────────────
+ * There were two ways to begin a written entry in the whole app: the button on
+ * Home, and "Save, then write" at the end of a check-in. The archive — the screen
+ * you are on when you are already thinking about your writing — had none.
+ *
+ * ── Why in the panel rather than above the list ───────────────────────────────
+ * The panel is on screen on every `/reflections` route, while the main view is
+ * replaced by whatever record you open. Actions above the main view would vanish
+ * the moment you read something.
+ *
+ * It also settles an inconsistency the design system already named: the rule for
+ * this panel is "Actions first, then the list — the panel answers 'what can I do
+ * here' before 'what have I done'", and the panel opened with a search box.
+ *
+ * ── The questionnaire needs a choice, the other two do not ────────────────────
+ * Writing and the check-in are one press each. A questionnaire is "which one",
+ * so it is a picker plus its own button, on its own row.
+ */
+function StartSomething() {
+  const { start, starting, failed } = useStartRecord();
+  const [instrument, setInstrument] = useState(INSTRUMENTS[0]?.slug ?? "");
+  const busy = starting !== null;
+
+  return (
+    <div className="mb-[10px]">
+      <span style={blockLabel}>{COPY.startHeading}</span>
+
+      <div className="flex gap-[6px]">
+        <button
+          type="button"
+          onClick={() => void start("entry")}
+          disabled={busy}
+          className="flex-1 rounded-full transition-colors disabled:opacity-40"
+          style={{
+            padding: "6px 10px",
+            fontSize: "11.5px",
+            fontWeight: 500,
+            background: "var(--rf-text)",
+            color: "var(--rf-paper)",
+          }}
+        >
+          {starting === "entry" ? COPY.startOpening : COPY.startWrite}
+        </button>
+        <button
+          type="button"
+          onClick={() => void start("checkin", "daily_checkin")}
+          disabled={busy}
+          className="flex-1 rounded-full transition-colors disabled:opacity-40"
+          style={{
+            padding: "6px 10px",
+            fontSize: "11.5px",
+            color: "var(--rf-text-2)",
+            boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+          }}
+        >
+          {starting === "checkin" ? COPY.startOpening : COPY.startCheckin}
+        </button>
+      </div>
+
+      {INSTRUMENTS.length > 0 && (
+        <div className="mt-[6px] flex gap-[6px]">
+          <label className="sr-only" htmlFor="rail-framework">
+            {COPY.startFrameworkLabel}
+          </label>
+          <select
+            id="rail-framework"
+            value={instrument}
+            onChange={(e) => setInstrument(e.target.value)}
+            disabled={busy}
+            className="min-w-0 flex-1 rounded-[3px] px-2 py-[5px] outline-none disabled:opacity-40"
+            style={fieldStyle}
+          >
+            {INSTRUMENTS.map((q) => (
+              <option key={q.slug} value={q.slug}>
+                {q.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void start("framework", instrument)}
+            disabled={busy || !instrument}
+            className="shrink-0 rounded-full transition-colors disabled:opacity-40"
+            style={{
+              padding: "5px 12px",
+              fontSize: "11.5px",
+              color: "var(--rf-text-2)",
+              boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
+            }}
+          >
+            {starting === "framework" ? COPY.startOpening : COPY.startGo}
+          </button>
+        </div>
+      )}
+
+      {failed && (
+        <p
+          className="mt-[6px]"
+          style={{ fontSize: "11px", color: "var(--color-error)" }}
+        >
+          {COPY.startError}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -336,6 +464,15 @@ export function RecordRail({
         boxShadow: "inset 0 0 0 1px var(--rf-border)",
       }}
     >
+      {/* Actions first, then the list — the design system's rule for this panel,
+          which it did not previously follow. See StartSomething. */}
+      <StartSomething />
+
+      <div
+        className="mb-[10px]"
+        style={{ height: 1, background: "var(--rf-border)" }}
+      />
+
       <div className="mb-2">
         <span style={groupLabel}>{COPY.heading}</span>
       </div>
@@ -632,17 +769,11 @@ export function RecordRail({
       </div>
 
       {records.length === 0 ? (
+        /* No "Start something" link to Home any more: the buttons that start
+           something are at the top of this same panel, and sending someone to
+           another screen to reach them would be worse than saying nothing. */
         <p className="mt-2" style={{ fontSize: "12.5px", color: "var(--rf-text-4)" }}>
-          {filtered ? COPY.emptyFiltered : COPY.empty}{" "}
-          {!filtered && (
-            <Link
-              href="/"
-              className="underline underline-offset-[3px]"
-              style={{ color: "var(--rf-text-2)" }}
-            >
-              {COPY.start}
-            </Link>
-          )}
+          {filtered ? COPY.emptyFiltered : COPY.emptyStart}
         </p>
       ) : (
         /* Dimmed rather than replaced while refiltering. Swapping in a

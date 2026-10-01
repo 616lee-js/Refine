@@ -11,7 +11,14 @@ import type { EntrySummary } from "@/lib/summaries/types";
  * ── Side by side, because the judgement is a comparison ───────────────────────
  * The read-back page stacks the summary above the entry, which is right for
  * reading and wrong for checking one against the other. Assessing puts them in
- * two columns so both are in view while the rubric is answered.
+ * two columns so both are in view while the rubric is answered. This is the only
+ * screen where they sit side by side; reading an entry keeps one column and the
+ * full width.
+ *
+ * ── And the two columns are the same height ───────────────────────────────────
+ * The entry was capped at a flat 320px however tall the summary beside it was, so
+ * the thing being judged and the thing it is judged against were different sizes.
+ * The summary sizes the row now and the entry fills it, scrolling. See the grid.
  *
  * ── Yes is always the acceptable answer ───────────────────────────────────────
  * Every item is worded so that "yes" means the summariser did the right thing.
@@ -285,8 +292,20 @@ export function AssessSummary({
         </div>
 
         {/* Side by side at lg, stacked below it — comparing two columns on a
-            phone is worse than reading them in sequence. */}
-        <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            phone is worse than reading them in sequence.
+
+            ── The two columns are the same height ──────────────────────────────
+            The entry used to be capped at a flat 320px regardless of how tall the
+            summary beside it was, so the thing being judged and the thing judging
+            it were different sizes. The summary column now sizes the row and the
+            entry fills it: the entry column's contents are taken out of the flow
+            (`lg:absolute lg:inset-0`), so they add no height, and the entry box
+            stretches to the row and scrolls inside it. Nothing is measured, so
+            nothing moves after the panel paints.
+
+            `lg:min-h-[320px]` keeps a short summary from reducing the entry to a
+            slot, and is the old fixed height, so no case is worse than it was. */}
+        <div className="mt-4 grid gap-5 lg:min-h-[320px] lg:grid-cols-2 lg:items-stretch">
           <div>
             <Eyebrow size={9}>{COPY.summaryColumn}</Eyebrow>
             {/* Said plainly, because the read-back above shows their corrected
@@ -355,23 +374,33 @@ export function AssessSummary({
             </div>
           </div>
 
-          <div>
-            <Eyebrow size={9}>{COPY.entryColumn}</Eyebrow>
-            <div
-              className="mt-2 overflow-y-auto rounded-[4px] px-4 py-3"
-              style={{ maxHeight: 320, background: "var(--rf-paper)" }}
-            >
-              <p
-                className="whitespace-pre-wrap"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "14px",
-                  lineHeight: 1.7,
-                  color: "var(--rf-text)",
-                }}
+          <div className="relative min-w-0">
+            <div className="lg:absolute lg:inset-0 lg:flex lg:min-h-0 lg:flex-col">
+              <div className="lg:shrink-0">
+                <Eyebrow size={9}>{COPY.entryColumn}</Eyebrow>
+              </div>
+              {/* `max-h-[320px] lg:max-h-none`, as classes rather than a style:
+                  an inline maxHeight would outrank the Tailwind class and keep the
+                  cap at every width, which is the bug this is fixing. Below lg the
+                  columns are stacked, so there is no height to match and the cap
+                  stops an entry pushing the questions off screen. At lg the row
+                  supplies the height instead. */}
+              <div
+                className="mt-2 max-h-[320px] overflow-y-auto rounded-[4px] px-4 py-3 lg:max-h-none lg:min-h-0 lg:flex-1"
+                style={{ background: "var(--rf-paper)" }}
               >
-                {body}
-              </p>
+                <p
+                  className="whitespace-pre-wrap"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "14px",
+                    lineHeight: 1.7,
+                    color: "var(--rf-text)",
+                  }}
+                >
+                  {body}
+                </p>
+              </div>
             </div>
           </div>
         </div>

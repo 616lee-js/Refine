@@ -132,24 +132,10 @@ export function EntrySummaryPanel({
   onQuoteConsumed,
 }: EntrySummaryPanelProps) {
   const router = useRouter();
-  /*
-   * Open by default, which resolves OQ-006 in the design system.
-   *
-   * It was collapsed, and the open question asked whether that was still right
-   * once the panel moved above the entry: a collapsed panel leading the page is
-   * the first thing on screen and says nothing, while opening it by default would
-   * make the summary the headline of someone's own entry.
-   *
-   * The layout settles it rather than the argument being won either way. The
-   * panel now sits *beside* the writing instead of above it (see ./read-back.tsx),
-   * so an open summary displaces nothing — the entry is at the top of the page
-   * either way, and the objection was positional. It is still collapsible.
-   *
-   * Below `lg` the two stack and the summary does lead, which is the one place
-   * the original objection still bites. Recorded in the design system rather than
-   * resolved silently.
-   */
-  const [open, setOpen] = useState(true);
+  // Collapsed. OQ-006 in the design system is still open: a collapsed panel
+  // leading the page says nothing, but opening it by default makes the summary
+  // the headline of someone's own entry. Product owner's call, not made yet.
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(summary?.summary ?? "");
   /*

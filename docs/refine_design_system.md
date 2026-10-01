@@ -614,22 +614,29 @@ controls that narrow the choosing belong in it rather than above the results.
   objects inside the panel rather than dissolving into a list. A column of loose
   pieces does not read as a section of the page.
 
-#### Two columns of matched height — ADDED 2026-10-01
+#### Assessing: two columns of matched height — ADDED 2026-10-01
 
-Where two things are read against each other, they are the same height and the
-longer one scrolls inside its own box. Used by the read-back page: summary left,
-the person's writing right.
+**Side by side is for assessment, not for reading.** Where something generated is
+being checked against the content it came from, the two sit in two columns of the
+same height with the longer one scrolling, so both are in view while the questions
+are answered. Used by `assess-summary.tsx`: the summary left, the entry right.
+
+Reading the same entry is **one column at full width** — the writing is not capped
+and does not scroll inside a box. Two columns were tried on the read-back page and
+reverted: at `lg` the archive's 300px record panel leaves about 656px, so a second
+column drops the writing to roughly 30 characters a line.
 
 ```html
-<!-- lg and up: two columns, equal height. Below: stacked, nothing capped. -->
-<div class="lg:grid lg:items-stretch lg:gap-7 lg:[grid-template-columns:0.8fr_1.2fr]"
-     style="min-height:420px">
-  <div class="min-w-0"><!-- sizes the row --></div>
+<!-- lg and up: equal height, the right column scrolling. Below: stacked. -->
+<div class="grid gap-5 lg:min-h-[320px] lg:grid-cols-2 lg:items-stretch">
+  <div><!-- the generated thing: sizes the row --></div>
 
   <div class="relative min-w-0">
     <div class="lg:absolute lg:inset-0 lg:flex lg:min-h-0 lg:flex-col">
       <div class="lg:shrink-0"><!-- label --></div>
-      <div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto"><!-- scrolls --></div>
+      <div class="max-h-[320px] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
+        <!-- the source content, scrolling -->
+      </div>
     </div>
   </div>
 </div>
@@ -638,15 +645,18 @@ the person's writing right.
 - **The heights match without measuring anything.** The scrolling column's
   contents are taken out of the flow, so they contribute no height and the row is
   sized by the other column alone. No `ResizeObserver`, no layout effect, nothing
-  that runs after paint and moves the page under the reader.
-- **A minimum height on the row.** A thin entry produces a short summary, and
-  matching the writing to three lines of it would leave it unreadable.
-- **Below `lg` the cap is removed entirely**, not reduced. A scroll box inside a
-  page that already scrolls is two scrollbars competing on a phone.
-- **The person's words get the larger column** — `1.2fr` against `0.8fr`. The ratio
-  is not 50/50 because prose needs line length and a summary does not.
-- **Width is still capped inside the column** at 760px. A column can be wider than
-  prose should be.
+  that runs after paint and moves the panel under the reader.
+- **A minimum height on the row**, set to whatever fixed height it replaces, so no
+  case comes out shorter than it was.
+- **The scroll cap is a class, never an inline style.** An inline `maxHeight`
+  outranks the Tailwind class that is supposed to lift it at `lg`, so the cap
+  silently survives into the matched-height layout — which was the original bug.
+- **Below `lg` the cap stays** rather than being removed. Stacked, there is no
+  height to match, and an uncapped source would push the questions off screen.
+
+**A report has no second column.** `assess-report.tsx` is deliberately one column
+with the questions below: a report's subject is everything the person has written,
+so there is no single piece of content to put beside it.
 
 #### Records open in the main view — ADDED 2026-09-23
 
@@ -985,25 +995,6 @@ Added to `globals.css`:
 Streaming cursor and voice indicator animations suppressed for users with `prefers-reduced-motion: reduce`.
 
 ---
-
-### OQ-006 — Entry summary panel: collapsed or open by default? — RESOLVED 2026-10-01
-
-**Resolved as (b), open by default, by the layout rather than by the argument.**
-
-The read-back page became two columns at `lg`: the summary beside the writing
-rather than above it, both the same height, the entry scrolling in its own box.
-The objection below was *positional* — a collapsed panel leading the page says
-nothing, an open one makes the summary the headline of someone's own entry. Beside
-the writing, an open summary displaces nothing; the entry is at the top either way.
-
-Still a `<details>`, so it closes.
-
-**Where the original objection still bites:** below `lg` the two stack and the
-summary does lead the page, now open. Accepted rather than solved. Changing the
-source order to put the writing first would break select-to-quote, which depends
-on the two being one component with the summary first.
-
-The original entry follows.
 
 ### OQ-006 — Entry summary panel: collapsed or open by default?
 

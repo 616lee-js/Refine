@@ -963,6 +963,33 @@ Before any new color combination is introduced, verify contrast at [WebAIM Contr
 
 - `animate-pulse` is used for the streaming cursor and voice indicator. Wrap in `@media (prefers-reduced-motion: reduce)` to suppress. Not yet implemented — see OQ-005.
 
+### Dictation — ADDED 2026-10-01
+
+Speaking into the writing surface. One button under the sheet, above the row that
+finishes the entry — it is another way of putting words in, not an action on the
+entry.
+
+- **Every state is on screen.** Listening, restarting, and what has been heard but
+  not yet committed. The browser ends recognition after a pause and words in the
+  gap are lost (LIM-012), so "Microphone restarting" shows in the error colour
+  rather than being hidden. A silent gap reads as bad transcription.
+- **Interim words are visible and visibly provisional** — italic, in the muted
+  text tone, outside the sheet. They are not in the entry yet and must not look as
+  though they are.
+- **Words land at the caret**, not appended, and a selection is replaced. Spacing
+  is decided at the insertion point, not by the transcriber, which has no idea
+  what sits either side of the caret.
+- **The privacy notice is part of the control, not a settings page.** The first
+  press explains that the browser sends audio to Google and waits for
+  acknowledgement; later presses start immediately. Remembered per browser,
+  because it is about what a device does with sound. Every `localStorage` access
+  guarded — blocked site data means the notice shows again, which is the safe
+  failure.
+- **Nothing renders where speech recognition is unavailable**, and nothing renders
+  on the server: support is detected after mount, never during render. Reading
+  `window` while rendering is the hydration failure that took the check-in page
+  down.
+
 ### Voice mode accessibility — STALE 2026-07-29
 
 Voice is archived (`archive/chat-model/`) and the journal surface has no voice

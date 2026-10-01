@@ -69,6 +69,24 @@ has to be obtained from the International Wellbeing Group. Withdrawing it is one
 boolean (`shipped: false`), and responses already recorded stay readable — the same
 mechanism that withdrew SWLS.
 
+**Open question, raised 2026-10-01 and deliberately not resolved here.** Would
+charging for the app while not charging for the instrument be allowed? The two
+available statements conflict:
+
+- The manual's own condition is that the *Index* must not be sold, which read
+  narrowly a paid app does not obviously breach.
+- The Centre's website is reported to be published under **Creative Commons
+  Attribution-NonCommercial**, and NonCommercial covers use primarily directed
+  toward commercial advantage or monetary compensation — which a paid app is,
+  itemised or not.
+
+The second reading is the broader one and therefore the binding one if both apply.
+**Unverified:** the Creative Commons claim comes from a search result, not from the
+primary source — acqol.com.au sits behind a Deakin access challenge. Do not act on
+either reading. If this becomes commercially relevant, ask the Australian Centre on
+Quality of Life directly and keep the written answer; permission is granted
+routinely and costs nothing to request.
+
 A second, narrower issue: the item wording was written from the published stem and
 domain names rather than transcribed character-for-character from the manual, so
 `wordingVerified` is false and Mirror charts nothing for it. Verify against
@@ -265,16 +283,45 @@ The Web Speech API `SpeechRecognition` object stops silently when the browser de
 
 **Mitigation:** The status indicator alerts users. Switching to a push-to-talk model or a continuous server-side provider (Deepgram, Whisper streaming) at v2 would eliminate the gap.
 
+**Still true as of 2026-10-01, and still mitigated the same way.** Dictation shipped
+with `restarting` shown in the error colour beside the microphone, reading
+"Microphone restarting — words said just now may be lost". Shown rather than
+hidden deliberately: a silent gap looks like bad transcription, and the person
+cannot know to repeat themselves unless told. Words already committed are
+untouched; only what was spoken during the gap is gone.
+
 ---
 
 #### LIM-005 — Voice transcription via browser Web Speech API in v1
 
 **Severity:** Minor for v1 development; significant for users at v2
-**Status:** Mitigated in v1; revisit before v2
+**Status:** Live again as of 2026-10-01, with the exposure now stated on screen
 
 Web Speech API is free and requires no additional accounts but has lower transcription accuracy than dedicated providers (Whisper, Deepgram), and Chrome's implementation sends audio to Google for processing. The latter has privacy implications that are acceptable for solo testing but may not meet the PHI-grade rigor commitment for real users.
 
 **v2 requirement:** Re-evaluate transcription provider against privacy commitments before any non-developer users.
+
+**Updated 2026-10-01 — dictation shipped.** Speaking into an entry is live. Two
+things changed about this entry's risk posture, and one did not:
+
+- **Nothing is recorded.** No `MediaRecorder`, no blob, no upload, no file. Only
+  recognised text crosses from the browser into the entry. The v1 behaviour of
+  saving `.webm` files is gone and is not coming back with this feature — see
+  LIM-011, and `src/lib/flags.ts`, where `VOICE_ENABLED` now means audio capture
+  and retention alone.
+- **The person is told, before the first use.** The microphone button shows a
+  notice explaining that the browser sends the audio to Google rather than
+  transcribing on the device, and will not start until that is acknowledged. The
+  acknowledgement is per browser, not per account, because it is about what a
+  device does with sound. Nothing about the exposure is hidden behind a glyph.
+- **The exposure itself is unchanged.** Audio still leaves the machine, and this
+  is still the wrong provider for PHI-grade material. The v2 requirement above
+  stands untouched. What shipped is informed use by the owner, not a resolution.
+
+**Which entries were dictated is now recorded.** `journal_entries.modality` moves
+from `text` to `mixed` when any words arrive by voice, one-way, so the provider
+re-evaluation this entry commits to has something to look at. Never `voice`: no
+entry here is produced without a keyboard.
 
 ---
 

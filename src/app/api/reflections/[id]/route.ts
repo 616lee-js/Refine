@@ -59,7 +59,11 @@ export async function PUT(req: Request, { params }: Params) {
   // Either field may travel alone. A title-only PUT is what the read view sends
   // when someone names an entry after the fact — it must not have to round-trip
   // the whole body back to the server to do that.
-  const { text, title } = body as { text?: unknown; title?: unknown };
+  const { text, title, spoken } = body as {
+    text?: unknown;
+    title?: unknown;
+    spoken?: unknown;
+  };
   const hasText = typeof text === "string";
   const hasTitle = typeof title === "string";
   if (!hasText && !hasTitle) {
@@ -103,6 +107,21 @@ export async function PUT(req: Request, { params }: Params) {
       // buy a regeneration that cannot possibly differ. Naming an entry from the
       // read-back page sends exactly that request.
       ...(hasText ? { updatedAt: new Date() } : {}),
+      /*
+       * Some of this entry's words were spoken rather than typed.
+       *
+       * One direction only: "text" becomes "mixed" and nothing ever moves back.
+       * The client reports whether dictation has been used at any point in the
+       * session, so an entry that was dictated into and later edited by keyboard
+       * is still mixed — which is true of it. Writing "text" back on a later save
+       * would erase that.
+       *
+       * Never "voice": no entry here is dictated end to end with no keyboard at
+       * all, and claiming otherwise would misreport what produced the text.
+       */
+      ...(spoken === true && entry.modality === "text"
+        ? { modality: "mixed" as const }
+        : {}),
     })
     .where(eq(journalEntries.id, id));
 
@@ -121,7 +140,11 @@ export async function PATCH(req: Request, { params }: Params) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const { text, title } = body as { text?: unknown; title?: unknown };
+  const { text, title, spoken } = body as {
+    text?: unknown;
+    title?: unknown;
+    spoken?: unknown;
+  };
   if (typeof text !== "string" || !text.trim()) {
     return new Response("Cannot complete an empty entry", { status: 400 });
   }
@@ -159,6 +182,12 @@ export async function PATCH(req: Request, { params }: Params) {
         : {}),
       ...(typeof title === "string"
         ? { encryptedTitle: title.trim() ? encrypt(title.trim()) : null }
+        : {}),
+      // Same one-way move as in PUT above. Here because completing immediately
+      // after speaking can land before the debounced autosave has fired, and the
+      // modality would otherwise never be recorded for a short dictated entry.
+      ...(spoken === true && entry.modality === "text"
+        ? { modality: "mixed" as const }
         : {}),
       completedAt: entry.completedAt ?? now,
     })

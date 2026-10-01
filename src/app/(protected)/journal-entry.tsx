@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DictationButton } from "@/components/ui/dictation-button";
 import { JournalGuidanceSidebar } from "@/components/ui/journal-guidance-sidebar";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
 import { getGuidanceSections } from "@/lib/journal/guidance";
+import { useDictation } from "./use-dictation";
 
 /**
  * The writing surface.
@@ -154,11 +156,62 @@ export default function JournalEntry({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The text most recently persisted, so an unchanged body is never re-saved. */
   const savedTextRef = useRef(initialText);
+  /** Whether any of this entry's words arrived by voice. See insertSpoken. */
+  const spokenRef = useRef(false);
 
   const guidanceCount = getGuidanceSections().reduce(
     (n, s) => n + s.items.length,
     0
   );
+
+  /**
+   * A spoken utterance, placed where the caret is.
+   *
+   * At the caret rather than appended, so dictating into the middle of a
+   * paragraph works and so a spoken afterthought does not land at the bottom of
+   * the entry. Any selected text is replaced, which is what typing would do.
+   *
+   * Spacing is decided here rather than by the transcriber: recognition returns
+   * bare words with no knowledge of what sits either side of the caret, so a
+   * space goes in only where there is a character before it and it is not already
+   * whitespace. Without that, speaking twice runs two sentences together.
+   *
+   * `setText` is all that is needed to persist it — the autosave effect watches
+   * `text` and does not care whether a change was typed or spoken.
+   */
+  const insertSpoken = useCallback((chunk: string) => {
+    // Recorded so the entry's modality can move from "text" to "mixed". The enum
+    // has carried "voice" and "mixed" since v1 for exactly this; without it, an
+    // entry that was half spoken is indistinguishable from one that was typed,
+    // and LIM-005 commits to re-evaluating the transcriber before anyone but the
+    // owner uses this. That evaluation needs to know which entries to look at.
+    spokenRef.current = true;
+    const ta = textareaRef.current;
+    setText((current) => {
+      const start = ta?.selectionStart ?? current.length;
+      const end = ta?.selectionEnd ?? current.length;
+      const before = current.slice(0, start);
+      const after = current.slice(end);
+
+      const needsSpace = before.length > 0 && !/\s$/.test(before);
+      const insert = (needsSpace ? " " : "") + chunk;
+      const next = before + insert + after;
+
+      // The caret follows the words in, so speaking repeatedly continues forward
+      // rather than re-inserting at the original point. After paint, because the
+      // value has to be on the element before a selection into it means anything.
+      const caret = start + insert.length;
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.setSelectionRange(caret, caret);
+      });
+
+      return next;
+    });
+  }, []);
+
+  const dictation = useDictation({ onText: insertSpoken });
 
   /**
    * The autosave currently on the wire, if any. Finishing and cancelling both
@@ -176,7 +229,7 @@ export default function JournalEntry({
           const res = await fetch(`/api/reflections/${entryId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: value }),
+            body: JSON.stringify({ text: value, spoken: spokenRef.current }),
           });
           if (!res.ok) throw new Error(String(res.status));
           savedTextRef.current = value;
@@ -215,7 +268,9 @@ export default function JournalEntry({
       if (text === savedTextRef.current) return;
       navigator.sendBeacon(
         `/api/reflections/${entryId}`,
-        new Blob([JSON.stringify({ text })], { type: "application/json" })
+        new Blob([JSON.stringify({ text, spoken: spokenRef.current })], {
+          type: "application/json",
+        })
       );
     };
     window.addEventListener("beforeunload", flush);
@@ -292,7 +347,7 @@ export default function JournalEntry({
       const res = await fetch(`/api/reflections/${entryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, spoken: spokenRef.current }),
       });
       if (!res.ok) throw new Error(String(res.status));
       savedTextRef.current = text;
@@ -442,6 +497,14 @@ export default function JournalEntry({
                 </div>
               </div>
             </Sheet>
+
+            {/* Speaking belongs with the writing, not with Complete and Delete.
+                It is another way of putting words in, so it sits directly under
+                the sheet and above the row that ends the entry. Renders nothing at
+                all on a browser without speech recognition. */}
+            <div className="mt-3">
+              <DictationButton dictation={dictation} />
+            </div>
 
             {/* Action bar */}
             <div className="mt-5 flex flex-wrap items-center justify-between gap-4">

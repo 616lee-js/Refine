@@ -22,14 +22,26 @@
  *    and journal entries have no send and no response. That hook now lives in
  *    `archive/chat-model/`.
  *
- * What survives and is genuinely reusable for dictating into a journal textarea:
+ * What survived, and is now in use:
  *   - src/lib/transcription/types.ts       TranscriptionProvider interface
  *   - src/lib/transcription/web-speech.ts  WebSpeech implementation
  *   - src/types/speech.d.ts                ambient SpeechRecognition types
  *
- * Re-enabling voice for journal entries is therefore NOT just flipping this
- * constant: it needs a dictation integration (provider → textarea) plus cloud
- * audio storage. The old accumulate-and-trigger paradigm is not what a writing
- * surface wants — see archive/chat-model/README.md.
+ * ── Dictation shipped 2026-10-01, and this flag did not change ────────────────
+ * Speaking into an entry is live — see src/app/(protected)/use-dictation.ts and
+ * components/ui/dictation-button.tsx. It did not need this constant because it
+ * does not do either of the things this constant is about:
+ *
+ *   - It records nothing. No MediaRecorder, no blob, no upload, no file. Only
+ *     text crosses from the browser, so reason 1 above does not apply: there is
+ *     no recording to imply it is keeping.
+ *   - It has no send and no trigger. Words land in the textarea as they are
+ *     recognised, so reason 2 does not apply either.
+ *
+ * **This flag now means audio capture and retention, nothing else.** Turning it
+ * on would mean keeping recordings, which still needs cloud storage this app does
+ * not have, and a decision about keeping someone's voice that has not been made.
+ * It is deliberately still false, and is still referenced only by
+ * archive/chat-model/.
  */
 export const VOICE_ENABLED = false;

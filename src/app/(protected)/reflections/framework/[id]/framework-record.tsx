@@ -326,6 +326,21 @@ export function FrameworkRecord({
           </div>
         )}
 
+        {/* What the ends of the scale mean, where the options are numbers.
+            Stated once rather than under every option: a column headed "7" says
+            nothing on its own, and repeating the meaning eleven times is how an
+            eleven-point scale becomes unreadable. Rendered in both the edit and
+            the read view — a recorded answer of "7" needs the same context. */}
+        {q.scaleAnchors && (
+          <div
+            className="flex flex-wrap justify-between gap-x-4 gap-y-1 pb-3"
+            style={{ fontSize: "11px", color: "var(--rf-text-4)" }}
+          >
+            <span>{q.scaleAnchors[0]}</span>
+            <span>{q.scaleAnchors[1]}</span>
+          </div>
+        )}
+
         {q.items.map((item, i) => {
           const selected = answers[item.key];
           const last = i === q.items.length - 1;

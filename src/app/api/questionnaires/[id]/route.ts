@@ -122,11 +122,19 @@ export async function PATCH(req: Request, { params }: Params) {
    * Answering one above zero is recorded here with source "questionnaire", so
    * the safety log distinguishes it from something the user wrote in prose.
    *
-   * Recording is not responding. What the person SEES after such an answer is a
-   * content decision that has not been made, which is exactly why PHQ-9 is
-   * gated at the registry and cannot be started. This branch is here so the
-   * mechanism is in place and tested when that decision lands — it does not run
-   * for GAD-7, which has no safety item.
+   * Recording is not responding. The person is shown nothing after such an
+   * answer, and that is the intended behaviour rather than an unfinished one:
+   * Refine is an isolated reflection log, it carries no escalation path to any
+   * external service, and it is not screening anyone. See phq9.ts.
+   *
+   * **This branch is live.** It previously said PHQ-9 was gated at the registry
+   * and that this code did not run — both stopped being true on 2026-09-24 when
+   * PHQ-9 shipped. Corrected because a comment claiming a safety path is untested
+   * dead code is how a safety path gets removed.
+   *
+   * It still does not run for GAD-7 or the Personal Wellbeing Index, neither of
+   * which has a safety item: GAD-7 is a symptom scale and the PWI is a wellbeing
+   * measure, and nothing in either is a disclosure.
    */
   const triggered = triggeredSafetyItems(q, clean);
   if (triggered.length > 0) {

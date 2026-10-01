@@ -59,7 +59,23 @@ export const swls: LikertQuestionnaire = {
   recallWindow: "[COPY] Your life in general",
 
   allowsNote: true,
-  shipped: true,
+
+  /**
+   * Withdrawn 2026-10-01, replaced by the Personal Wellbeing Index.
+   *
+   * The product owner was shown a domain-based framework in therapy and this is
+   * not it: the SWLS asks one global question five ways, and what was wanted is
+   * satisfaction with named areas of life. See pwi.ts.
+   *
+   * Withdrawn rather than deleted, and that is the whole point of this flag:
+   * `getQuestionnaire()` still finds it, so any answer already recorded against it
+   * opens and reads correctly. Only `getStartableQuestionnaire()` and
+   * `listStartable()` exclude it, so it cannot be started again.
+   *
+   * One boolean to bring it back, if both are ever wanted — they do measure
+   * different things.
+   */
+  shipped: false,
 
   // Not checked against a primary source, so Mirror charts nothing for it.
   // Flip to true in the same change that verifies the item text.

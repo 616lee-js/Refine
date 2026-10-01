@@ -6,7 +6,7 @@ import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import { TopNav } from "@/components/ui/top-nav";
-import { listStartable } from "@/lib/questionnaires";
+import { instrumentLabel, listStartable } from "@/lib/questionnaires";
 import { useStartRecord } from "./use-start-record";
 
 /**
@@ -293,7 +293,7 @@ export function ScreenHome({
                   >
                     {INSTRUMENTS.map((q) => (
                       <option key={q.slug} value={q.slug}>
-                        {q.title}
+                        {instrumentLabel(q)}
                       </option>
                     ))}
                   </select>

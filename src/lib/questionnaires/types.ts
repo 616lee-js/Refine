@@ -136,6 +136,25 @@ export type LikertQuestionnaire = Common & {
   options: ResponseOption[];
   items: LikertItem[];
   bands: ScoreBand[];
+  /**
+   * How the items combine into the score the bands are defined against.
+   *
+   * `sum` (the default) is GAD-7 and PHQ-9: add the item values. `mean-x10` is
+   * the Personal Wellbeing Index: average the items and multiply by ten, giving
+   * 0–100. Which one an instrument uses is part of the instrument, not a detail —
+   * applying the wrong one produces a number in the right range that means
+   * something else entirely.
+   */
+  scoring?: "sum" | "mean-x10";
+  /**
+   * The two ends of the scale, where the options themselves are not words.
+   *
+   * A 0–10 scale labels its options with digits, so the column headers say
+   * nothing on their own and the scale needs stating once: `["0 means X",
+   * "10 means Y"]`. Instruments whose every option is already a phrase
+   * ("Not at all", "Nearly every day") leave this unset.
+   */
+  scaleAnchors?: [string, string];
 };
 
 export type TrackerQuestionnaire = Common & {
@@ -160,10 +179,31 @@ export type QuestionnaireScoring = {
   items: Record<string, number>;
 };
 
-/** Highest total the instrument can produce — items × the top response value. */
+/** Highest score the instrument can produce, in whatever unit it scores in. */
 export function maxTotal(q: LikertQuestionnaire): number {
   const top = Math.max(...q.options.map((o) => o.value));
+  // Averaged scales do not grow with the number of items: every item's top value
+  // is the same, so the mean of all of them is that value, ×10.
+  if (q.scoring === "mean-x10") return top * 10;
   return q.items.length * top;
+}
+
+/**
+ * Whether every item has an answer.
+ *
+ * Read by anything that charts or bands a score, and the reason is a real defect
+ * that shipped: `score()` combines only the items actually answered, so a
+ * half-finished response produces a low number that is indistinguishable from a
+ * genuinely low one. On GAD-7 that reads as less anxiety than was reported; on an
+ * averaged scale it is subtler and no better. It was recorded as a known problem
+ * in swls.ts and deferred until a score was charted.
+ *
+ * Partial responses are still stored — someone may finish later — they are simply
+ * not treated as measurements.
+ */
+export function isComplete(q: Questionnaire, answers: Answers): boolean {
+  if (q.kind !== "likert") return true;
+  return q.items.every((i) => typeof answers[i.key] === "number");
 }
 
 /** The band a total falls in, or null when the instrument has no bands. */
@@ -175,11 +215,17 @@ export function bandFor(q: LikertQuestionnaire, total: number): string | null {
 }
 
 /**
- * Sums a likert instrument and resolves the band.
+ * Scores a likert instrument and resolves the band.
  *
  * Trackers are not scored: there is no meaningful total across hours slept, a
  * mood rating, and a set of toggles, and inventing one would produce a number
  * that looks like a measurement and isn't.
+ *
+ * ── Only the answered items are combined ──────────────────────────────────────
+ * Which means a partly answered response scores low rather than scoring nothing.
+ * That is deliberate — the per-item values are stored alongside, so the response
+ * stays interpretable — but it is why `isComplete()` exists and why nothing charts
+ * a score without checking it first.
  */
 export function score(
   q: Questionnaire,
@@ -188,15 +234,33 @@ export function score(
   if (q.kind !== "likert") return null;
 
   const items: Record<string, number> = {};
-  let total = 0;
+  let sum = 0;
 
   for (const item of q.items) {
     const v = answers[item.key];
     if (typeof v === "number") {
       items[item.key] = v;
-      total += v;
+      sum += v;
     }
   }
+
+  const answered = Object.keys(items).length;
+
+  /*
+   * An averaged scale divides by what was answered, not by the item count.
+   *
+   * Dividing by the item count would make a missing answer read as a zero — the
+   * worst possible value on a satisfaction scale — rather than as absent. The
+   * Personal Wellbeing Index's own guidance is to use the mean of the available
+   * items, and this matches it. Rounded, because a band is defined against whole
+   * numbers and a score of 71.42857 is false precision about a 0–10 judgement.
+   */
+  const total =
+    q.scoring === "mean-x10"
+      ? answered === 0
+        ? 0
+        : Math.round((sum / answered) * 10)
+      : sum;
 
   const band =
     [...q.bands].sort((a, b) => b.min - a.min).find((b) => total >= b.min)

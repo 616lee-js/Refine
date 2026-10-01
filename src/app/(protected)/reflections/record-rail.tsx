@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
-import { listStartable } from "@/lib/questionnaires";
+import { instrumentLabel, listStartable } from "@/lib/questionnaires";
 import { useStartRecord } from "../use-start-record";
 import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
 
@@ -320,7 +320,7 @@ function StartSomething() {
           >
             {INSTRUMENTS.map((q) => (
               <option key={q.slug} value={q.slug}>
-                {q.title}
+                {instrumentLabel(q)}
               </option>
             ))}
           </select>

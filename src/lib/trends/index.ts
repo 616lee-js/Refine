@@ -1,5 +1,6 @@
 import {
   getQuestionnaire,
+  isComplete,
   maxTotal,
   type Answers,
   type LikertQuestionnaire,
@@ -454,8 +455,29 @@ export function buildTrends(
     // it is named after, so a trend of it asserts something unproven.
     if (!q.wordingVerified) continue;
 
+    /*
+     * Half-finished responses are not measurements.
+     *
+     * `score()` combines only the items that were answered, so a response with
+     * three of seven filled in produces a genuine-looking low number: on GAD-7 it
+     * reads as less anxiety than was reported, on a satisfaction scale as
+     * dissatisfaction. Plotted on a line beside complete responses it is
+     * indistinguishable from a real dip.
+     *
+     * This was recorded as a known problem in swls.ts and deferred until a score
+     * was actually charted. The Personal Wellbeing Index is the first averaged
+     * scale, where it is subtler and no less wrong, so it is fixed here.
+     *
+     * The response itself is kept — someone may finish it later. It is simply not
+     * treated as a reading.
+     */
     const readings: Reading[] = inWindow
-      .filter((r) => r.slug === slug && typeof r.total === "number")
+      .filter(
+        (r) =>
+          r.slug === slug &&
+          typeof r.total === "number" &&
+          isComplete(q, r.answers)
+      )
       .map((r) => ({ at: r.completedAt, value: r.total as number }));
 
     const card = instrumentCard(q, readings);

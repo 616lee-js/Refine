@@ -48,6 +48,38 @@ The items below are limitations identified during planning that exist by design 
 
 ---
 
+### Licensing limitations
+
+#### LIM-018 — The Personal Wellbeing Index may not be sold
+
+**Severity:** Low today, blocking if Refine ever charges
+**Status:** Accepted 2026-10-01. Added when the instrument shipped.
+
+The Personal Wellbeing Index (`src/lib/questionnaires/pwi.ts`) is free to use for
+teaching, research and practice with no restrictions — **on the condition that the
+Index is not sold.** That is the licence, not a preference.
+
+Refine does not charge, so the condition is met. It is recorded here because the
+person who eventually adds billing is unlikely to be reading an instrument file,
+and the failure mode is silent: nothing breaks, nothing warns, and the product is
+simply in breach.
+
+**If Refine ever charges money, this instrument has to come out**, or permission
+has to be obtained from the International Wellbeing Group. Withdrawing it is one
+boolean (`shipped: false`), and responses already recorded stay readable — the same
+mechanism that withdrew SWLS.
+
+A second, narrower issue: the item wording was written from the published stem and
+domain names rather than transcribed character-for-character from the manual, so
+`wordingVerified` is false and Mirror charts nothing for it. Verify against
+https://www.acqol.com.au/uploads/pwi-a/pwi-a-english.pdf in the same change that
+flips the flag, and re-read the "not sold" condition while there.
+
+**Related:** GAD-7 and PHQ-9 carry the same unverified-wording caveat for the same
+reason.
+
+---
+
 ### Infrastructure limitations
 
 #### LIM-017 — Pinned Supabase CA was not verified against the authenticated dashboard

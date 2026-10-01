@@ -2,7 +2,6 @@ import { canonicalCategory } from "./categories";
 import {
   MAX_PEOPLE,
   MAX_QUOTES,
-  MAX_SUMMARY_CHARS,
   MAX_TOPICS,
   type EntrySummary,
   type RawSummary,
@@ -153,7 +152,9 @@ export function parse(raw: string, body: string): EntrySummary {
   }
 
   return {
-    summary: obj.summary.trim().slice(0, MAX_SUMMARY_CHARS),
+    // Trimmed, not truncated. A long entry earns a long summary; see the note
+    // where MAX_SUMMARY_CHARS used to be in ./types.ts.
+    summary: obj.summary.trim(),
     topics: refineCategories(obj.topics),
     people: asStringArray(obj.people, MAX_PEOPLE),
     // Located, then refined, then capped — the cap applies after the weak

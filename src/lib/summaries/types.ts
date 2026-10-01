@@ -59,4 +59,31 @@ export const MAX_QUOTES = 3;
  * model is guessing what matters, the writer knows.
  */
 export const MAX_QUOTES_CURATED = 5;
-export const MAX_SUMMARY_CHARS = 600;
+
+/*
+ * There is deliberately no cap on summary length.
+ *
+ * There was one — 600 characters, applied with a bare `slice()` on both the
+ * model's summary and the writer's own correction. It cut mid-word, left no
+ * ellipsis, logged nothing and raised nothing, so a long entry's summary simply
+ * arrived truncated and a long correction was silently shortened on save. The
+ * second of those lost the person's own writing, which is the worse failure of
+ * the two and the reason this is a comment rather than a smaller number.
+ *
+ * What bounds length now is the prompt (summaries/../layer2/entry-summariser.md,
+ * which asks the summary to follow the entry and forbids padding) and
+ * `max_tokens` in generate.ts as the outer limit. Both fail loudly: a reply that
+ * hits the token ceiling fails to parse as JSON and the entry is retried.
+ */
+
+/**
+ * The most a *person* may type into a summary correction before the request is
+ * refused. A refusal limit, not a truncation limit — the distinction is the whole
+ * point of this change, so the name says which it is.
+ *
+ * Generous because a correction is the writer's own words about their own entry,
+ * and the same number as the Mirror report editor so the two agree. Exceeding it
+ * returns 400 with a reason, matching how an over-long quote is already handled
+ * in the same route rather than being quietly shortened.
+ */
+export const MAX_SUMMARY_INPUT_CHARS = 20_000;

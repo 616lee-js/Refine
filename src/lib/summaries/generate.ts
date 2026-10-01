@@ -68,7 +68,17 @@ export async function generateSummary(body: string): Promise<EntrySummary> {
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 700,
+    /*
+     * Was 700, which was the real ceiling on a summary once the 600-character
+     * clip was removed — lifting one without the other just moves the cut.
+     *
+     * 2000 covers the longest entry this can be given (MAX_INPUT_CHARS of source
+     * at the prompt's "follow the entry" ratio) plus the categories, people and
+     * quotes in the same reply. It is a safety stop, not a target: the prompt is
+     * what decides length, and hitting this fails loudly because a reply cut
+     * mid-JSON does not parse and the entry is retried.
+     */
+    max_tokens: 2000,
     system: SYSTEM_PROMPT,
     messages: [
       {

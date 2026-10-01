@@ -6,7 +6,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import {
   MAX_PEOPLE,
   MAX_QUOTES_CURATED,
-  MAX_SUMMARY_CHARS,
+  MAX_SUMMARY_INPUT_CHARS,
   MAX_TOPICS,
   type EntrySummary,
   type SummaryQuote,
@@ -101,6 +101,14 @@ export async function PUT(req: Request, { params }: Params) {
     return new Response("A summary cannot be empty", { status: 400 });
   }
 
+  // Refused, never shortened. This used to `.slice(0, 600)` here, which meant a
+  // long correction was cut mid-word and saved looking successful — the writer's
+  // own words lost with nothing to tell them. An over-long quote is already
+  // rejected a few lines below; this now behaves the same way.
+  if (summary.trim().length > MAX_SUMMARY_INPUT_CHARS) {
+    return new Response("That summary is too long to store", { status: 400 });
+  }
+
   const row = await loadOwned(id, session.userId);
   if (!row) return new Response("Not found", { status: 404 });
   if (row.purgedAt) return new Response("Gone", { status: 410 });
@@ -137,7 +145,7 @@ export async function PUT(req: Request, { params }: Params) {
   }
 
   const corrected: EntrySummary = {
-    summary: summary.trim().slice(0, MAX_SUMMARY_CHARS),
+    summary: summary.trim(),
     topics: cleanList(topics, MAX_TOPICS),
     people: cleanList(people, MAX_PEOPLE),
     quotes: nextQuotes,

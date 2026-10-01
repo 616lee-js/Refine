@@ -6,7 +6,12 @@ import { Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Notice } from "@/components/ui/notice";
-import { MAX_QUOTES_CURATED, type EntrySummary, type SummaryQuote } from "@/lib/summaries/types";
+import {
+  MAX_QUOTES_CURATED,
+  MAX_SUMMARY_INPUT_CHARS,
+  type EntrySummary,
+  type SummaryQuote,
+} from "@/lib/summaries/types";
 import { CATEGORY_VALUES, canonicalCategory } from "@/lib/summaries/categories";
 
 /**
@@ -351,7 +356,12 @@ export function EntrySummaryPanel({
                   id="summary-body"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  rows={4}
+                  // Ten rather than four, and a limit the server agrees with:
+                  // summaries are no longer capped at 600 characters, so this
+                  // box has to be able to hold one. The limit stops you here
+                  // rather than letting the save be refused.
+                  rows={10}
+                  maxLength={MAX_SUMMARY_INPUT_CHARS}
                   autoFocus
                   className="w-full resize-none rounded-[4px] px-3 py-2 outline-none"
                   style={{

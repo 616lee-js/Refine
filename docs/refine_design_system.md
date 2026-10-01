@@ -503,6 +503,32 @@ grid-template-columns: minmax(0, 1fr) minmax(<floor>px, min(<ideal>px, 55%));
 - Below `sm` the row stacks and each option carries its own label, so the floor
   never has to carry a long scale on its own.
 
+### Month calendar — ADDED 2026-10-01
+
+A month grid on Home showing which days have something recorded. Replaced the
+four-row recent list.
+
+- **Marks, never counts.** A dot per kind of record on that day, from a set rather
+  than a tally. Three entries on one day and one on another look the same,
+  deliberately: a number per day is a score, and no colour ramp implies a good day
+  and a bad day. Same rule as the record cards and the check-in.
+- **Nothing about absence.** An empty day is empty. No streak, no run length, no
+  "you missed Tuesday". A daily surface is exactly where that creeps in.
+- **It decrypts nothing.** A date and a kind per record, no bodies, no titles, no
+  summaries — so no `content_access_log` row. The list it replaced decrypted a
+  summary per row for its categories. A calendar that read a month of content to
+  draw thirty squares would be the worst possible version of the capped-list rule.
+- **Days with records are links into the archive's date filter**
+  (`/reflections?from=…&to=…`). Empty days are not links: a filtered archive
+  showing nothing reads as broken.
+- **Dates are computed on the server and sent as strings**, from local parts rather
+  than `toISOString()`, which is UTC and would put a late-evening entry on the
+  wrong day. The component only ever prints strings.
+- **The dot row reserves its height even when empty**, so the grid does not shift
+  as the month fills.
+- **Future days are drawn, never marked or linked.** A month ahead is not a plan.
+- Monday first. `getDay()` is Sunday-based, so Sunday's 0 becomes 6.
+
 ### Record states: viewed, then edited — ADDED 2026-09-21
 
 A completed record is **read**. Editing it is a separate, deliberate action that
@@ -1079,7 +1105,29 @@ are reachable only in the minute after writing.
 
 **Resolution pending — needs the clinical review, not a design call.**
 
-### OQ-008 — The Refine main page has not been restructured
+### OQ-008 — The Refine main page has not been restructured — PARTLY RESOLVED 2026-10-01
+
+**Resolved differently from any of the three options below: the main page keeps
+one centred column, and what is *in* it changed instead.**
+
+The question assumed the problem was layout — which of the archive's shapes the
+main page should adopt. It was not. What the product owner found unhelpful was the
+recent list, and the fix for that is not a second column:
+
+- **The recent four became a month calendar.** The four most recent records are
+  mostly the four things you remember doing. A month shows where writing clusters
+  and where it stops. Days with records link into the archive's existing date
+  filter, so the calendar answers "when" and the archive answers "what".
+- **The check-in strip became the check-in.** The four fields are on the page
+  rather than behind a button that created a record and navigated away.
+- **Both launch cards now say how often**, which nothing on the screen did.
+
+So the two-column question is moot for now: the main page has a launcher, a thing
+to answer, and a month. None of those is a detail pane for the others.
+
+**Still open:** whether the page should eventually adopt the archive's shape at
+all. Nothing stored depends on it, so this stays a two-way door. The original
+entry follows, because the reasoning in it is still the reasoning.
 
 Added 2026-09-23. **Deferred by the product owner; recorded so the decision is
 not lost.**

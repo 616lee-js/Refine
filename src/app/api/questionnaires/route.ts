@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { questionnaireResponses } from "@/lib/db/schema";
@@ -54,6 +54,42 @@ export async function POST(req: Request) {
 
   if (existing) {
     return Response.json({ responseId: existing.id, resumed: true });
+  }
+
+  /*
+   * A daily tracker already answered today reopens today's answer.
+   *
+   * Without this, "Change it" on Home created a *second* check-in for the same
+   * day: the resume above only finds responses that were never finished, and
+   * today's was finished. Two records for one day is wrong twice over — the day
+   * appears logged twice, and Trends counts both.
+   *
+   * Scoped to trackers with a daily rhythm. A questionnaire is deliberately not
+   * included: answering GAD-7 twice in a day is two readings, both real, and
+   * silently editing the morning's answer in the afternoon would destroy one.
+   */
+  if (q.kind === "tracker") {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [todays] = await db
+      .select({ id: questionnaireResponses.id })
+      .from(questionnaireResponses)
+      .where(
+        and(
+          eq(questionnaireResponses.userId, session.userId),
+          eq(questionnaireResponses.questionnaireSlug, slug),
+          gte(questionnaireResponses.completedAt, startOfToday),
+          isNull(questionnaireResponses.deletedAt),
+          isNull(questionnaireResponses.purgedAt)
+        )
+      )
+      .orderBy(desc(questionnaireResponses.completedAt))
+      .limit(1);
+
+    if (todays) {
+      return Response.json({ responseId: todays.id, resumed: true });
+    }
   }
 
   const id = randomUUID();

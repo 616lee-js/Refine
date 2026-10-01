@@ -350,3 +350,41 @@ per-row *category* (which signal fired, not just which tier) needs the classifie
 to return one — a Layer 3 prompt change, owed as a proposal with a closed
 vocabulary drawn from the existing tier definitions. `raw_signals` is jsonb, so
 recording it needs no migration.
+
+---
+
+## Instrument rhythms and due markers — deferred 2026-10-01
+
+**Deferred by the product owner, pending more thought and planning.** Recorded
+here rather than left as a gap in a plan, because the groundwork is already in
+place and the next person to look at it will assume it was forgotten.
+
+What was asked for, then held: a rhythm the person sets per instrument, and a quiet
+marker on Home when something is outstanding. The owner's reasoning: a suggested
+rhythm in words covers the short term, and personalised cadences need more thought
+before they are built.
+
+**What shipped instead:** wording only. Both launch cards on Home say how often —
+open writing whenever, frameworks on the rhythm the instrument already suggests.
+The framework line reads `cadence` from the instrument definition, so it cannot
+disagree with the record screen, which prints the same string.
+
+**What exists already, if this is picked up:**
+- `cadence?: string` on every instrument (`lib/questionnaires/types.ts`), today a
+  display string only. Its own comment says "Not enforced, never nagged."
+- `users.preferences` is a jsonb blob, so a per-instrument rhythm needs no
+  migration.
+- `lastTakenAt` is already computed on the framework record page.
+- The original design had this: the reference Home shows a framework card reading
+  "GAD-7 · due today" with "Two weeks since the last one"
+  (`docs/design/journaling-redesign/reference/screens-home.jsx`).
+
+**The constraint that makes this a product decision and not a build task.** There
+is no way to send anything — no email, no push, no mobile app. A reminder can only
+be a marker seen on next opening. And the line it has to stay on the right side of
+is narrow: "gentle reminders the user controls fully are acceptable"
+(`refine_v1_planning.md`), against a hard rule of no streaks, no counting, and
+nothing that says "you haven't written in a while". The permitted version is a
+rhythm the person chose and a neutral marker. Getting that wrong turns a journal
+into something that nags, which is the specific failure the no-engagement-mechanics
+rule exists to prevent.

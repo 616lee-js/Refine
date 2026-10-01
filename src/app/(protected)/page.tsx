@@ -1,23 +1,29 @@
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull } from "drizzle-orm";
+import { randomUUID } from "crypto";
+import { after } from "next/server";
+import { and, count, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  contentAccessLog,
   journalEntries,
-  journalEntrySummaries,
   questionnaireResponses,
 } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
-import { authoritativeSummary } from "@/lib/summaries/read";
-import { getQuestionnaire } from "@/lib/questionnaires";
-import { ScreenHome, type RecentRow } from "./home";
-import { formatRecordDate } from "./reflections/records";
+import { dailyCheckin, sanitiseAnswers, type Answers } from "@/lib/questionnaires";
+import { loadMonth, monthFrom } from "@/lib/journal/month";
+import { ScreenHome } from "./home";
 import { AdminNav } from "@/components/ui/admin-nav";
 
 /**
  * Home — the data behind ScreenHome.
  *
- * Only titles are decrypted, never bodies: the same rule the archive follows,
- * for the same reason. See src/app/(protected)/reflections/page.tsx.
+ * ── What it reads, and what it no longer reads ────────────────────────────────
+ * A draft's title, and today's check-in answers so the fields on Home can be
+ * edited rather than duplicated. Nothing else is decrypted.
+ *
+ * The four-row recent list that used to live here decrypted a summary per row for
+ * its categories. The calendar that replaced it needs dates and kinds only, so
+ * that decryption is gone rather than moved — see lib/journal/month.ts.
  */
 
 /** Rough relative phrasing. Precise enough for a sentence, no library needed. */
@@ -49,7 +55,11 @@ function safeDecrypt(value: string | null): string | null {
   }
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
   const authSession = await getSession();
   const userId = authSession.userId!;
   const now = new Date();
@@ -59,7 +69,10 @@ export default async function HomePage() {
     now.getDate()
   );
 
-  const [entries, responses, checkinsToday, totals] = await Promise.all([
+  const { month: monthParam } = await searchParams;
+  const monthStart = monthFrom(monthParam, now);
+
+  const [entries, checkinsToday, totals, month] = await Promise.all([
     db
       .select({
         id: journalEntries.id,
@@ -80,26 +93,13 @@ export default async function HomePage() {
       .orderBy(desc(journalEntries.updatedAt))
       .limit(20),
 
+    // Today's check-in, with its answers: Home now holds the four fields itself,
+    // so an existing answer has to come back to be edited rather than replaced.
     db
       .select({
         id: questionnaireResponses.id,
-        slug: questionnaireResponses.questionnaireSlug,
-        completedAt: questionnaireResponses.completedAt,
+        encryptedAnswers: questionnaireResponses.encryptedAnswers,
       })
-      .from(questionnaireResponses)
-      .where(
-        and(
-          eq(questionnaireResponses.userId, userId),
-          isNotNull(questionnaireResponses.completedAt),
-          isNull(questionnaireResponses.deletedAt),
-          isNull(questionnaireResponses.purgedAt)
-        )
-      )
-      .orderBy(desc(questionnaireResponses.completedAt))
-      .limit(20),
-
-    db
-      .select({ id: questionnaireResponses.id })
       .from(questionnaireResponses)
       .where(
         and(
@@ -107,9 +107,11 @@ export default async function HomePage() {
           eq(questionnaireResponses.questionnaireSlug, "daily_checkin"),
           isNotNull(questionnaireResponses.completedAt),
           gte(questionnaireResponses.completedAt, startOfToday),
-          isNull(questionnaireResponses.deletedAt)
+          isNull(questionnaireResponses.deletedAt),
+          isNull(questionnaireResponses.purgedAt)
         )
       )
+      .orderBy(desc(questionnaireResponses.completedAt))
       .limit(1),
 
     // Counted rather than derived from the lists above, which are capped — the
@@ -138,6 +140,8 @@ export default async function HomePage() {
           )
         ),
     ]),
+
+    loadMonth(userId, monthStart, now),
   ]);
 
   const totalRecords = (totals[0][0]?.n ?? 0) + (totals[1][0]?.n ?? 0);
@@ -149,82 +153,39 @@ export default async function HomePage() {
   // it here would be offering to resume a blank page.
   const draft = entries.find((e) => e.completedAt === null && e.hasBody);
 
-  const recent: (RecentRow & { entryId?: string })[] = [
-    ...completedEntries.map((e) => {
-      const at = e.completedAt!;
-      return {
-        sort: at.getTime(),
-        entryId: e.id,
-        id: `entry-${e.id}`,
-        href: `/reflections/${e.id}`,
-        at: at.toISOString(),
-        dateLabel: formatRecordDate(at),
-        detail: [] as string[],
-        kindLabel: "Writing",
-        framework: false,
-      };
-    }),
-    ...responses.map((r) => {
-      const q = getQuestionnaire(r.slug);
-      const tracker = q?.kind === "tracker";
-      const at = r.completedAt!;
-      return {
-        sort: at.getTime(),
-        id: `q-${r.id}`,
-        // Into the archive, where records are read — matching the rail's own
-        // links. See loadRecords in reflections/records.ts.
-        href: tracker
-          ? `/reflections/checkin/${r.id}`
-          : `/reflections/framework/${r.id}`,
-        at: at.toISOString(),
-        dateLabel: formatRecordDate(at),
-        detail: [] as string[],
-        kindLabel: q?.shortName ?? r.slug,
-        framework: !tracker,
-      };
-    }),
-  ]
-    .sort((a, b) => b.sort - a.sort)
-    .slice(0, 4);
-
   /*
-   * Categories for the four cards actually shown — and only those.
+   * Today's check-in answers, for the four fields on Home.
    *
-   * Home is the most-visited screen in the product, so it deliberately does NOT
-   * reuse the archive's loader: that decrypts every summary the user has to
-   * build its rail, which is right for a browsing surface and wrong for a
-   * dashboard. Four ids, four summaries, no audit row for a list that shows no
-   * content of its own.
+   * The only decryption on this screen now. The recent list that used to sit here
+   * decrypted a summary per row to show its categories; the calendar that replaced
+   * it reads dates and kinds only. This is one record, the reader's own, from
+   * today, which they are about to edit.
    */
-  const shownEntryIds = recent
-    .map((r) => r.entryId)
-    .filter((id): id is string => Boolean(id));
-
-  if (shownEntryIds.length > 0) {
-    const summaries = await db
-      .select({
-        journalEntryId: journalEntrySummaries.journalEntryId,
-        encryptedContent: journalEntrySummaries.encryptedContent,
-        encryptedUserContent: journalEntrySummaries.encryptedUserContent,
-        userEditedAt: journalEntrySummaries.userEditedAt,
-        generatedAt: journalEntrySummaries.generatedAt,
-        generationVersion: journalEntrySummaries.generationVersion,
-      })
-      .from(journalEntrySummaries)
-      .where(inArray(journalEntrySummaries.journalEntryId, shownEntryIds));
-
-    const byEntry = new Map<string, string[]>();
-    for (const row of summaries) {
-      try {
-        byEntry.set(row.journalEntryId, authoritativeSummary(row).summary.topics);
-      } catch {
-        // A summary that will not decrypt costs this card its subheader and
-        // nothing else.
-      }
+  let todaysAnswers: Answers = {};
+  if (checkinsToday[0]?.encryptedAnswers) {
+    try {
+      const parsed = JSON.parse(
+        decrypt(checkinsToday[0].encryptedAnswers)
+      ) as { answers?: Answers };
+      todaysAnswers = sanitiseAnswers(dailyCheckin, parsed.answers ?? {});
+    } catch {
+      // Unreadable: the fields open empty rather than the page failing. Saving
+      // then writes a fresh answer over a record that could not be read, which is
+      // the better of the two outcomes.
     }
-    for (const r of recent) {
-      if (r.entryId) r.detail = byEntry.get(r.entryId) ?? [];
-    }
+  }
+
+  // Logged because something was decrypted, once, with a count — the rule
+  // everywhere else in this codebase. after() so it never delays the render.
+  if (checkinsToday[0]?.encryptedAnswers) {
+    after(async () => {
+      await db.insert(contentAccessLog).values({
+        id: randomUUID(),
+        userId,
+        questionnaireResponseId: checkinsToday[0].id,
+        context: "home_checkin_prefill (1 record read)",
+      });
+    });
   }
 
   // Sorted by completion, not by `updated_at` — editing an old entry today does
@@ -248,8 +209,12 @@ export default async function HomePage() {
             }
           : null
       }
-      recent={recent}
-      checkedInToday={checkinsToday.length > 0}
+      checkin={{
+        questionnaire: dailyCheckin,
+        initialAnswers: todaysAnswers,
+        alreadyToday: checkinsToday.length > 0,
+      }}
+      month={month}
       totalRecords={totalRecords}
     />
   );

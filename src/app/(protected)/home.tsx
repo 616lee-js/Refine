@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
-import { RecordCard, RecordCardList } from "@/components/ui/record-card";
 import { TopNav } from "@/components/ui/top-nav";
 import { instrumentLabel, listStartable } from "@/lib/questionnaires";
 import { useStartRecord } from "./use-start-record";
+import { HomeCheckin } from "./home-checkin";
+import { HomeCalendar, type CalendarMonth } from "./home-calendar";
+import type { Answers, TrackerQuestionnaire } from "@/lib/questionnaires";
 
 /**
  * Home.
@@ -46,55 +48,46 @@ const COPY = {
   writeTitle: "[COPY] Write what's there",
   writeBody:
     "[COPY] Nothing to answer. A few footholds wait in the margin if you want a way in.",
+  /*
+   * How often, said rather than enforced.
+   *
+   * Open writing is the most useful thing here and is invited at any time, in any
+   * shape — which is a thing worth saying, because a screen offering three options
+   * with no guidance implies they are interchangeable.
+   *
+   * Nothing computes whether anything is due, and nothing nags. A rhythm the
+   * person sets, with a marker when something is outstanding, was deferred by the
+   * product owner on 2026-10-01 pending more thought — so this is wording only.
+   * Do not let it grow into a schedule without that decision.
+   */
+  writeCadence: "[COPY] Whenever you like — most useful kept often.",
   writeCta: "[COPY] Begin",
 
   frameworkEyebrow: "[COPY] Frameworks",
   frameworkBody: "[COPY] Structured questions, then back to your own words.",
+  /**
+   * The suggested rhythm comes from the instrument itself (`cadence`), so the
+   * card cannot disagree with the record screen, which already prints the same
+   * string. Suggested, not enforced: nothing checks it.
+   */
+  frameworkCadence: (cadence: string) => `[COPY] Suggested: ${cadence}. Use one whenever you want.`,
   frameworkCta: "[COPY] Start",
   frameworkPickLabel: "[COPY] Choose a framework",
 
-  checkinEyebrow: "[COPY] Check-in",
-  checkinDone: "[COPY] Logged today. You can change it if something shifted.",
-  checkinTodo:
-    "[COPY] Sleep, mood, energy, and what you kept up. Fifteen seconds.",
-  checkinChangeCta: "[COPY] Change it",
-  checkinLogCta: "[COPY] Log",
-
   opening: "[COPY] Opening…",
-
-  recentHeading: "[COPY] Recent",
-  seeEverything: "[COPY] See everything →",
 } as const;
 
 /**
  * The instruments offered on Home, from the registry.
  *
- * Trackers are excluded: the daily check-in is a different weight of action and
- * has its own strip further down. `listStartable()` already applies the
- * `shipped` gate, so an unshipped instrument cannot appear here by omission.
+ * Trackers are excluded: the daily check-in is answered in place further down
+ * rather than started. `listStartable()` already applies the `shipped` gate, so an
+ * unshipped instrument cannot appear here by omission.
  *
  * Computed at module scope — the definitions are static data and do not change
  * between renders.
  */
 const INSTRUMENTS = listStartable().filter((q) => q.kind === "likert");
-
-export type RecentRow = {
-  id: string;
-  href: string;
-  /**
-   * Already formatted, server-side. This screen is a client component, so a
-   * date formatted here would render once on the server and again at hydration
-   * with a different locale and timezone. See formatRecordDate in
-   * reflections/records.ts.
-   */
-  dateLabel: string;
-  /** ISO string. Kept for sorting and keys, never for display. */
-  at: string;
-  /** Categories, or a check-in's values. The card's subheader. */
-  detail: string[];
-  kindLabel: string;
-  framework: boolean;
-};
 
 export function ScreenHome({
   greeting,
@@ -102,8 +95,8 @@ export function ScreenHome({
 
   lastWrote,
   unfinished,
-  recent,
-  checkedInToday,
+  checkin,
+  month,
   totalRecords,
 }: {
   greeting: string;
@@ -114,8 +107,14 @@ export function ScreenHome({
   lastWrote: string | null;
   /** An entry with writing in it that was never finished. */
   unfinished: { id: string; title: string | null; when: string } | null;
-  recent: RecentRow[];
-  checkedInToday: boolean;
+  /** The daily check-in, answered here. See ./home-checkin.tsx. */
+  checkin: {
+    questionnaire: TrackerQuestionnaire;
+    initialAnswers: Answers;
+    alreadyToday: boolean;
+  };
+  /** One month of the record, built on the server. See lib/journal/month.ts. */
+  month: CalendarMonth;
   totalRecords: number;
 }) {
   /** Which instrument the picker has selected. */
@@ -125,6 +124,15 @@ export function ScreenHome({
   // because the archive's record panel offers the same three. See
   // ./use-start-record.ts.
   const { start, starting: loading, failed } = useStartRecord();
+
+  /*
+   * The suggested rhythm of whichever instrument is picked.
+   *
+   * Read from the instrument rather than written on the card, so the two cannot
+   * disagree and a new instrument brings its own. Undefined where an instrument
+   * carries none, in which case the line is simply absent rather than guessed at.
+   */
+  const selectedCadence = INSTRUMENTS.find((q) => q.slug === instrument)?.cadence;
 
   return (
     <PageBg>
@@ -237,6 +245,14 @@ export function ScreenHome({
                 >
                   {COPY.writeBody}
                 </p>
+                <p
+                  style={{
+                    fontSize: "11.5px",
+                    color: "var(--rf-text-4)",
+                  }}
+                >
+                  {COPY.writeCadence}
+                </p>
                 <div>
                   <button
                     onClick={() => start("entry")}
@@ -267,6 +283,16 @@ export function ScreenHome({
                 >
                   {COPY.frameworkBody}
                 </p>
+                {selectedCadence && (
+                  <p
+                    style={{
+                      fontSize: "11.5px",
+                      color: "var(--rf-text-4)",
+                    }}
+                  >
+                    {COPY.frameworkCadence(selectedCadence)}
+                  </p>
+                )}
 
                 {/* A picker, not a list. Driven by the registry rather than
                     hard-coded, so shipping an instrument is a flag in its own
@@ -320,42 +346,6 @@ export function ScreenHome({
             </Sheet>
           </div>
 
-          {/* The check-in is a strip, not a third launch card — it is a
-              different weight of action from writing or an instrument.
-              "Logged today" is a statement of fact with no follow-up: it does
-              not congratulate, and there is no streak behind it. */}
-          <div
-            className="mt-[18px] flex flex-wrap items-center justify-between gap-4 rounded-[4px] px-5 py-[15px]"
-            style={{ background: "var(--rf-surface)" }}
-          >
-            <div>
-              <Eyebrow size={9.5}>{COPY.checkinEyebrow}</Eyebrow>
-              <p
-                className="mt-1"
-                style={{ fontSize: "12.5px", color: "var(--rf-text-3)" }}
-              >
-                {checkedInToday ? COPY.checkinDone : COPY.checkinTodo}
-              </p>
-            </div>
-            <button
-              onClick={() => start("checkin", "daily_checkin")}
-              disabled={loading !== null}
-              className="rounded-full transition-colors disabled:opacity-40"
-              style={{
-                boxShadow: "inset 0 0 0 1px var(--rf-border-strong)",
-                color: "var(--rf-text-2)",
-                fontSize: "12.5px",
-                padding: "8px 15px",
-              }}
-            >
-              {loading === "checkin"
-                ? COPY.opening
-                : checkedInToday
-                  ? COPY.checkinChangeCta
-                  : COPY.checkinLogCta}
-            </button>
-          </div>
-
           {failed && (
             <p
               className="mt-4 text-center"
@@ -365,40 +355,16 @@ export function ScreenHome({
             </p>
           )}
 
-          {recent.length > 0 && (
-            <section className="mt-[34px]">
-              <div className="mb-[10px] flex items-baseline justify-between gap-4">
-                <Eyebrow>{COPY.recentHeading}</Eyebrow>
-                <Link
-                  href="/reflections"
-                  className="font-mono uppercase transition-colors"
-                  style={{
-                    fontSize: "9.5px",
-                    letterSpacing: "0.14em",
-                    color: "var(--rf-text-4)",
-                  }}
-                >
-                  {COPY.seeEverything}
-                </Link>
-              </div>
+          {/* The four fields themselves, not a button to a screen with them on.
+              Pressing the old strip created a record and navigated away, which is
+              four taps of work behind a page change. See ./home-checkin.tsx. */}
+          <HomeCheckin
+            questionnaire={checkin.questionnaire}
+            initialAnswers={checkin.initialAnswers}
+            alreadyToday={checkin.alreadyToday}
+          />
 
-              {/* Cards, the same ones the archive rail and the check-in panel
-                  use. No rail here — a dashboard panel is not a browsing
-                  surface, and "see everything" above goes to the one that is. */}
-              <RecordCardList>
-                {recent.map((r) => (
-                  <RecordCard
-                    key={r.id}
-                    href={r.href}
-                    kindLabel={r.kindLabel}
-                    dateLabel={r.dateLabel}
-                    detail={r.detail}
-                    accent={r.framework}
-                  />
-                ))}
-              </RecordCardList>
-            </section>
-          )}
+          <HomeCalendar month={month} />
         </div>
       </main>
     </PageBg>

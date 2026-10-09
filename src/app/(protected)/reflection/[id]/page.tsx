@@ -61,8 +61,16 @@ export default async function JournalEntryPage({
     }
   }
 
-  // Guidance is expanded by default: guidance nobody can find does not exist.
-  // The stored preference only overrides that once the user has chosen.
+  /*
+   * Footholds start CLOSED. Product owner, 2026-10-09.
+   *
+   * They were open, on the reasoning that "guidance nobody can find does not
+   * exist" — written when closing them left nothing on screen. The collapsed
+   * state now shows a spine with the item count on a laptop, and a fixed edge
+   * tab below that, so it is findable — and a blank page should open blank.
+   *
+   * The stored preference still wins once the person has chosen either way.
+   */
   const [user] = await db
     .select({ preferences: users.preferences })
     .from(users)
@@ -75,7 +83,7 @@ export default async function JournalEntryPage({
       : {};
 
   const initialGuidanceOpen =
-    typeof prefs.guidanceOpen === "boolean" ? prefs.guidanceOpen : true;
+    typeof prefs.guidanceOpen === "boolean" ? prefs.guidanceOpen : false;
 
   // Footholds, including any drawn from this person's own record. Built here
   // because the personal ones read the database and decrypt — see

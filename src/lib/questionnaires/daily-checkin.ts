@@ -21,7 +21,12 @@ import type { TrackerQuestionnaire } from "./types";
 export const dailyCheckin: TrackerQuestionnaire = {
   kind: "tracker",
   slug: "daily_checkin",
-  version: "v1-2026-07-30",
+  /*
+   * v2: the `kept_up` field was relabelled. Bumped so a stored response records
+   * which wording was actually on screen when it was answered — the keys and the
+   * values are unchanged, so nothing about the data moves.
+   */
+  version: "v2-2026-10-09",
   title: "Daily check-in",
   shortName: "Check-in",
   blurb: "Four taps. Then write, or don't.",
@@ -58,8 +63,22 @@ export const dailyCheckin: TrackerQuestionnaire = {
     {
       kind: "toggles",
       key: "kept_up",
-      label: "Kept up",
-      note: "Tap what happened",
+      /*
+       * "Kept up" until 2026-10-09, which disagreed with two of its own options.
+       *
+       * It reads as "things I maintained", which is right for medication, moved
+       * and outside and backwards for alcohol and screens — the product owner
+       * asked whether tapping "Screens after 11" meant screens were used or
+       * avoided, which is exactly the ambiguity. It records that they *were*.
+       *
+       * The key stays `kept_up` and so do `alcohol` and `late_screens`. Check-in
+       * answers are stored against keys, not labels, and renaming one does not
+       * error — historical answers simply stop being found. See the
+       * instrument-keys section of CLAUDE.md, which names this specific field as
+       * the outstanding case and prescribes relabelling as the fix.
+       */
+      label: "What happened",
+      note: "Tap anything that did",
       options: [
         { key: "medication", label: "Medication" },
         { key: "moved", label: "Moved" },

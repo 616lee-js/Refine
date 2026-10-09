@@ -54,7 +54,21 @@ export default async function ReflectionsLayout({
           Now the row starts on the same 20px edge as the nav, and the main view
           takes whatever is left. */}
       <div className="flex min-h-0 flex-1 px-5 pt-5">
+        {/* ── The record comes first in the DOM, the panel after it ─────────────
+            On a phone these stack in source order, and the panel used to be
+            first — so tapping a record meant scrolling past the whole list, the
+            filters and the start buttons to reach the thing you had just asked
+            for. The design system already documented the fix and the archive did
+            the opposite of it: "the aside second in source order, so the stacking
+            is the natural one."
+
+            `lg:order-first` puts the panel back on the left at laptop width,
+            where it belongs, without putting it back above the record on a
+            phone. Below `lg` the panel also collapses itself — see
+            ./record-rail.tsx. */}
         <div className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-7">
+          <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+
           <RecordRail
             initial={{
               records: rail.records,
@@ -63,8 +77,6 @@ export default async function ReflectionsLayout({
               capped: rail.capped,
             }}
           />
-
-          <main className="flex min-w-0 flex-1 flex-col">{children}</main>
         </div>
       </div>
     </PageBg>

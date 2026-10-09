@@ -69,6 +69,8 @@ const INSTRUMENTS = listStartable().filter((q) => q.kind === "likert");
 const COPY = {
   railLabel: "[COPY] Search your records",
   heading: "[COPY] Search",
+  /** On the phone toggle, where it covers searching and the list together. */
+  browseHeading: "[COPY] Find a record",
   // `capped` means the list was cut short by the row limit rather than by the
   // filters, so the number is a floor and says so rather than claiming a total.
   count: (shown: number, total: number, capped: boolean) =>
@@ -397,6 +399,13 @@ export function RecordRail({
 
   const [data, setData] = useState(initial);
   const [loading, setLoading] = useState(false);
+  /**
+   * Whether searching and the record list are showing on a phone.
+   *
+   * Closed to start. From `lg` up this value is ignored — the content carries
+   * `lg:block`, so the panel is always open as the left column there.
+   */
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   /*
    * Refetch when the filters change.
@@ -458,14 +467,17 @@ export function RecordRail({
   return (
     <aside
       aria-label={COPY.railLabel}
-      className="w-full shrink-0 rounded-[4px] p-3 lg:w-[300px]"
+      className="w-full shrink-0 rounded-[4px] p-3 lg:order-first lg:w-[300px]"
       style={{
         background: "var(--rf-surface)",
         boxShadow: "inset 0 0 0 1px var(--rf-border)",
       }}
     >
       {/* Actions first, then the list — the design system's rule for this panel,
-          which it did not previously follow. See StartSomething. */}
+          which it did not previously follow. See StartSomething.
+
+          Deliberately OUTSIDE the collapse below: starting something stays one
+          tap on a phone. Only finding an old record folds away. */}
       <StartSomething />
 
       <div
@@ -473,11 +485,51 @@ export function RecordRail({
         style={{ height: 1, background: "var(--rf-border)" }}
       />
 
-      <div className="mb-2">
+      {/* ── Searching and the list fold away on a phone ──────────────────────
+          The panel now sits *below* the record being read, so on a phone it is
+          a long tail of controls under the thing you came to read. Closed by
+          default there; always open from `lg` up, where it is the left column
+          and folding it would be pointless.
+
+          Not a `<details>`: its closed state cannot be overridden by a media
+          query, so there would be no way to force it open on a laptop. A button
+          plus `hidden lg:block` does both, and the marker still turns — the
+          design system's rule for anything that opens. */}
+      <button
+        type="button"
+        onClick={() => setBrowseOpen((v) => !v)}
+        aria-expanded={browseOpen}
+        aria-controls="record-browse"
+        className="mb-2 flex w-full items-center gap-[7px] lg:hidden"
+      >
+        <svg
+          width="8"
+          height="8"
+          viewBox="0 0 10 10"
+          fill="currentColor"
+          className="shrink-0 transition-transform"
+          style={{
+            color: "var(--rf-text-3)",
+            transform: browseOpen ? "rotate(90deg)" : "none",
+          }}
+          aria-hidden="true"
+        >
+          <path d="M3 1 L8 5 L3 9 Z" />
+        </svg>
+        <span style={groupLabel}>{COPY.browseHeading}</span>
+        <span className="ml-auto" style={{ ...groupLabel, color: "var(--rf-text-4)" }}>
+          {COPY.count(records.length, total, capped)}
+        </span>
+      </button>
+
+      <div className="mb-2 hidden lg:block">
         <span style={groupLabel}>{COPY.heading}</span>
       </div>
 
-      <div>
+      <div
+        id="record-browse"
+        className={browseOpen ? "" : "hidden lg:block"}
+      >
         {/* ── Always visible: dates, search, type ──
             No headings above these. The controls say what they are, and the
             labels survive for screen readers below. */}
@@ -757,12 +809,12 @@ export function RecordRail({
             </div>
           </div>
         )}
-      </div>
 
       {/* The divider separates finding records from the records themselves,
-          and carries the count that used to sit under a "Records" heading. */}
+          and carries the count that used to sit under a "Records" heading.
+          Hidden below `lg`, where the count is already on the toggle above. */}
       <div
-        className="mt-3 flex items-baseline justify-between gap-3 pt-3"
+        className="mt-3 hidden items-baseline justify-between gap-3 pt-3 lg:flex"
         style={{ borderTop: "1px solid var(--rf-border)" }}
       >
         <span style={groupLabel}>{COPY.count(records.length, total, capped)}</span>
@@ -803,6 +855,7 @@ export function RecordRail({
           ))}
         </RecordCardList>
       )}
+      </div>
     </aside>
   );
 }

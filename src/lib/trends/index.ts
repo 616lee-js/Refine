@@ -1,4 +1,9 @@
 import {
+  DEFAULT_RANGE,
+  inRange,
+  type TrendRange,
+} from "./range";
+import {
   getQuestionnaire,
   isComplete,
   maxTotal,
@@ -21,6 +26,10 @@ import {
  *             reasonably conclude it was not recorded.
  *   charted   at threshold. A line through four points is a slope with no
  *             evidence behind it, which is why the threshold exists at all.
+ *
+ * The threshold counts readings on the WHOLE record, not readings inside the
+ * selected range — see `lineCard`. A charted card whose range happens to contain
+ * nothing says so, rather than pretending there is no history.
  *
  * ── No causal claims ──────────────────────────────────────────────────────────
  * Nothing here says one thing caused another. `plainly()` states co-occurrence
@@ -94,7 +103,6 @@ const MIN_PLAINLY_CHECKINS = 21;
 const MIN_PLAINLY_READINGS = 2;
 
 const MATRIX_DAYS = 21;
-const LOOKBACK_DAYS = 90;
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -203,10 +211,24 @@ export type DecryptedResponse = {
 
 // ── Card builders ────────────────────────────────────────────────────────────
 
+/**
+ * ── Two sets of readings, and the difference is the point ─────────────────────
+ * `all` is every reading on record; `shown` is the ones inside the chosen range.
+ *
+ * The five-reading threshold is applied to `all`, not to `shown`. It existed to
+ * stop a slope being drawn through two points and called a trend — but when the
+ * window was fixed at 90 days it also meant a fortnightly instrument sat at
+ * "gathering" forever and a quarterly one could never escape it at all.
+ *
+ * Counting over the whole record separates the two questions properly: whether
+ * there is enough history for a line to mean anything, and which part of it you
+ * are looking at. Narrowing the view is zooming, not claiming less evidence.
+ */
 function lineCard(opts: {
   id: string;
   label: string;
-  readings: Reading[];
+  all: Reading[];
+  shown: Reading[];
   max: number;
   meta: string;
   unit?: string;
@@ -215,21 +237,21 @@ function lineCard(opts: {
   /** Formats the headline number. */
   format?: (v: number) => string;
 }): LineCard | null {
-  const { readings } = opts;
-  if (readings.length === 0) return null;
+  const { all, shown } = opts;
+  if (all.length === 0) return null;
 
   const base = {
     kind: "line" as const,
     id: opts.id,
     label: opts.label,
-    count: readings.length,
+    count: all.length,
     max: opts.max,
     bandKey: opts.bandKey ?? null,
     provenance: opts.provenance ?? null,
     wide: Boolean(opts.bandKey),
   };
 
-  if (readings.length < MIN_LINE_READINGS) {
+  if (all.length < MIN_LINE_READINGS) {
     return {
       ...base,
       state: "gathering",
@@ -241,16 +263,33 @@ function lineCard(opts: {
     };
   }
 
-  const last = readings[readings.length - 1].value;
+  // Charted, but nothing falls in the chosen range. The card stays — the history
+  // exists and saying so is the honest answer to "show me last month". The panel
+  // renders this as a line of text rather than an empty chart.
+  if (shown.length === 0) {
+    return {
+      ...base,
+      state: "charted",
+      points: [],
+      labels: [],
+      reading: "",
+      note: null,
+      meta: opts.meta,
+    };
+  }
+
+  const last = shown[shown.length - 1].value;
   const fmt = opts.format ?? ((v: number) => String(Math.round(v * 10) / 10));
 
   return {
     ...base,
     state: "charted",
-    points: readings.map((r) => r.value),
-    labels: axisLabels(readings),
+    points: shown.map((r) => r.value),
+    labels: axisLabels(shown),
+    // The headline and the movement describe the range on screen, not the whole
+    // record — the number under a chart has to be the number the chart shows.
     reading: `${fmt(last)}${opts.unit ?? ""}`,
-    note: movement(readings),
+    note: movement(shown),
     meta: opts.meta,
   };
 }
@@ -382,40 +421,71 @@ function plainly(
 
 export function buildTrends(
   responses: DecryptedResponse[],
+  range: TrendRange = { key: DEFAULT_RANGE, from: null, to: null },
   now: Date = new Date()
 ): Trends {
-  const cutoff = now.getTime() - LOOKBACK_DAYS * 86_400_000;
-  const inWindow = responses
-    .filter((r) => r.completedAt.getTime() >= cutoff)
-    .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime());
+  /*
+   * Everything, in order — not a window.
+   *
+   * There used to be a 90-day cutoff here and it decided three separate things
+   * at once: which points were drawn, whether a card existed, and whether an
+   * instrument was visible at all. A quarterly instrument fitted one reading into
+   * it, so it could never reach the five a line needs. The range now decides only
+   * the first of those.
+   */
+  const all = [...responses].sort(
+    (a, b) => a.completedAt.getTime() - b.completedAt.getTime()
+  );
 
-  const checkins = inWindow.filter((r) => r.slug === "daily_checkin");
+  const allCheckins = all.filter((r) => r.slug === "daily_checkin");
+  const checkins = allCheckins.filter((c) => inRange(c.completedAt, range));
   const tracker = getQuestionnaire("daily_checkin");
 
-  // One row per day. A second check-in on the same day replaces the first —
-  // the screen is explicitly re-editable, so the latest is what was meant.
+  /*
+   * The habit grid stays on its own 21 days, whatever the range says.
+   *
+   * It is a grid of one cell per day per habit. At "total" that is a column per
+   * day since the person started, which is unreadable, and at a custom week it is
+   * five columns. Its label already says "last 21 days", so it is not claiming to
+   * follow the selection.
+   */
+  const matrixSince = now.getTime() - MATRIX_DAYS * 86_400_000;
   const byDay = new Map<number, Answers>();
-  for (const c of checkins) byDay.set(startOfDay(c.completedAt), c.answers);
+  for (const c of allCheckins) {
+    if (c.completedAt.getTime() < matrixSince) continue;
+    // One row per day. A second check-in on the same day replaces the first —
+    // the screen is explicitly re-editable, so the latest is what was meant.
+    byDay.set(startOfDay(c.completedAt), c.answers);
+  }
 
-  const numeric = (key: string): Reading[] =>
-    checkins
+  const numeric = (rows: DecryptedResponse[], key: string): Reading[] =>
+    rows
       .filter((c) => typeof c.answers[key] === "number")
       .map((c) => ({ at: c.completedAt, value: c.answers[key] as number }));
 
-  const sleep = numeric("sleep_hours");
-  const mood = numeric("mood");
-  const energy = numeric("energy");
+  const sleepAll = numeric(allCheckins, "sleep_hours");
+  const sleep = numeric(checkins, "sleep_hours");
 
   const cards: TrendCard[] = [];
 
   const sleepCard = lineCard({
     id: "sleep",
     label: COPY.sleepLabel,
-    readings: sleep,
+    all: sleepAll,
+    shown: sleep,
     max: 12,
     unit: "h",
+    /*
+     * The median describes what is on screen, so it is taken from the range —
+     * but only once there is enough history for the card to be charted at all.
+     *
+     * Both conditions are needed. Without the first, a single check-in produced
+     * "median 6.5h", which is a median of one number and reads as a settled
+     * figure. Without the second, a charted card whose range is empty would try
+     * to take the median of nothing.
+     */
     meta:
-      sleep.length >= MIN_LINE_READINGS
+      sleepAll.length >= MIN_LINE_READINGS && sleep.length > 0
         ? COPY.sleepMeta(median(sleep.map((r) => r.value)))
         : COPY.sleepMetaGathering,
   });
@@ -425,7 +495,8 @@ export function buildTrends(
   const moodCard = lineCard({
     id: "mood",
     label: COPY.moodLabel,
-    readings: mood,
+    all: numeric(allCheckins, "mood"),
+    shown: numeric(checkins, "mood"),
     max: 5,
     meta: COPY.moodMeta,
   });
@@ -434,7 +505,8 @@ export function buildTrends(
   const energyCard = lineCard({
     id: "energy",
     label: COPY.energyLabel,
-    readings: energy,
+    all: numeric(allCheckins, "energy"),
+    shown: numeric(checkins, "energy"),
     max: 5,
     meta: COPY.energyMeta,
   });
@@ -443,17 +515,36 @@ export function buildTrends(
   // ── Instruments ────────────────────────────────────────────────────────────
   let plainlyInstrument: { label: string; readings: Reading[] } | null = null;
 
+  /*
+   * Every instrument ever answered, not just ones answered inside the range.
+   *
+   * Taken from the whole record because the range is a view. Deriving the slug
+   * list from a window meant an instrument whose last answer was 91 days old
+   * vanished entirely — no card, not even a count.
+   */
   const instrumentSlugs = [
-    ...new Set(inWindow.filter((r) => r.slug !== "daily_checkin").map((r) => r.slug)),
+    ...new Set(all.filter((r) => r.slug !== "daily_checkin").map((r) => r.slug)),
   ];
 
   for (const slug of instrumentSlugs) {
     const q = getQuestionnaire(slug);
     if (!q || q.kind !== "likert") continue;
 
-    // The verification gate. An unverified instrument may not be the instrument
-    // it is named after, so a trend of it asserts something unproven.
-    if (!q.wordingVerified) continue;
+    /*
+     * ── The verification gate moved, it did not go away ──────────────────────
+     * This used to `continue` here on any instrument whose wording had not been
+     * checked against a primary source — which is all four of them, so no
+     * framework has ever been charted.
+     *
+     * The product owner's reasoning, 2026-10-09: the clinical claim is in the
+     * *interpretation*, not in the counting. A line through scores someone
+     * recorded asserts nothing about what they mean; printing the instrument's
+     * published severity ranges beside it does, and that is the claim a
+     * paraphrase actually undermines.
+     *
+     * So the line is drawn for every instrument, and `instrumentCard` withholds
+     * the band key and its provenance line until the wording is verified.
+     */
 
     /*
      * Half-finished responses are not measurements.
@@ -471,7 +562,7 @@ export function buildTrends(
      * The response itself is kept — someone may finish it later. It is simply not
      * treated as a reading.
      */
-    const readings: Reading[] = inWindow
+    const readingsAll: Reading[] = all
       .filter(
         (r) =>
           r.slug === slug &&
@@ -480,8 +571,11 @@ export function buildTrends(
       )
       .map((r) => ({ at: r.completedAt, value: r.total as number }));
 
-    const card = instrumentCard(q, readings);
+    const readings = readingsAll.filter((r) => inRange(r.at, range));
+
+    const card = instrumentCard(q, readingsAll, readings);
     if (card) cards.push(card);
+    // The "Plainly" paragraph describes what is on screen, so it reads the range.
     if (!plainlyInstrument && readings.length > 0) {
       plainlyInstrument = { label: q.shortName, readings };
     }
@@ -501,31 +595,61 @@ export function buildTrends(
 
 function instrumentCard(
   q: LikertQuestionnaire,
-  readings: Reading[]
+  all: Reading[],
+  shown: Reading[]
 ): LineCard | null {
   const max = maxTotal(q);
   const sorted = [...q.bands].sort((a, b) => a.min - b.min);
 
-  const bandKey: BandKeyRow[] = sorted.map((b, i) => {
-    const next = sorted[i + 1];
-    return {
-      label: b.label,
-      range: next ? `${b.min}–${next.min - 1}` : `${b.min}–${max}`,
-      from: b.min,
-    };
-  });
+  /*
+   * ── The band key is where the clinical claim lives ───────────────────────────
+   * "moderate 10–14" beside a line says the score means what the instrument says
+   * it means. That is exactly the claim an unverified paraphrase cannot support,
+   * so it is withheld until the wording has been checked against a primary
+   * source — while the line itself, which is only the values the person recorded,
+   * is drawn either way.
+   *
+   * `lineCard` derives `wide` from the presence of a band key, so an unverified
+   * instrument also takes one column instead of two. That is correct rather than
+   * incidental: there is nothing in the second column to show.
+   */
+  const bandKey: BandKeyRow[] | null = q.wordingVerified
+    ? sorted.map((b, i) => {
+        const next = sorted[i + 1];
+        return {
+          label: b.label,
+          range: next ? `${b.min}–${next.min - 1}` : `${b.min}–${max}`,
+          from: b.min,
+        };
+      })
+    : null;
+
+  /*
+   * Lowercased for mid-sentence use — but not when it still carries a `[COPY]`
+   * marker, which `toLowerCase()` turns into a lowercase `[copy]` and makes look
+   * like a typo rather than a note to the owner. The marker is meant to be
+   * legible on screen; see the Personal Wellbeing Index, whose title and
+   * suggested rhythm are both still placeholders.
+   */
+  const cadence = q.cadence
+    ? q.cadence.startsWith("[COPY]")
+      ? q.cadence
+      : q.cadence.toLowerCase()
+    : null;
 
   return lineCard({
     id: q.slug,
     label: `${q.title} · ${q.shortName}`,
-    readings,
+    all,
+    shown,
     max,
-    meta: `${readings.length} ${readings.length === 1 ? "reading" : "readings"}${
-      q.cadence ? ` · ${q.cadence.toLowerCase()}` : ""
+    // Counts the readings on screen, like every other card's meta line.
+    meta: `${shown.length} ${shown.length === 1 ? "reading" : "readings"}${
+      cadence ? ` · ${cadence}` : ""
     }`,
     bandKey,
-    // CONTENT PASS: placeholder wording.
-    provenance: COPY.bandProvenance(q.shortName),
+    // CONTENT PASS: placeholder wording. Null alongside the band key it explains.
+    provenance: bandKey ? COPY.bandProvenance(q.shortName) : null,
     format: (v) => String(Math.round(v)),
   });
 }

@@ -1,6 +1,7 @@
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { LineChart, BandKey } from "@/components/ui/line-chart";
 import { DotMatrix } from "@/components/ui/dot-matrix";
+import { RangePicker } from "./range-picker";
 import {
   MIN_LINE_READINGS,
   MIN_MATRIX_DAYS,
@@ -130,6 +131,34 @@ function Line({ card }: { card: LineCard }) {
     );
   }
 
+  /*
+   * Charted, but nothing falls in the range on screen.
+   *
+   * The card stays rather than disappearing, and says how many readings exist
+   * outside the selection. Removing it would be the same mistake as hiding a
+   * gathering card: someone who narrowed to last month and watched a chart vanish
+   * would reasonably conclude the data had gone.
+   */
+  if (card.points.length === 0) {
+    return (
+      <Sheet className="px-5 py-[16px]">
+        <Eyebrow>{card.label}</Eyebrow>
+        <p
+          className="mt-[9px]"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "16px",
+            lineHeight: 1.55,
+            color: "var(--rf-text-2)",
+            textWrap: "pretty",
+          }}
+        >
+          {COPY.emptyRange(card.count)}
+        </p>
+      </Sheet>
+    );
+  }
+
   const chart = (
     <LineChart
       data={card.points}
@@ -189,11 +218,17 @@ function Matrix({ card }: { card: MatrixCard }) {
 // src/lib/trends/index.ts and is marked there.
 const COPY = {
   scoringRanges: "[COPY] Scoring ranges",
+  emptyRange: (n: number) =>
+    `[COPY] Nothing in this range. ${n} ${n === 1 ? "reading" : "readings"} outside it.`,
 } as const;
 
 export function TrendsPanel({ trends }: { trends: Trends }) {
   return (
     <div className="flex flex-col gap-[14px] pb-6">
+      {/* Above the charts, closed, with the current selection on its row.
+          See ./range-picker.tsx. */}
+      <RangePicker />
+
       <div className="grid gap-[14px] lg:grid-cols-2">
         {trends.cards.map((card) =>
           card.kind === "line" ? (

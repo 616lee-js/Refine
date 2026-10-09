@@ -529,6 +529,51 @@ four-row recent list.
 - **Future days are drawn, never marked or linked.** A month ahead is not a plan.
 - Monday first. `getDay()` is Sunday-based, so Sunday's 0 becomes 6.
 
+### Charting a score, and withholding its meaning — ADDED 2026-10-09
+
+Mirror charts every instrument someone has answered. It withholds the
+instrument's published severity ranges until that instrument's wording has been
+verified against a primary source.
+
+The product owner's rule, which replaced a single gate on both: **the clinical
+claim is in the interpretation, not in the counting.** A line through scores
+someone recorded asserts nothing about what they mean. "moderate · 10–14" beside
+it says the number means what the instrument says it means — which is exactly the
+claim an unverified paraphrase cannot support.
+
+Before this, `wordingVerified` suppressed the whole card, and it is false on every
+instrument — so no framework had ever been charted, and an account with framework
+responses and no check-ins got no Trends tab at all.
+
+- **The band key and its provenance line travel together.** Withholding the ranges
+  and keeping the sentence that explains them would leave an explanation of
+  nothing.
+- **An unverified card takes one column, not two.** `wide` derives from the
+  presence of a band key, so this falls out rather than being decided twice.
+- Still no shading behind the line, verified or not. See the band-key note above.
+
+### Range filters over a fixed window — ADDED 2026-10-09
+
+Charts show a range the reader picks — custom dates, one month, this year,
+everything — defaulting to one month, from a collapsed section above the charts.
+
+- **The range lives in the URL.** The filtering happens on the server where the
+  data is already decrypted, so the selection has to reach the server; and a view
+  then survives a reload and can be linked.
+- **A threshold counts the whole record, not the range.** Trends needs five
+  readings before it draws a line, because a line through two points is a slope
+  with no evidence. That count is over everything on record. Narrowing the view is
+  zooming, not claiming less evidence — a fixed 90-day window conflated the two,
+  and left a quarterly instrument permanently unable to reach five.
+- **A card whose range is empty stays and says so**, with how many readings sit
+  outside the selection. Same reasoning as the gathering state: a chart that
+  vanishes when you narrow the view reads as data that vanished.
+- **The headline number and the movement describe the range on screen**, not the
+  whole record. The number under a chart has to be the number the chart shows.
+- **A day-by-day grid does not follow the range.** It keeps its own 21 days and
+  says so on its label: one cell per day per habit over "everything" is a column
+  per day since the person started.
+
 ### Record states: viewed, then edited — ADDED 2026-09-21
 
 A completed record is **read**. Editing it is a separate, deliberate action that

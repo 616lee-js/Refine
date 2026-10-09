@@ -17,6 +17,7 @@ import {
   type DecryptedResponse,
   type Trends,
 } from "@/lib/trends";
+import { resolveRange, type TrendRange } from "@/lib/trends/range";
 import { PageBg } from "@/components/ui/page-bg";
 import { Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
@@ -77,9 +78,14 @@ type Tab = "report" | "memory" | "trends";
 export default async function MirrorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, ...rangeParams } = await searchParams;
   const authSession = await getSession();
   const userId = authSession.userId!;
 
@@ -100,12 +106,17 @@ export default async function MirrorPage({
     )
     .groupBy(questionnaireResponses.questionnaireSlug);
 
+  /*
+   * Whether there is anything to chart.
+   *
+   * This used to reject any questionnaire whose wording was unverified, which is
+   * all of them — so someone with forty framework responses and no check-ins got
+   * no Trends tab at all. The gate now sits on the band key instead of on
+   * charting; see the note in lib/trends/index.ts.
+   */
   const trendsAvailable = counts.some(({ slug, n }) => {
     const q = getQuestionnaire(slug);
     if (!q) return false;
-    // An unverified instrument is not chartable at all, so it cannot be the
-    // thing that brings the tab into existence.
-    if (q.kind === "likert" && !q.wordingVerified) return false;
     return n >= Math.min(MIN_LINE_READINGS, MIN_MATRIX_DAYS);
   });
 
@@ -128,9 +139,13 @@ export default async function MirrorPage({
           ? "report"
           : "memory";
 
+  // Which stretch the charts show. From the URL so a view survives a reload and
+  // so the filtering can happen on the server, where the data already is.
+  const range = resolveRange(rangeParams);
+
   let trends: Trends | null = null;
   if (tab === "trends") {
-    trends = await loadTrends(userId);
+    trends = await loadTrends(userId, range);
   }
 
   let report: { current: CurrentReport | null; history: ReportPeriod[] } = {
@@ -326,7 +341,10 @@ async function loadReport(
   return { current, history };
 }
 
-async function loadTrends(userId: string): Promise<Trends> {
+async function loadTrends(
+  userId: string,
+  range: TrendRange
+): Promise<Trends> {
   const rows = await db
     .select({
       slug: questionnaireResponses.questionnaireSlug,
@@ -384,5 +402,5 @@ async function loadTrends(userId: string): Promise<Trends> {
     context: `mirror_trends_view (${decrypted.length} responses read)`,
   });
 
-  return buildTrends(decrypted);
+  return buildTrends(decrypted, range);
 }

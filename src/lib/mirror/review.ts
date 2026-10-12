@@ -25,7 +25,18 @@ import {
 // Bundled at build time, not read from disk — see next.config.ts.
 import extractionPrompt from "@/lib/layer2/memory-extraction.md";
 
-import { authoritativeReport } from "./read";
+import {
+  authoritativeReport,
+  reportToText,
+  serialiseReport,
+  type StructuredReport,
+} from "./read";
+import {
+  DOMAIN_FINGERPRINT,
+  canonicalDomain,
+  domainOrder,
+  domainPromptBlock,
+} from "./domains";
 import type { CheckinLines, RawReport } from "./types";
 
 /**
@@ -61,15 +72,40 @@ import type { CheckinLines, RawReport } from "./types";
 
 const MODEL = "claude-sonnet-5";
 
-export const PROMPT_VERSION = promptVersion(extractionPrompt);
+/**
+ * The area list, interpolated rather than pasted into the markdown.
+ *
+ * Built once at module load — the list is static. Same arrangement as the
+ * summariser and its categories, so the prompt cannot fall out of step with the
+ * code that validates against it.
+ */
+const SYSTEM_PROMPT = extractionPrompt.replace("{{DOMAINS}}", domainPromptBlock());
+
+/**
+ * Recorded against every report.
+ *
+ * The area fingerprint is folded in because that list lives in TypeScript, not
+ * in the markdown. Without it, editing the areas would change what the model is
+ * told while leaving the version identical — and the archive would hold two
+ * incompatible vintages with no way to tell them apart. Exactly the reason the
+ * summariser folds in its category fingerprint.
+ */
+export const PROMPT_VERSION = `${promptVersion(
+  extractionPrompt
+)}+${DOMAIN_FINGERPRINT}`;
 
 /**
  * True while the prompt is still a placeholder.
  *
  * The placeholder's header reads UNWRITTEN, so writing a real version line is
  * the single action that switches reports on. No second flag to remember.
+ *
+ * Compares the prompt's own version, NOT `PROMPT_VERSION` — that now carries the
+ * area fingerprint appended, so `=== "UNWRITTEN"` would never match again and
+ * this guard would have silently stopped working. The guard is the only thing
+ * standing between a placeholder prompt and a report about a real person.
  */
-export const PROMPT_UNWRITTEN = PROMPT_VERSION === "UNWRITTEN";
+export const PROMPT_UNWRITTEN = promptVersion(extractionPrompt) === "UNWRITTEN";
 
 /** 14 days, per the product owner. Changeable without a deploy. */
 export const DEFAULT_INTERVAL_DAYS = 14;
@@ -382,7 +418,16 @@ async function priorReports(userId: string): Promise<string[]> {
       // what the next run builds on. Showing it the superseded version would
       // rebuild an account they had already corrected.
       const r = authoritativeReport(row);
-      out.push(`${day(row.createdAt)}: ${r.report}`);
+      /*
+       * Flattened through `reportToText`, not interpolated.
+       *
+       * A report is an object now, and `${r.report}` is valid TypeScript that
+       * produces "[object Object]" — so every past report would have reached the
+       * prompt as that string, the model would have had no history to avoid
+       * repeating, and nothing would have errored. The typechecker does not catch
+       * this; it is why the helper exists.
+       */
+      out.push(`${day(row.createdAt)}: ${reportToText(r.report)}`);
     } catch {
       // Unreadable history degrades the run; it does not stop it.
     }
@@ -404,19 +449,49 @@ export function parseReport(raw: string): RawReport {
     throw new ReviewError("Report reply was not JSON");
   }
 
-  const { report, periodNote } = obj as {
-    report?: unknown;
+  const { overall, sections, periodNote } = obj as {
+    overall?: unknown;
+    sections?: unknown;
     periodNote?: unknown;
   };
 
-  if (typeof report !== "string" || !report.trim()) {
-    throw new ReviewError("Report reply was missing the report");
+  if (typeof overall !== "string" || !overall.trim()) {
+    throw new ReviewError("Report reply was missing the overall account");
   }
   if (typeof periodNote !== "string" || !periodNote.trim()) {
     throw new ReviewError("Report reply was missing the period note");
   }
 
-  return { report: report.trim(), periodNote: periodNote.trim() };
+  /*
+   * Sections are filtered, not validated into an error.
+   *
+   * An unknown area is discarded the way the summariser discards an invented
+   * category — the closed list is a guarantee rather than an instruction the
+   * model might ignore. Throwing instead would cost a whole report, including a
+   * perfectly good overall account, over one mislabelled section.
+   *
+   * `[]` is explicitly correct: a window with nothing area-specific in it should
+   * produce no sections rather than seven thin ones.
+   */
+  const parsed: { domain: string; text: string }[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(sections)) {
+    for (const s of sections) {
+      if (typeof s !== "object" || s === null) continue;
+      const { domain, text } = s as { domain?: unknown; text?: unknown };
+      const key = canonicalDomain(domain);
+      if (!key || seen.has(key)) continue;
+      if (typeof text !== "string" || !text.trim()) continue;
+      seen.add(key);
+      parsed.push({ domain: key, text: text.trim() });
+    }
+  }
+
+  // Our order, never the model's — otherwise the same person's reports would
+  // reorder their own life between runs for no reason.
+  parsed.sort((a, b) => domainOrder(a.domain) - domainOrder(b.domain));
+
+  return { overall: overall.trim(), sections: parsed, periodNote: periodNote.trim() };
 }
 
 /**
@@ -480,8 +555,11 @@ export async function reviewUser(
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 3000,
-    system: extractionPrompt,
+    // Raised from 3000 with v3: the same prose now arrives split across an
+    // overall account and up to seven sections, each carrying its own JSON
+    // scaffolding. A reply cut mid-JSON does not parse and the run is retried.
+    max_tokens: 4000,
+    system: SYSTEM_PROMPT,
     messages: [
       {
         role: "user",
@@ -533,12 +611,18 @@ export async function reviewUser(
   const parsed = parseReport(replyText(response));
 
   /*
-   * The check-in lines are appended verbatim rather than left to the model, so
+   * The check-in lines are carried verbatim rather than left to the model, so
    * what the report says about a number is the same string the chart shows.
+   *
+   * Their own field now rather than appended to the prose: a sleep median is not
+   * a statement about "health", so putting them in an area would be filing a
+   * figure under a judgement nobody made.
    */
-  const reportText = checkins.length
-    ? `${parsed.report}\n\n${checkins.join("\n")}`
-    : parsed.report;
+  const stored: StructuredReport = {
+    overall: parsed.overall,
+    sections: parsed.sections,
+    figures: checkins,
+  };
 
   await db.insert(mirrorReviews).values({
     id: randomUUID(),
@@ -546,7 +630,7 @@ export async function reviewUser(
     windowStart,
     windowEnd,
     entriesRead: recent.length,
-    encryptedReport: encrypt(reportText),
+    encryptedReport: encrypt(serialiseReport(stored)),
     encryptedPeriodNote: encrypt(parsed.periodNote),
     modelVersion: PROMPT_VERSION,
     createdAt: new Date(),

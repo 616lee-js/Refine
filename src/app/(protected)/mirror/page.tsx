@@ -304,7 +304,7 @@ async function loadReport(
     decrypted++;
     current = {
       id: newest.id,
-      text: resolved.report,
+      report: resolved.report,
       edited: resolved.source === "user",
       createdAt: newest.createdAt.toISOString(),
       windowStart: newest.windowStart.toISOString(),

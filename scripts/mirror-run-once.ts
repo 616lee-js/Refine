@@ -7,6 +7,13 @@ import { SUPABASE_ROOT_CA_2021 } from "../src/lib/db/supabase-ca";
 import { encrypt, decrypt } from "../src/lib/crypto";
 import { authoritativeSummary } from "../src/lib/summaries/read";
 import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
+import { parseReport } from "../src/lib/mirror/review";
+import { domainLabel, domainPromptBlock } from "../src/lib/mirror/domains";
+import {
+  reportToText,
+  serialiseReport,
+  type StructuredReport,
+} from "../src/lib/mirror/read";
 
 /**
  * Produce one Mirror report on demand, from the command line.
@@ -31,11 +38,18 @@ import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
  * Those are correct for the scheduled run and useless for testing a prompt.
  *
  * ── Where it duplicates, and where it must not drift ──────────────────────────
- * The prompt file, the resolver for corrected summaries, and the check-in
- * wording all come from the same modules the real run uses, so those cannot
- * disagree. What IS duplicated is the assembly of the message — the order of
- * sections and their headings. If src/lib/mirror/review.ts changes that order,
+ * The prompt file, the area list and its interpolation, the reply parser, the
+ * resolver for corrected summaries, and the check-in wording all come from the
+ * same modules the real run uses, so none of those can disagree.
+ *
+ * What IS still duplicated is the assembly of the message — the order of the
+ * blocks and their headings. If src/lib/mirror/review.ts changes that order,
  * change it here too, or this stops previewing the thing it claims to preview.
+ *
+ * The reply used to be cast to a shape and trusted here. It now goes through the
+ * real `parseReport`, because with sections a local cast would keep an invented
+ * area name that the real run discards — a preview that lies about what it
+ * previews is worse than no preview.
  */
 
 const PROMPT_PATH = join(
@@ -307,26 +321,48 @@ async function main() {
     const client = new Anthropic({ apiKey: key });
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 3000,
-      system: prompt,
+      // Matches review.ts. The same prose now arrives split across an overall
+      // account and up to seven sections, each with its own JSON scaffolding.
+      max_tokens: 4000,
+      // The area list is interpolated, exactly as the real run does it.
+      system: prompt.replace("{{DOMAINS}}", domainPromptBlock()),
       messages: [{ role: "user", content: message }],
     });
 
     const raw = response.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");
-    const parsed = JSON.parse(
-      raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, "")
-    ) as { report: string; periodNote: string };
+    /*
+     * Through the real parser, not a local cast.
+     *
+     * This used to cast the reply to a shape and trust it. With sections that
+     * would silently keep an invented area name, so the preview would show a
+     * section the real run discards — a preview that lies about what it previews
+     * is worse than no preview.
+     */
+    const parsed = parseReport(raw);
 
-    const reportText = checkins.length
-      ? `${parsed.report}\n\n${checkins.join("\n")}`
-      : parsed.report;
+    const stored: StructuredReport = {
+      overall: parsed.overall,
+      sections: parsed.sections,
+      figures: checkins,
+    };
 
-    console.log("\n=== REPORT ===\n");
-    console.log(reportText);
+    console.log("\n=== OVERALL ===\n");
+    console.log(parsed.overall);
+    for (const s of parsed.sections) {
+      console.log(`\n=== ${(domainLabel(s.domain) ?? s.domain).toUpperCase()} ===\n`);
+      console.log(s.text);
+    }
+    if (checkins.length) {
+      console.log("\n=== FIGURES (verbatim from Trends) ===\n");
+      console.log(checkins.join("\n"));
+    }
     console.log("\n=== PERIOD NOTE ===\n");
     console.log(parsed.periodNote);
     console.log(
-      `\n(report ${parsed.report.split(/\s+/).length} words, note ${parsed.periodNote.split(/\s+/).length} words)`
+      `\n(overall ${parsed.overall.split(/\s+/).length} words, ` +
+        `${parsed.sections.length} section(s), ` +
+        `${reportToText(stored).split(/\s+/).length} words total, ` +
+        `note ${parsed.periodNote.split(/\s+/).length} words)`
     );
 
     if (dry) {
@@ -346,7 +382,7 @@ async function main() {
         windowStart,
         windowEnd,
         recent.length,
-        encrypt(reportText),
+        encrypt(serialiseReport(stored)),
         encrypt(parsed.periodNote),
         version.replace(/\s+[—–-]\s+/, "@"),
       ]

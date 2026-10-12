@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { mirrorReviews, reportEvaluations } from "@/lib/db/schema";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { parseStoredReport, reportToText } from "@/lib/mirror/read";
 import { EVAL_SNAPSHOTS_ENABLED, getBooleanSetting } from "@/lib/settings";
 
 /**
@@ -113,7 +114,16 @@ export async function POST(
   let reportSnapshot: string | null = null;
   if (captureSnapshots) {
     try {
-      reportSnapshot = encrypt(decrypt(report.encryptedReport));
+      /*
+       * Flattened to the prose that was on screen, not the stored JSON.
+       *
+       * A report is stored as an object now — overall account, areas, figures. A
+       * raw blob copy would snapshot that, and whoever reviews the assessment
+       * later would be reading JSON rather than the report the person judged.
+       */
+      reportSnapshot = encrypt(
+        reportToText(parseStoredReport(decrypt(report.encryptedReport)))
+      );
     } catch (err) {
       // An unreadable snapshot must not lose the assessment — the rubric is the
       // part worth keeping and it stands on its own.

@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { mirrorReviews } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
+import { canonicalDomain, domainOrder } from "@/lib/mirror/domains";
+import { serialiseReport, type StructuredReport } from "@/lib/mirror/read";
 
 /**
  * Editing a Mirror report.
@@ -17,13 +19,25 @@ import { encrypt } from "@/lib/crypto";
  * an edit can be compared against what prompted it, and reverted.
  *
  * ── Reverting ─────────────────────────────────────────────────────────────────
- * Sending empty content clears the edit rather than storing an empty report.
+ * Sending `report: null` clears the edit rather than storing an empty report.
  * "Put it back how it was" is a thing people want, and an empty report would
  * otherwise be indistinguishable from a blank one Refine had written.
+ *
+ * ── It takes the whole report, not one part ───────────────────────────────────
+ * The report is an overall account plus a section per area of life, and the panel
+ * edits one part at a time — but it sends all of it. The alternative is a route
+ * that patches a part, which means the server deciding how to merge into an
+ * encrypted blob it would have to decrypt first. Sending the whole object keeps
+ * the merge in the one place that already holds the report.
+ *
+ * Validated into shape rather than trusted: this is a request body, and whatever
+ * lands here becomes the account the next run builds on.
  */
 
 /** A report someone has rewritten by hand is not a place to paste a novel. */
-const MAX_REPORT_CHARS = 20_000;
+const MAX_PART_CHARS = 20_000;
+/** Seven areas plus some slack. A report cannot grow sections it has no names for. */
+const MAX_SECTIONS = 16;
 
 export async function PATCH(
   req: Request,
@@ -40,12 +54,68 @@ export async function PATCH(
     return new Response("Bad request", { status: 400 });
   }
 
-  const { content } = body as { content?: unknown };
-  if (typeof content !== "string") {
-    return new Response("content required", { status: 400 });
+  const { report } = body as { report?: unknown };
+
+  // Explicit null is the revert. `undefined` is a malformed request, and the two
+  // must not be conflated — one clears someone's rewrite.
+  if (report !== null && (typeof report !== "object" || report === undefined)) {
+    return new Response("report required", { status: 400 });
   }
-  if (content.length > MAX_REPORT_CHARS) {
-    return new Response("Too long", { status: 413 });
+
+  let stored: StructuredReport | null = null;
+  if (report !== null) {
+    const { overall, sections, figures } = report as Record<string, unknown>;
+
+    if (typeof overall !== "string" || !overall.trim()) {
+      return new Response("The report cannot be empty", { status: 400 });
+    }
+    if (overall.length > MAX_PART_CHARS) {
+      return new Response("Too long", { status: 413 });
+    }
+    if (!Array.isArray(sections) || sections.length > MAX_SECTIONS) {
+      return new Response("Bad sections", { status: 400 });
+    }
+
+    const clean: { domain: string; text: string }[] = [];
+    const seen = new Set<string>();
+    for (const s of sections) {
+      if (typeof s !== "object" || s === null) {
+        return new Response("Bad sections", { status: 400 });
+      }
+      const { domain, text } = s as { domain?: unknown; text?: unknown };
+      /*
+       * The area must be one of ours. An unknown key would store a section the
+       * panel cannot label and nothing can join to a score — and the list is
+       * closed precisely so that is impossible.
+       */
+      const key = canonicalDomain(domain);
+      if (!key || seen.has(key)) {
+        return new Response("Bad sections", { status: 400 });
+      }
+      if (typeof text !== "string" || text.length > MAX_PART_CHARS) {
+        return new Response("Bad sections", { status: 400 });
+      }
+      // An emptied section is dropped rather than stored blank: deleting the text
+      // is how someone removes an area they disagree with.
+      if (!text.trim()) continue;
+      seen.add(key);
+      clean.push({ domain: key, text: text.trim() });
+    }
+    clean.sort((a, b) => domainOrder(a.domain) - domainOrder(b.domain));
+
+    /*
+     * The figures are Trends' own strings and are not the person's to rewrite —
+     * the whole point of carrying them verbatim is that the report and the chart
+     * cannot disagree about a number. Accepted from the body only as strings, and
+     * the panel offers no editor for them.
+     */
+    stored = {
+      overall: overall.trim(),
+      sections: clean,
+      figures: Array.isArray(figures)
+        ? figures.filter((f): f is string => typeof f === "string")
+        : [],
+    };
   }
 
   // Ownership re-checked: `id` comes from the URL and is untrusted.
@@ -57,19 +127,23 @@ export async function PATCH(
 
   if (!row) return new Response("Not found", { status: 404 });
 
-  const trimmed = content.trim();
-
   await db
     .update(mirrorReviews)
     .set(
-      trimmed
-        ? { encryptedUserReport: encrypt(trimmed), userEditedAt: new Date() }
+      stored
+        ? {
+            encryptedUserReport: encrypt(serialiseReport(stored)),
+            userEditedAt: new Date(),
+          }
         : // Revert: back to what Refine wrote, with no trace of an edit.
           { encryptedUserReport: null, userEditedAt: null }
     )
     .where(eq(mirrorReviews.id, id));
 
-  return Response.json({ savedAt: new Date().toISOString(), edited: Boolean(trimmed) });
+  return Response.json({
+    savedAt: new Date().toISOString(),
+    edited: Boolean(stored),
+  });
 }
 
 /**

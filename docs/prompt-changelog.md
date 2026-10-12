@@ -19,6 +19,69 @@ Entries below are written when a change actually lands, so these are pointers on
 
 ---
 
+## `memory-extraction.md` v3 — 2026-10-09
+
+**The report breaks out by area of life.** The product owner found it read as an
+undifferentiated wall of prose.
+
+An **overall account comes first** — their words: *"catch-all first to represent
+what the user is actually discussing/talking about in a summary or comprehensive
+format, then PWI seven domains."* The lead is load-bearing rather than a preamble.
+The seven areas are the Personal Wellbeing Index's core domains and they do not
+cover a journal: of the nine categories the summariser already attaches to
+entries, **faith** has no area at all, **rest** only folds awkwardly into health,
+and **work**, **purpose** and **personal growth** all collapse onto "achieving in
+life". Grief, identity and creative work have no home either. Without a lead
+section, a report organised by these would silently drop all of it.
+
+Then one section per area the writing supports — **only those**. An area nobody
+has written about gets no section: an empty heading is padding and implies they
+have neglected something.
+
+**The sections are data, not headings in prose.** There is no markdown renderer
+anywhere in this project, so `## Health` in a string would display as those
+characters; and a heading inside a free-text box is one keystroke from being
+destroyed. Output moved from `{ report, periodNote }` to
+`{ overall, sections[], periodNote }`.
+
+Outside the prompt, in the same change:
+
+- The area list lives in `src/lib/mirror/domains.ts` and is interpolated at call
+  time, so the markdown cannot drift from the code that validates against it. Its
+  fingerprint is folded into the stored report version — the same arrangement the
+  summariser uses for its categories, and for the same reason: otherwise editing
+  the list would change what the model is told while leaving the version
+  identical.
+- An unknown area is **discarded, not fatal** — like an invented summariser
+  category. Throwing would cost a whole report, including a good overall account,
+  over one mislabelled section. Section order is ours, so a person's reports do
+  not reorder their own life between runs.
+- **The report is edited one part at a time.** It was one textarea over the whole
+  thing, and whatever was typed became authoritative *and* fed the next run as the
+  account to build on. One box over structured data is one keystroke from
+  destroying a section with nothing noticing.
+- **The check-in figures became their own field** rather than text appended after
+  a blank line. A sleep median is not a statement about "health", so filing it
+  under an area would be a judgement nobody made. Still verbatim from Trends, and
+  still not editable.
+- **No migration.** A report that is not JSON reads as one unsectioned account,
+  so all 11 existing reports open unchanged. Verified against the database.
+- `max_tokens` 3000 → 4000: the same prose now arrives split across an overall
+  account and up to seven sections, each with its own JSON scaffolding.
+
+**Two bugs found while building it, both of which typechecked cleanly:**
+
+- `priorReports()` interpolated the report into a string — valid TypeScript that
+  produces `"[object Object]"`. Every past report would have reached the prompt as
+  that literal string, the model would have had no history to avoid repeating, and
+  nothing would have errored.
+- `PROMPT_UNWRITTEN` compared `PROMPT_VERSION === "UNWRITTEN"`, and that constant
+  now carries the area fingerprint appended — so the guard would never have
+  matched again. It is the only thing standing between a placeholder prompt and a
+  report about a real person. It now checks the prompt's own version.
+
+---
+
 ## `memory-extraction.md` v2 — 2026-10-01
 
 **The window and the entry count are now given to the model.** v1 asked it to say

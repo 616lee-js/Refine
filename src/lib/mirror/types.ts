@@ -6,8 +6,19 @@
  * report; the history is every window's note, read back in order.
  */
 export type RawReport = {
-  /** The running whole-picture report. Rewritten every run. */
-  report: string;
+  /**
+   * The running whole-picture account, in prose. Rewritten every run.
+   *
+   * Leads the report and carries everything the areas below cannot hold — the
+   * seven come from the Personal Wellbeing Index and do not cover a journal. See
+   * ./domains.ts.
+   */
+  overall: string;
+  /**
+   * One per area of life the writing supports, in our order rather than the
+   * model's. Empty is correct for a window with nothing area-specific in it.
+   */
+  sections: { domain: string; text: string }[];
   /** What changed in this window alone. Short. */
   periodNote: string;
 };

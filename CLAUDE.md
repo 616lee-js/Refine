@@ -369,19 +369,34 @@ door — swap implementations without touching the hook.
 ## Phase 5 additions
 
 ### New pages (Phase 5)
-- Memory UI: `src/app/(protected)/memory/page.tsx` — active/proposed memory, per-entry confirm/edit/delete, add new, bulk delete
+- Memory UI: `src/app/(protected)/mirror/memory-panel.tsx` — per-entry edit/delete,
+  add new, bulk delete. Moved from `memory/page.tsx` into Mirror as a tab.
+  **The confirm/proposed half is dead code:** nothing can create a proposed item,
+  so Keep and the "waiting on you" callout never render. See
+  `PROPOSAL — Memory as measurements` in `docs/build-notes.md`.
 - Profile settings: `src/app/(protected)/settings/profile/page.tsx` — three optional profile fields (tendencies, goals, background)
 - Onboarding: `src/app/(protected)/onboarding/page.tsx` — post-signup profile capture, redirects to `/`
 
 ### New schema
 - `user_profiles` table: PHI-isolated encrypted profile blob, one row per user
-- `reflections.extractionStatus`: null → pending → running → succeeded/failed (tracks memory extraction lifecycle)
+- ~~`reflections.extractionStatus`: null → pending → running → succeeded/failed~~
+  **Gone.** Dropped 2026-09-24, NULL on every row, and the table is `journal_entries`
+  rather than `reflections`. Work is derived by joining against what it produced,
+  never tracked by a status column — see `src/lib/summaries/queue.ts`.
 
 ### Memory state model
 Reuses `user_memory.lastConfirmedAt` as proposed/active discriminator:
 - `lastConfirmedAt IS NULL + isActive = true` → proposed (claude-generated, awaiting confirmation)
 - `lastConfirmedAt IS NOT NULL` → active (confirmed or user-added)
-- Layer 4 orchestrator query: `isActive = true AND lastConfirmedAt IS NOT NULL`
+- Readers query: `isActive = true AND lastConfirmedAt IS NOT NULL`
+
+**The proposed state is unreachable.** Noted 2026-10-12. The only insert
+(`POST /api/user/memory`) hard-codes `lastConfirmedAt: now` and
+`source: "user_added"`, so every row is born confirmed and nothing can create a
+proposal. `claude_inferred` and `entry_derived` exist in the enum and are never
+written; `isActive` is documented as a soft delete and nothing ever writes
+`false`. Two readers use the query above: Mirror's report run and the journal
+footholds. **Nothing writes `user_memory` but the person.**
 
 ### Phase 5 also included
 - Full terminology rename: "session" → "reflection" throughout — DB schema, routes, code, docs

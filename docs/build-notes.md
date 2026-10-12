@@ -74,10 +74,17 @@ guarantees the held-open promise always settles so a function can never hang for
   which an LLM completion plus a post-response write can exceed.
 
 For work heavier than a couple of inserts — which Phase 6 summarization will be — prefer a
-cron-driven worker that picks up `extraction_status = 'pending'` rows over extending a
-user-facing request. The `extraction_status` column already exists on `reflections` for
-exactly this lifecycle (null → pending → running → succeeded/failed), and a daily cron is
-already configured for the keep-alive.
+cron-driven worker over extending a user-facing request. A daily cron is already configured.
+
+~~The `extraction_status` column already exists on `reflections` for exactly this lifecycle
+(null → pending → running → succeeded/failed).~~ **Corrected 2026-10-12.** That column was
+dropped on 2026-09-24, NULL on every row, and is not coming back — there is no `reflections`
+table either. **Do not add a status column.** The summariser queue settled the same question
+better: derive the work by joining entries against what they produced, so a run that dies
+halfway leaves work due rather than rows stuck in "running" that something has to clean up.
+`src/lib/summaries/queue.ts` is the pattern to copy, and Mirror's `usersDue()` is the
+cross-entry version of it. See the note where the column used to be, in
+`src/lib/db/schema.ts`.
 
 ---
 
@@ -388,3 +395,172 @@ nothing that says "you haven't written in a while". The permitted version is a
 rhythm the person chose and a neutral marker. Getting that wrong turns a journal
 into something that nags, which is the specific failure the no-engagement-mechanics
 rule exists to prevent.
+
+---
+
+## PROPOSAL — Memory as measurements (not built, awaiting approval)
+
+Proposed 2026-10-12, at the product owner's request. **Nothing here is built.**
+Their words: *"Memory is an opportunity to capture patterns in topics, word
+choice, entry length, and other data to correlate with insights or user
+behaviors/well being… This will need more thought and planning what data could be
+useful to track, but I would go wide first."*
+
+This document is the wide version, for them to cut down.
+
+### What it replaces, and what it does not revive
+
+Memory generates nothing today. Everything in `user_memory` was typed by the
+person. That is not an oversight — it was built and removed:
+
+- `0009_legal_purifiers.sql` added `mirror_reviews.encrypted_findings` and
+  `user_memory.mirror_review_id`.
+- `0010_mean_firedrake.sql` removed both, the same day.
+
+The note left behind: *"If anything ever proposes memory again, that is a
+decision, not a column to restore."* The direction dropped was findings proposed
+one at a time for approval, because **Mirror became a report to read rather than
+lines to sort**.
+
+**This proposal does not revive that.** It is a different thing in the same
+place: Memory holding derived *measurements* about someone's writing, rather than
+statements about their life. Worth being explicit, because the schema, the UI and
+three documents still describe the dropped version as the plan.
+
+### The shift, stated plainly
+
+Today a Memory item is a sentence someone wrote about themselves, of a `kind`
+(`fact`, `thread`, `preference`, `diagnostic_context`, `other`), stored encrypted.
+
+What is proposed is a count, a length, a frequency, a distribution. Those are not
+sentences, and that is the whole difficulty: every part of the current Memory —
+the table shape, the Keep/Remove controls, the "waiting on you" callout, the
+per-kind columns — was built for statements awaiting approval. None of it fits a
+number.
+
+### The catalogue — what could be tracked
+
+Grouped by what it costs, because that decides what can ship first and what needs
+a model call.
+
+**Group 1 — no decryption at all.** Plain columns. Free, and available for every
+account today.
+
+| Signal | From |
+|---|---|
+| Entries per week, per month | `journal_entries.completed_at` |
+| Gaps between entries, longest gap | same |
+| Time of day someone writes | same |
+| Day of week | same |
+| How long an entry was open before being finished | `created_at` to `completed_at` |
+| Whether an entry was returned to and edited | `updated_at` vs `completed_at` |
+| Typed versus partly spoken | `modality` (`text` / `mixed`) |
+| Check-in completion rate | `questionnaire_responses.completed_at` |
+| Which frameworks get answered, and how often | `questionnaire_slug` |
+| Distribution of safety tiers over time | `safety_log.tier`, `created_at` |
+| How often someone re-reads their own record | `content_access_log` |
+
+**Group 2 — needs decryption, no model call.** Everything here is already
+decrypted by an existing pass, so this adds reading, not spend.
+
+| Signal | From |
+|---|---|
+| Entry length, and how it changes | entry body |
+| Which of the nine categories recur, and in what proportion | summary `topics` |
+| Which people recur, and how often | summary `people` |
+| How many entries are flagged `thin` | summary `thin` |
+| Framework scores over time, and movement | `encrypted_scoring.total` |
+| Sleep, mood, energy series | check-in answers |
+| Which habits hold and which drift | check-in `kept_up` |
+| Whether a summary was corrected by hand, and how often | `encrypted_user_content` |
+
+**Group 3 — needs the model.** Reading, not counting. Belongs in the existing
+Mirror run, which already reads everything — a separate call would be a second
+pass over the same material.
+
+| Signal | Note |
+|---|---|
+| Word choice and register | The owner's example. Needs defining: vocabulary range? hedging? absolutes? |
+| Whether something is described or evaluated | "I was late" versus "I'm hopeless" |
+| Whether an entry resolves or trails off | |
+| Who appears as subject versus object | "I did" versus "it happened to me" |
+| Which categories co-occur | Derivable from Group 2 counts, but reading is better at it |
+
+**Deliberately not on this list:** anything that scores a person. No "resilience",
+no "insight", no composite wellbeing index. The same line Trends refuses to cross
+with severity bands, and the reason the summariser is forbidden from writing
+"barely keeping it together" — see the top of this file.
+
+### The storage question, which is a one-way door
+
+Three options, none free:
+
+1. **Reuse `user_memory`.** Numbers stored as encrypted sentences. Cheapest to
+   build, worst to query, and the `kind` enum would need a value that is not a
+   kind of statement. The Keep/Remove UI would sit over rows that cannot be
+   meaningfully approved.
+2. **A new table.** Right shape — a key, a value, a window, a computed-at. But
+   Mirror's Memory tab would then show two unrelated things, and the person has to
+   understand why.
+3. **Not in Memory at all.** These are trends about writing, and Mirror already
+   has a Trends tab that does exactly this for check-ins. The honest reading of
+   the owner's ask may be that Trends grows a second family of cards and Memory
+   stays what it is.
+
+**Option 3 is worth real consideration before 1 or 2.** The word "Memory" is doing
+a lot of work in the original request, and the thing described — patterns,
+correlated against wellbeing — is what Trends is.
+
+### What happens to the Memory that exists
+
+Needs an answer either way:
+
+- Do hand-written facts and threads stay? They are the only thing in Memory now.
+- If measurements live alongside them, what does Keep/Remove mean on a number?
+- The Keep button, the "waiting on you" badges and the aside callout are all
+  **dead code today** — gated on a proposed state nothing can create. They light
+  up only if something proposes items. Measurements would not.
+
+### The limit on what any of this may claim
+
+Trends already sets the rule and it is not negotiable here: state co-occurrence
+with the denominator visible, never causation, never a direction called good or
+bad, and never let a model write the prose about someone's scores.
+
+*"Of the 11 highest readings with sleep logged around them, 7 fell in a week whose
+median sleep was below your overall median"* is the shape that is allowed. *"Your
+anxiety is worse when you sleep badly"* is not, and the gap between those two
+sentences is the entire risk of this feature.
+
+A correlation between writing behaviour and a wellbeing score is more tempting
+and more fragile than either signal alone, because the sample is one person and
+the person reads the result.
+
+### Two copy problems to fix whenever Memory is next touched
+
+Both are promises the app cannot keep:
+
+- The Threads empty state reads *"Refine will start proposing them once there is
+  enough writing to find them in."* Nothing will.
+- The Memory panel links to Trash saying deleted items are *"kept for 30 days"*.
+  Memory deletion is immediate and never reaches Trash.
+
+### Declining — decided 2026-10-12
+
+The owner chose: **declining deletes outright.** Consequences, recorded rather
+than discovered later:
+
+- The same item can be proposed again on a later run.
+- The design package's rule that *"dropped items are never re-proposed"* cannot be
+  enforced; there is nothing left to compare against.
+- `is_active` stays unused. It is documented as a soft-delete flag and nothing has
+  ever written `false` to it.
+
+### What is needed before any of this is built
+
+1. Which groups, and which signals within them.
+2. Where it is stored — and whether it belongs in Memory at all, or in Trends.
+3. Whether anything is *proposed* for approval, or simply computed and shown. If
+   nothing is proposed, the dead approval UI should be removed rather than left.
+4. A prompt, if Group 3 is wanted. That is Layer 2 content and working rule 7
+   applies: worked through with the owner, not drafted alone.

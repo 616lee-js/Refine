@@ -139,7 +139,7 @@ Originally scoped narrowly to user memory and editing. Testing feedback after Ph
 
 ### What Phase 5 actually covered
 
-**User memory and editing.** Memory entries proposed by background processing, stored with proposed status until user reviews and confirms. Only confirmed (active) memory flows into Layer 4 by the orchestrator. Full edit UI: view, edit, delete per entry, bulk actions, filter by kind.
+**User memory and editing.** ~~Memory entries proposed by background processing, stored with proposed status until user reviews and confirms.~~ **Corrected 2026-10-12: the proposing half was never built, and was then deliberately dropped.** Nothing writes `user_memory` except the person — the only insert hard-codes `source: "user_added"` and a set `last_confirmed_at`, so the proposed state cannot be created at all. Background proposing was removed on 2026-09-24 when Mirror became a report to read rather than lines to approve; see `PROPOSAL — Memory as measurements` in `build-notes.md`. What did ship: only confirmed memory reaches a prompt, plus the full edit UI — view, edit, delete per entry, bulk actions, filter by kind.
 
 **User profile and onboarding.** Persistent profile separate from session-derived memory. Profile captures stated tendencies, goals, background, interaction preferences. Editable in user settings. Stored in a dedicated `user_profiles` table (overriding Claude Code's recommendation of a JSONB column on `users` — the separate table better honors PHI-grade sensitivity and access pattern separation).
 

@@ -583,10 +583,26 @@ export async function reviewUser(
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });
   const response = await client.messages.create({
     model: MODEL,
-    // Raised from 3000 with v3: the same prose now arrives split across an
-    // overall account and up to seven sections, each carrying its own JSON
-    // scaffolding. A reply cut mid-JSON does not parse and the run is retried.
-    max_tokens: 4000,
+    /*
+     * ── This is the budget for thinking AND the report, not the report ────────
+     * 3000 → 4000 with v3 → 16000 on 2026-10-12, after the owner ran a report by
+     * hand and got "Report reply was not JSON".
+     *
+     * The cause was not the prompt and not the JSON. This model reasons before
+     * it answers, and that reasoning is charged against this number. On the
+     * owner's own account — 15 summaries, 7 Mirror items, 4 previous reports,
+     * 28,600 characters of input — it used the whole 4000 on reasoning and
+     * produced **zero characters** of report. The run looked like a parse
+     * failure because an empty reply is not valid JSON.
+     *
+     * A richer account reasons for longer, which is why the other account in the
+     * same batch succeeded. The ceiling has to clear the reasoning with the
+     * report's own 400–700 words left over.
+     *
+     * Raising it costs nothing unless it is used: output is billed per token
+     * produced, not per token allowed.
+     */
+    max_tokens: 16000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -634,6 +650,21 @@ export async function reviewUser(
       },
     ],
   });
+
+  /*
+   * Say which failure this is, before the parser gets a chance to mislabel it.
+   *
+   * A reply that ran out of budget is cut off mid-sentence or missing entirely,
+   * and the parser can only report that what it got was not JSON — which sends
+   * the next person looking at the prompt and the schema, neither of which is
+   * the problem. This is the one failure where the fix is a number.
+   */
+  if (response.stop_reason === "max_tokens") {
+    throw new ReviewError(
+      `Report ran out of room: the model used all ${response.usage.output_tokens} ` +
+        `tokens it was allowed and the report was cut off. Raise max_tokens.`
+    );
+  }
 
   // Not content[0] — Sonnet puts a thinking block there. See lib/model-reply.ts.
   const parsed = parseReport(replyText(response));

@@ -311,21 +311,96 @@ async function main() {
     console.log(`input size     ${message.length} characters`);
     console.log("─".repeat(70));
 
+    /*
+     * What each part of the message costs, and whether it grows.
+     *
+     * The question this answers: does a report get more expensive the longer
+     * someone keeps a journal? Only one part of the message can, and this says
+     * by how much. --measure stops here, so asking costs nothing.
+     */
+    const pct = (n: number) => `${Math.round((n / message.length) * 100)}%`;
+    const blocks: [string, number, string][] = [
+      ["profile", (profile || "(nothing)").length, "fixed — 3 fields"],
+      [
+        "Mirror items",
+        memory.join("\n").length,
+        `grows with Mirror — ${memory.length} now, no cap`,
+      ],
+      [
+        "summaries",
+        summaries.join("\n\n").length,
+        `ONE PER ENTRY, all history — ${summaries.length} now, capped at 200`,
+      ],
+      [
+        "entries in full",
+        recent.map((r) => `### ${r.date}\n${r.body}`).join("\n\n").length,
+        "this window only — bounded by the interval",
+      ],
+      [
+        "check-in figures",
+        checkins.join("\n").length,
+        "grows with instruments, not with responses",
+      ],
+      [
+        "previous reports",
+        prior.join("\n\n").length,
+        `fixed — newest ${prior.length} of them`,
+      ],
+    ];
+    for (const [name, size, note] of blocks) {
+      console.log(
+        `  ${name.padEnd(17)}${String(size).padStart(7)} chars  ${pct(size).padStart(4)}  ${note}`
+      );
+    }
+    console.log("─".repeat(70));
+
+    if (args.includes("--measure")) {
+      console.log("\n--measure: no call made, nothing spent.");
+      return;
+    }
+
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error("ANTHROPIC_API_KEY is not set in .env.local");
 
     const client = new Anthropic({ apiKey: key });
     const response = await client.messages.create({
       model: MODEL,
-      // Matches review.ts. The same prose now arrives split across an overall
-      // account and up to seven sections, each with its own JSON scaffolding.
-      max_tokens: 4000,
+      // Matches review.ts, and must: this number is the budget for the model's
+      // reasoning AND the report, and 4000 was consumed entirely by reasoning on
+      // a full account. See the note there.
+      max_tokens: 16000,
       // The area list is interpolated, exactly as the real run does it.
       system: prompt.replace("{{DOMAINS}}", domainPromptBlock()),
       messages: [{ role: "user", content: message }],
     });
 
     const raw = response.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");
+
+    /*
+     * What came back, before anything tries to read it.
+     *
+     * The parser throws "Report reply was not JSON" and says nothing about why,
+     * which is useless for the two causes that actually happen: a reply cut off
+     * at the token limit, and a reply with prose in front of the JSON. Both are
+     * visible here and nowhere else — the scheduled run records the message and
+     * discards the reply.
+     */
+    console.log(`stop reason    ${response.stop_reason}`);
+    console.log(
+      `reply          ${response.usage.output_tokens} output tokens, ${raw.length} characters`
+    );
+    console.log("─".repeat(70));
+    if (response.stop_reason === "max_tokens") {
+      console.log(
+        "\nCUT OFF AT THE TOKEN LIMIT. The reply is incomplete, so it cannot parse.\n"
+      );
+    }
+    if (process.env.MIRROR_SHOW_RAW === "1" || response.stop_reason === "max_tokens") {
+      console.log("=== RAW REPLY ===\n");
+      console.log(raw);
+      console.log("\n=== END RAW ===\n");
+    }
+
     /*
      * Through the real parser, not a local cast.
      *
@@ -334,7 +409,17 @@ async function main() {
      * section the real run discards — a preview that lies about what it previews
      * is worse than no preview.
      */
-    const parsed = parseReport(raw);
+    let parsed;
+    try {
+      parsed = parseReport(raw);
+    } catch (err) {
+      // The reply is the only evidence of what went wrong, and it is gone the
+      // moment this process exits.
+      console.log("=== REPLY DID NOT PARSE — RAW BELOW ===\n");
+      console.log(raw);
+      console.log("\n=== END RAW ===\n");
+      throw err;
+    }
 
     const stored: StructuredReport = {
       overall: parsed.overall,

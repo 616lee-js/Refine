@@ -491,9 +491,38 @@ no "insight", no composite wellbeing index. The same line Trends refuses to cros
 with severity bands, and the reason the summariser is forbidden from writing
 "barely keeping it together" — see the top of this file.
 
-### The storage question, which is a one-way door
+### The storage question — a two-way door, corrected 2026-10-12
 
-Three options, none free:
+**This section first called storage a one-way door. That was wrong, and the owner
+corrected it.** Their argument, which holds: if Memory as discussed turns out to be
+redundant, the table can be wiped with no consequence and Memory repurposed or
+hidden.
+
+Why it holds. The one-way-door label belongs to data that cannot be regenerated —
+an encryption key, a summary of an entry that has since been destroyed, an
+instrument key with responses behind it. **Measurements are derived.** Counts,
+lengths, frequencies and distributions can be recomputed from entries, summaries
+and check-ins whenever they are wanted. Wiping them loses nothing permanent. The
+hand-typed items that exist are restorable from backup and re-typeable. Changing
+shape costs a migration, which is routine in this project.
+
+**The one part that is genuinely hard to undo, and it is not storage.** Mirror's
+report run reads confirmed Memory and presents it to the model as *"Confirmed in
+their Mirror"* — things the person stands behind. If measurements land in the same
+rows, the model begins reading someone's numbers as their own statements about
+themselves, and every report built on that is wrong in a way nothing surfaces.
+That is a correctness problem, avoidable by keeping the source distinguishable
+(`source` already has unused values for exactly this), and it is worth deciding
+deliberately rather than discovering in a report.
+
+The remaining cost of getting the shape wrong is a migration, plus one caveat: any
+*action the person took* on those rows — an edit, a deletion — is not
+regenerable, unlike the measurements themselves. If measurements are never
+editable, there is nothing there to lose.
+
+### Where it goes
+
+Three options:
 
 1. **Reuse `user_memory`.** Numbers stored as encrypted sentences. Cheapest to
    build, worst to query, and the `kind` enum would need a value that is not a
@@ -521,20 +550,58 @@ Needs an answer either way:
   **dead code today** — gated on a proposed state nothing can create. They light
   up only if something proposes items. Measurements would not.
 
-### The limit on what any of this may claim
+### What a finding is allowed to say — build both registers, owner decides
 
-Trends already sets the rule and it is not negotiable here: state co-occurrence
-with the denominator visible, never causation, never a direction called good or
-bad, and never let a model write the prose about someone's scores.
+**The owner's decision, 2026-10-12:** during this testing stage, produce **both**
+the bare count and the interpreted reading, and they will judge which is
+appropriate. Their reasoning on each:
 
-*"Of the 11 highest readings with sleep logged around them, 7 fell in a week whose
-median sleep was below your overall median"* is the shape that is allowed. *"Your
-anxiety is worse when you sleep badly"* is not, and the gap between those two
-sentences is the entire risk of this feature.
+- The bare count *"of the 11 highest readings with sleep logged around them, 7
+  fell in a week whose median sleep was below your overall median"* — **not useful
+  on its own.** Their words: *"it's just numbers - there needs to be a translation
+  to a user what those numbers actually mean."* Correct, and it is why the
+  "Plainly" paragraph exists and why it has never satisfied anyone.
+- The causal claim *"your anxiety is worse when you sleep badly"* — **too strong.**
+- What they want sits between: *"higher scores on GAD-7 questionnaires correlate
+  with worse sleep patterns over time"*, or *"the topics/tone conveyed in entries
+  also focuses more on the open questions/problems with less hours of sleep"*.
 
-A correlation between writing behaviour and a wellbeing score is more tempting
-and more fragile than either signal alone, because the sample is one person and
-the person reads the result.
+So three registers, not two, and the middle one is the target:
+
+| Register | Example |
+|---|---|
+| **Counted** | "7 of your 11 highest GAD-7 readings fell in weeks whose median sleep was under 6.2 hours." |
+| **Read** (target) | "Your higher anxiety scores have tended to fall in weeks with less sleep — 7 of 11, against a median of 6.2 hours." |
+| **Causal** (not allowed) | "Your anxiety is worse when you sleep badly." |
+
+The middle register keeps the count *in* the sentence rather than instead of it.
+That is the move: it translates without detaching from the evidence, so the reader
+can disagree with the reading and still see the numbers it came from.
+
+**Three things the middle register costs, which the test should be designed to
+expose rather than hide:**
+
+1. **It probably cannot be a template.** `plainly()` is a deterministic template
+   precisely so no model writes prose about someone's mental-health scores. The
+   register above is more expressive than a template produces comfortably, which
+   pushes toward model-written — and that is the line Trends drew. If the test
+   concludes the middle register is right, **that decision needs making openly**,
+   not arrived at by implementation.
+2. **"Worse sleep" is a judgement.** The existing rule is that nothing calls a
+   direction good or bad. "Less sleep" is a fact; "worse sleep" is a reading of it.
+   Defensible for sleep specifically, and the owner owns copy — but it is the thin
+   end of a wedge that ends at "worse week".
+3. **There is not enough data yet for any of it.** 2 GAD-7 readings and 9
+   check-ins as of 2026-10-12. A correlation across 2 points is not a correlation,
+   in any register. Whatever ships needs a minimum-sample floor or the test will
+   produce confident sentences about noise and teach the wrong lesson. Trends
+   already has the precedent: 5 readings for a line, 21 check-ins before the
+   "Plainly" paragraph says anything at all.
+
+A correlation between writing behaviour and a wellbeing score is more tempting and
+more fragile than either signal alone, because the sample is one person and that
+person reads the result. That is the argument for the floor, not against the
+feature.
 
 ### Two copy problems to fix whenever Memory is next touched
 
@@ -559,8 +626,13 @@ than discovered later:
 ### What is needed before any of this is built
 
 1. Which groups, and which signals within them.
-2. Where it is stored — and whether it belongs in Memory at all, or in Trends.
-3. Whether anything is *proposed* for approval, or simply computed and shown. If
+2. Where it goes — Memory, a new table, or Trends. Two-way either way, so this is
+   a design question rather than a commitment.
+3. Whether measurements are kept out of what the report reads as "confirmed",
+   which is the one hard-to-undo part. See the storage section.
+4. Whether anything is *proposed* for approval, or simply computed and shown. If
    nothing is proposed, the dead approval UI should be removed rather than left.
-4. A prompt, if Group 3 is wanted. That is Layer 2 content and working rule 7
-   applies: worked through with the owner, not drafted alone.
+5. A minimum-sample floor per finding, before any register ships.
+6. A prompt, if Group 3 or the middle register is wanted. That is Layer 2 content
+   and working rule 7 applies: worked through with the owner, not drafted alone.
+   It is also where the "may a model write prose about scores" decision lands.

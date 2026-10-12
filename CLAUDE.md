@@ -82,6 +82,34 @@ Reasoning behind decisions: `docs/refine_brainstorm_summary.md`
     Exempt: the design package under `docs/design/`, which is a received
     reference rather than product copy, and this rule's own list of banned words.
 
+    **Extended 2026-10-12, same principle: give the quantity, not a comparison
+    word.** Banned the same way: *less, more, worse, better, low, high, poor.*
+    Write "averaging under 6 hours", "7 of 11", "across 11 days".
+
+    The owner's reasoning, which is sharper than calling it a judgement: *"people
+    have varying ranges of average sleep, I myself usually sit around 6 hours
+    average. It's not that it's healthy, it's just my baseline — so less is
+    relative, but a quantity is absolute."* A comparison word has no second term
+    unless the reader already knows the baseline, and the baseline is not a health
+    claim.
+
+    **Relative framing is a feature, not a wording choice.** Once there is enough
+    history to know a person's own average, "below your 6.2-hour average" becomes
+    both available and meaningful, because the comparison is to them. Until then it
+    compares to nothing.
+
+    A reader cannot check a word. They can check a number. That is the whole of
+    both halves of this rule.
+
+    **Two exceptions, both narrow.** This rule governs statements about a person's
+    own record. It does not govern:
+    - **Scale anchors.** A 1–5 mood scale has to name its ends — "1 low · 5 good"
+      is what the scale *means*, not a comparison of anyone's data. Those words
+      come from the instrument.
+    - **Prose about the product or the practice**, including foothold guidance
+      ("detail tends to reveal more than a summary") and instructions to a model
+      about its own output ("a short summary is better than a padded one").
+
 ## Naming conventions
 
 Names throughout this codebase must reinforce the reflective journaling framing —

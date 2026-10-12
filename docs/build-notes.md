@@ -566,42 +566,78 @@ appropriate. Their reasoning on each:
   with worse sleep patterns over time"*, or *"the topics/tone conveyed in entries
   also focuses more on the open questions/problems with less hours of sleep"*.
 
-So three registers, not two, and the middle one is the target:
+So three registers, and the middle one is the target:
 
 | Register | Example |
 |---|---|
-| **Counted** | "7 of your 11 highest GAD-7 readings fell in weeks whose median sleep was under 6.2 hours." |
-| **Read** (target) | "Your higher anxiety scores have tended to fall in weeks with less sleep — 7 of 11, against a median of 6.2 hours." |
+| **Counted** | "7 of your 11 highest GAD-7 readings fell in weeks averaging under 6 hours of sleep." |
+| **Read** (target) | "Your higher anxiety scores have tended to fall in weeks averaging under 6 hours of sleep — 7 of 11." |
 | **Causal** (not allowed) | "Your anxiety is worse when you sleep badly." |
 
 The middle register keeps the count *in* the sentence rather than instead of it.
 That is the move: it translates without detaching from the evidence, so the reader
-can disagree with the reading and still see the numbers it came from.
+can disagree with the reading and still see the numbers behind it.
 
-**Three things the middle register costs, which the test should be designed to
-expose rather than hide:**
+#### Quantities, never relative words — owner's instruction 2026-10-12
 
-1. **It probably cannot be a template.** `plainly()` is a deterministic template
-   precisely so no model writes prose about someone's mental-health scores. The
-   register above is more expressive than a template produces comfortably, which
-   pushes toward model-written — and that is the line Trends drew. If the test
-   concludes the middle register is right, **that decision needs making openly**,
-   not arrived at by implementation.
-2. **"Worse sleep" is a judgement.** The existing rule is that nothing calls a
-   direction good or bad. "Less sleep" is a fact; "worse sleep" is a reading of it.
-   Defensible for sleep specifically, and the owner owns copy — but it is the thin
-   end of a wedge that ends at "worse week".
-3. **There is not enough data yet for any of it.** 2 GAD-7 readings and 9
-   check-ins as of 2026-10-12. A correlation across 2 points is not a correlation,
-   in any register. Whatever ships needs a minimum-sample floor or the test will
-   produce confident sentences about noise and teach the wrong lesson. Trends
-   already has the precedent: 5 readings for a line, 21 check-ins before the
-   "Plainly" paragraph says anything at all.
+My draft said "weeks with **less sleep**". The owner's correction, and it is a
+sharper rule than the one I had:
 
-A correlation between writing behaviour and a wellbeing score is more tempting and
-more fragile than either signal alone, because the sample is one person and that
-person reads the result. That is the argument for the floor, not against the
-feature.
+> *"Go with quantity, not even a relative — people have varying ranges of average
+> sleep, I myself usually sit around 6 hours average. It's not that it's healthy,
+> it's just my baseline — so less is relative, but a quantity is absolute."*
+
+"Less sleep" is meaningless without knowing whose baseline, and the baseline is
+not a health claim — it is just what that person's sleep is. "Under 6 hours" is
+absolute and checkable. So:
+
+- **Say the quantity.** "averaging under 6 hours", "across 11 days", "in 7 of 11".
+- **Not a comparison word.** Not "less", "more", "worse", "better", "low", "poor".
+- **Relative framing is a later feature, not a wording choice.** Once there is
+  enough history to know a person's own average, "below your 6.2-hour average"
+  becomes available *and meaningful* — because the comparison is to them rather
+  than to nothing. Until then it is a comparison with no second term.
+
+This also settles the "worse sleep" objection rather than arguing it: the word
+goes, because it is relative, not because it is a judgement. Same reasoning, and
+it generalises further than the judgement argument does.
+
+**This is rule 10 in `CLAUDE.md` extended** — that rule bans words that stand in
+for a length of time. This bans words that stand in for a comparison. Same shape,
+same reason: a reader cannot check a word, only a number.
+
+The owner's second example, rewritten to the rule: *"in weeks averaging under 6
+hours of sleep, your entries more often circled open questions than resolved
+them."*
+
+#### What this costs, which the test should expose rather than hide
+
+1. **It cannot be a deterministic template, and that is accepted.** `plainly()` is
+   a template precisely so no model writes prose about someone's mental-health
+   scores. The owner's decision, 2026-10-12: a model may write it, **but the
+   guardrails go in the system prompt** so the output is consistent rather than
+   improvised per run. That is how every other generated surface here already
+   works — the summariser's categories are a closed list the parser enforces, the
+   report's areas likewise. The same approach applies: state the rules above as
+   prompt rules, and enforce in code whatever can be enforced.
+2. **A floor applies to relationship claims, not to reporting readings.** Refined
+   from my original blanket objection, at the owner's direction: *"it's still good
+   to assess any of the framework readings with the data that was accrued in that
+   time period."* Correct, and the two are different acts:
+   - **Reporting what was recorded** is fine at any number, with the number
+     stated. "You answered GAD-7 twice in this window, scoring 14 and 12." Trends
+     already does exactly this with its gathering state.
+   - **Claiming a relationship between two signals** needs enough points to be
+     one. Across 2 readings it is not a correlation in any register, and a
+     confident sentence about noise teaches the wrong lesson about the feature.
+
+   As of 2026-10-12: 2 GAD-7 readings, 2 PHQ-9, 1 PWI, 1 SWLS, 9 check-ins. So
+   reporting works today; relationships do not yet.
+
+A relationship between writing behaviour and a wellbeing score is more tempting
+and more fragile than either signal alone, because the sample is one person and
+that person reads the result. That is the argument for the floor on relationship
+claims — not against the feature, and not against reporting readings.
 
 ### Two copy problems to fix whenever Memory is next touched
 
@@ -632,7 +668,14 @@ than discovered later:
    which is the one hard-to-undo part. See the storage section.
 4. Whether anything is *proposed* for approval, or simply computed and shown. If
    nothing is proposed, the dead approval UI should be removed rather than left.
-5. A minimum-sample floor per finding, before any register ships.
+5. A minimum-sample floor for **relationship claims** — not for reporting
+   readings, which is fine at any number with the number stated.
 6. A prompt, if Group 3 or the middle register is wanted. That is Layer 2 content
    and working rule 7 applies: worked through with the owner, not drafted alone.
-   It is also where the "may a model write prose about scores" decision lands.
+
+**Already decided, 2026-10-12:** a model may write this prose, with the guardrails
+stated in the system prompt so the output is consistent rather than improvised per
+run — the same arrangement as the summariser's closed category list and the
+report's closed area list, both enforced in code as well as instructed. The
+quantity-not-comparison rule is already in `memory-extraction.md` v3 and is
+rule 10 in `CLAUDE.md`.

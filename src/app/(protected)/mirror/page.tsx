@@ -12,8 +12,6 @@ import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import {
   buildTrends,
-  MIN_LINE_READINGS,
-  MIN_MATRIX_DAYS,
   type DecryptedResponse,
   type Trends,
 } from "@/lib/trends";
@@ -55,9 +53,9 @@ import { authoritativeReport, periodNote } from "@/lib/mirror/read";
  * there when it fills. The tab arriving is itself the signal.
  *
  * Availability is decided by COUNTS, which need no decryption. The cards then
- * apply their real thresholds to the decrypted data — a user who logged five
- * check-ins but skipped the sleep field on all of them gets the tab and a
- * gathering-state card, which is honest.
+ * decide for themselves what the decrypted data supports — someone who checked
+ * in but skipped the sleep field gets the tab with no sleep card on it, which is
+ * honest.
  */
 
 // COPY REVIEW: headings and descriptions, not just controls.
@@ -113,12 +111,15 @@ export default async function MirrorPage({
    * all of them — so someone with forty framework responses and no check-ins got
    * no Trends tab at all. The gate now sits on the band key instead of on
    * charting; see the note in lib/trends/index.ts.
+   *
+   * And every line now charts at one reading, so one answered instrument of
+   * either kind is enough. A single check-in produces sleep, mood and energy
+   * lines; a single framework produces its own. The only chart that still waits
+   * is the habit grid, which is never the only card on the tab.
    */
-  const trendsAvailable = counts.some(({ slug, n }) => {
-    const q = getQuestionnaire(slug);
-    if (!q) return false;
-    return n >= Math.min(MIN_LINE_READINGS, MIN_MATRIX_DAYS);
-  });
+  const trendsAvailable = counts.some(({ slug }) =>
+    Boolean(getQuestionnaire(slug))
+  );
 
   // Cheap: one row, no ciphertext read, just "is there a report at all".
   const [newest] = await db

@@ -11,25 +11,37 @@ import {
   type LikertQuestionnaire,
   type TrackerQuestionnaire,
 } from "@/lib/questionnaires";
+import { domainLabel } from "@/lib/mirror/domains";
 
 /**
  * Trends — turning stored responses into the cards Mirror renders.
  *
- * ── The three states ──────────────────────────────────────────────────────────
- * Every card is absent, gathering, or charted, and the difference matters:
+ * ── The states, and which charts still have a waiting one ─────────────────────
+ * A line card is absent or charted. Nothing in between:
  *
- *   absent    the instrument has never been taken. No card, no placeholder —
- *             an empty room teaches people the room is empty, and they stop
- *             opening the door.
- *   gathering 1–4 readings. One line of text, no chart. Absence here would be
- *             dishonest: someone who answered twice and sees nothing will
- *             reasonably conclude it was not recorded.
- *   charted   at threshold. A line through four points is a slope with no
- *             evidence behind it, which is why the threshold exists at all.
+ *   absent   the instrument has never been taken. No card, no placeholder — an
+ *            empty room teaches people the room is empty, and they stop opening
+ *            the door.
+ *   charted  one reading or a hundred. The line is drawn either way.
  *
- * The threshold counts readings on the WHOLE record, not readings inside the
- * selected range — see `lineCard`. A charted card whose range happens to contain
- * nothing says so, rather than pretending there is no history.
+ * It did have a middle state — 1 to 4 readings showed a line of text saying a
+ * chart needed five. Removed on 2026-10-12 at the product owner's direction:
+ * *"the frameworks should show the line even if a pattern hasn't been
+ * established. Points are quantitative data and should be conveyed, there's no
+ * insight being communicated from just data points."*
+ *
+ * That resolves what the old threshold was confusing. Plotting two readings
+ * asserts nothing; calling the gap between them a trend does. So the floors moved
+ * onto the claims and off the drawing: `movement()` still needs two readings,
+ * `plainly()` still needs 21 check-ins and the sleep median still needs five
+ * nights. What is drawn is what was recorded.
+ *
+ * The habit grid keeps its own waiting state, which is a different question — a
+ * 21-column grid with two filled columns reads as 19 days of failure rather than
+ * as two days of record.
+ *
+ * A charted card whose selected range happens to contain nothing says so, rather
+ * than pretending there is no history. See `lineCard`.
  *
  * ── No causal claims ──────────────────────────────────────────────────────────
  * Nothing here says one thing caused another. `plainly()` states co-occurrence
@@ -64,6 +76,17 @@ const COPY = {
   energyLabel: "[COPY] Energy",
   energyMeta: "[COPY] 1 empty · 5 full",
 
+  /*
+   * Deliberately not built from the instrument's title. The two cards from one
+   * instrument sit next to each other, and the PWI's placeholder title is
+   * "Life satisfaction by area" — appending anything to it gives "by area · by
+   * area". The short name identifies the instrument; what differs between the
+   * cards is what each one answers.
+   */
+  domainsLabel: (shortName: string) => `[COPY] By area · ${shortName}`,
+  domainsMeta: (asOf: string, cadence: string | null) =>
+    `[COPY] as answered ${asOf}${cadence ? ` · ${cadence}` : ""}`,
+
   matrixLabel: (field: string, days: number) => `[COPY] ${field} · last ${days} days`,
   matrixGathering: (logged: number, days: number) =>
     `[COPY] ${logged} of the last ${days} days logged`,
@@ -92,7 +115,15 @@ const COPY = {
     `[COPY] Of the ${comparable} highest readings with sleep logged around them, ${below} fell in a week whose median sleep was below your overall median of ${med} hours.`,
 } as const;
 
-/** A line needs enough points that its direction is not an artefact of two. */
+/**
+ * Enough readings that a statement ABOUT them is not an artefact of two.
+ *
+ * No longer a gate on drawing anything — see the note at the top of this file.
+ * It now guards only the two places that say something the readings do not say
+ * themselves: the sleep median on the sleep card, and the co-occurrence sentence
+ * in `plainly()`. A median of two nights is a number that looks settled and
+ * isn't.
+ */
 export const MIN_LINE_READINGS = 5;
 
 /** Matches MIN_HISTORY_FOR_COUNT on the check-in screen, for the same reason. */
@@ -113,13 +144,21 @@ export type BandKeyRow = { label: string; range: string; from: number };
 export type LineCard = {
   kind: "line";
   id: string;
-  state: "gathering" | "charted";
   label: string;
   count: number;
-  /** Charted only. */
+  /**
+   * Empty only when the selected range contains no readings. There is no
+   * minimum: one reading is one point.
+   */
   points: number[];
+  /** One per point, short — "25 Sep". The chart picks which to print. */
   labels: string[];
+  /** One per point, with the year — "25 Sep 2026". For the chart's readout. */
+  dates: string[];
   max: number;
+  /** Appended to a value, e.g. "h". Already part of `reading`; the chart's
+   * readout formats its own values and needs it separately. */
+  unit: string;
   reading: string;
   note: string | null;
   meta: string;
@@ -134,6 +173,36 @@ export type LineCard = {
   wide: boolean;
 };
 
+export type DomainBar = {
+  key: string;
+  label: string;
+  value: number;
+  /** The same area in the previous response, when it exists and differs. */
+  previous: number | null;
+};
+
+/**
+ * A reading across categories rather than over time — see domain-bars.tsx.
+ *
+ * It has no range and no `state`. The bars are a snapshot of one response, so
+ * there is nothing for the range picker to narrow: a span of time selects points
+ * on a line, and a single set of ratings is not points on a line. The card says
+ * which response it is showing instead.
+ */
+export type DomainsCard = {
+  kind: "domains";
+  id: string;
+  label: string;
+  /** Complete responses on record. */
+  count: number;
+  /** The index itself, e.g. "70 / 100". */
+  reading: string;
+  bars: DomainBar[];
+  max: number;
+  anchors: [string, string] | null;
+  meta: string;
+};
+
 export type MatrixRow = { label: string; days: ("yes" | "no" | "none")[] };
 
 export type MatrixCard = {
@@ -146,7 +215,7 @@ export type MatrixCard = {
   meta: string;
 };
 
-export type TrendCard = LineCard | MatrixCard;
+export type TrendCard = LineCard | MatrixCard | DomainsCard;
 
 export type Trends = {
   cards: TrendCard[];
@@ -173,15 +242,43 @@ function shortDate(d: Date): string {
 }
 
 /**
- * Sparse labels — first, middle, last. Labelling every point on a 21-wide chart
- * produces a row of unreadable overlapping text.
+ * With the year. Used in the chart's readout, where a bare "25 Sep" would be
+ * ambiguous across a record covering two of them.
  */
-function axisLabels(readings: Reading[]): string[] {
-  return readings.map((r, i) =>
-    i === 0 || i === readings.length - 1 || i === Math.floor(readings.length / 2)
-      ? shortDate(r.at)
-      : ""
-  );
+function fullDate(d: Date): string {
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/*
+ * ── Why both date lists are complete ──────────────────────────────────────────
+ * This module used to hand the chart a list with every label blanked except the
+ * first, middle and last, because printing one per point is a row of overlapping
+ * text. Choosing which to print is a question about how much room the chart has,
+ * which this module cannot see — and blanking them here destroyed the dates the
+ * readout needs for the points in between. The chart now receives all of them
+ * and does its own choosing.
+ *
+ * Both lists are formatted here, on the server, and travel as text. A date
+ * formatted in the browser disagrees with the server about locale and timezone,
+ * and React tears the tree down over it — see reflections/records.ts.
+ */
+
+/**
+ * The instrument's suggested rhythm, for a meta line.
+ *
+ * Lowercased for mid-sentence use — but not when it still carries a `[COPY]`
+ * marker, which `toLowerCase()` turns into a lowercase `[copy]` and makes look
+ * like a typo rather than a note to the owner. The marker is meant to be legible
+ * on screen; see the Personal Wellbeing Index, whose title and suggested rhythm
+ * are both still placeholders.
+ */
+function cadenceOf(q: LikertQuestionnaire): string | null {
+  if (!q.cadence) return null;
+  return q.cadence.startsWith("[COPY]") ? q.cadence : q.cadence.toLowerCase();
 }
 
 /** Movement in words. No arrows, no colour, no "worse". */
@@ -215,14 +312,10 @@ export type DecryptedResponse = {
  * ── Two sets of readings, and the difference is the point ─────────────────────
  * `all` is every reading on record; `shown` is the ones inside the chosen range.
  *
- * The five-reading threshold is applied to `all`, not to `shown`. It existed to
- * stop a slope being drawn through two points and called a trend — but when the
- * window was fixed at 90 days it also meant a fortnightly instrument sat at
- * "gathering" forever and a quarterly one could never escape it at all.
- *
- * Counting over the whole record separates the two questions properly: whether
- * there is enough history for a line to mean anything, and which part of it you
- * are looking at. Narrowing the view is zooming, not claiming less evidence.
+ * `all` decides whether there is a card at all and how many readings the card
+ * reports. `shown` is what gets drawn. Narrowing the view is zooming, not
+ * claiming less evidence — which is why a card whose range is empty stays on
+ * screen and says how many readings sit outside it.
  */
 function lineCard(opts: {
   id: string;
@@ -246,32 +339,21 @@ function lineCard(opts: {
     label: opts.label,
     count: all.length,
     max: opts.max,
+    unit: opts.unit ?? "",
     bandKey: opts.bandKey ?? null,
     provenance: opts.provenance ?? null,
     wide: Boolean(opts.bandKey),
   };
 
-  if (all.length < MIN_LINE_READINGS) {
-    return {
-      ...base,
-      state: "gathering",
-      points: [],
-      labels: [],
-      reading: "",
-      note: null,
-      meta: opts.meta,
-    };
-  }
-
-  // Charted, but nothing falls in the chosen range. The card stays — the history
-  // exists and saying so is the honest answer to "show me last month". The panel
-  // renders this as a line of text rather than an empty chart.
+  // Nothing falls in the chosen range. The card stays — the history exists and
+  // saying so is the honest answer to "show me last month". The panel renders
+  // this as a line of text rather than an empty chart.
   if (shown.length === 0) {
     return {
       ...base,
-      state: "charted",
       points: [],
       labels: [],
+      dates: [],
       reading: "",
       note: null,
       meta: opts.meta,
@@ -283,9 +365,9 @@ function lineCard(opts: {
 
   return {
     ...base,
-    state: "charted",
     points: shown.map((r) => r.value),
-    labels: axisLabels(shown),
+    labels: shown.map((r) => shortDate(r.at)),
+    dates: shown.map((r) => fullDate(r.at)),
     // The headline and the movement describe the range on screen, not the whole
     // record — the number under a chart has to be the number the chart shows.
     reading: `${fmt(last)}${opts.unit ?? ""}`,
@@ -555,8 +637,9 @@ export function buildTrends(
      * dissatisfaction. Plotted on a line beside complete responses it is
      * indistinguishable from a real dip.
      *
-     * This was recorded as a known problem in swls.ts and deferred until a score
-     * was actually charted. The Personal Wellbeing Index is the first averaged
+     * This was recorded as a known problem in the SWLS instrument file, since
+     * deleted, and deferred until a score was actually charted. The Personal
+     * Wellbeing Index is the first averaged
      * scale, where it is subtler and no less wrong, so it is fixed here.
      *
      * The response itself is kept — someone may finish it later. It is simply not
@@ -575,6 +658,12 @@ export function buildTrends(
 
     const card = instrumentCard(q, readingsAll, readings);
     if (card) cards.push(card);
+
+    // An averaged scale also gets its areas read separately. Two cards from one
+    // instrument, answering two different questions — see domainsCard.
+    const byArea = domainsCard(q, all, cadenceOf(q));
+    if (byArea) cards.push(byArea);
+
     // The "Plainly" paragraph describes what is on screen, so it reads the range.
     if (!plainlyInstrument && readings.length > 0) {
       plainlyInstrument = { label: q.shortName, readings };
@@ -624,18 +713,7 @@ function instrumentCard(
       })
     : null;
 
-  /*
-   * Lowercased for mid-sentence use — but not when it still carries a `[COPY]`
-   * marker, which `toLowerCase()` turns into a lowercase `[copy]` and makes look
-   * like a typo rather than a note to the owner. The marker is meant to be
-   * legible on screen; see the Personal Wellbeing Index, whose title and
-   * suggested rhythm are both still placeholders.
-   */
-  const cadence = q.cadence
-    ? q.cadence.startsWith("[COPY]")
-      ? q.cadence
-      : q.cadence.toLowerCase()
-    : null;
+  const cadence = cadenceOf(q);
 
   return lineCard({
     id: q.slug,
@@ -652,4 +730,76 @@ function instrumentCard(
     provenance: bandKey ? COPY.bandProvenance(q.shortName) : null,
     format: (v) => String(Math.round(v)),
   });
+}
+
+/**
+ * The same instrument, read across its areas instead of over time.
+ *
+ * ── Which instruments get one ─────────────────────────────────────────────────
+ * Keyed off `scoring: "mean-x10"`, not off the slug. An averaged scale is one
+ * whose items are rated on the same scale as the result, which is exactly the
+ * case where an item is worth reading on its own — on GAD-7 a single item's 0–3
+ * is a fragment of a sum and means little alone. A second averaged instrument
+ * therefore needs no new code here.
+ *
+ * ── Where the per-area values come from ───────────────────────────────────────
+ * `answers`, which the caller already decrypts for `isComplete`. `score()` also
+ * stores them as `scoring.items`, and that is the same set of numbers by
+ * construction — it copies them straight out of `answers`. Reading `answers`
+ * avoids widening the three separate loaders that currently parse only `.total`
+ * out of the stored scoring, and avoids them drifting apart.
+ *
+ * ── It ignores the range, deliberately ───────────────────────────────────────
+ * The bars are the latest complete response on the whole record. Narrowing to
+ * "last month" selects which points of a line to draw; it has nothing to say
+ * about a snapshot, and a card that emptied itself when the range moved would
+ * look like the answers had gone.
+ */
+function domainsCard(
+  q: LikertQuestionnaire,
+  responses: DecryptedResponse[],
+  cadence: string | null
+): DomainsCard | null {
+  if (q.scoring !== "mean-x10") return null;
+
+  // Partial responses are excluded for the same reason they are not plotted: an
+  // unanswered area is not a rating of zero. See the note in buildTrends.
+  const complete = responses.filter(
+    (r) => r.slug === q.slug && isComplete(q, r.answers)
+  );
+  if (complete.length === 0) return null;
+
+  const latest = complete[complete.length - 1];
+  const previous = complete[complete.length - 2] ?? null;
+  const top = Math.max(...q.options.map((o) => o.value));
+
+  /*
+   * In the instrument's own item order, which is also the order the report's
+   * sections come in — both lists were deliberately given the same keys in the
+   * same order, so a Health section and a Health bar line up without a mapping
+   * table. The label comes from the report's list for the same reason.
+   */
+  const bars: DomainBar[] = q.items.map((item) => {
+    const value = latest.answers[item.key];
+    const was = previous?.answers[item.key];
+    return {
+      key: item.key,
+      label: domainLabel(item.key) ?? item.text,
+      value: typeof value === "number" ? value : 0,
+      previous:
+        typeof was === "number" && was !== value ? was : null,
+    };
+  });
+
+  return {
+    kind: "domains",
+    id: `${q.slug}-domains`,
+    label: COPY.domainsLabel(q.shortName),
+    count: complete.length,
+    reading: `${latest.total ?? 0} / ${maxTotal(q)}`,
+    bars,
+    max: top,
+    anchors: q.scaleAnchors ?? null,
+    meta: COPY.domainsMeta(fullDate(latest.completedAt), cadence),
+  };
 }

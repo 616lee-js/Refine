@@ -66,8 +66,9 @@ simply in breach.
 
 **If Refine ever charges money, this instrument has to come out**, or permission
 has to be obtained from the International Wellbeing Group. Withdrawing it is one
-boolean (`shipped: false`), and responses already recorded stay readable — the same
-mechanism that withdrew SWLS.
+boolean (`shipped: false`), and responses already recorded stay readable — which
+is the point of that flag, and it is how the SWLS was taken out of use before
+being removed entirely on 2026-10-12.
 
 **Open question, raised 2026-10-01 and deliberately not resolved here.** Would
 charging for the app while not charging for the instrument be allowed? The two

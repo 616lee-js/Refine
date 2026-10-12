@@ -1,10 +1,11 @@
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { LineChart, BandKey } from "@/components/ui/line-chart";
 import { DotMatrix } from "@/components/ui/dot-matrix";
+import { DomainBars } from "@/components/ui/domain-bars";
 import { RangePicker } from "./range-picker";
 import {
-  MIN_LINE_READINGS,
   MIN_MATRIX_DAYS,
+  type DomainsCard,
   type LineCard,
   type MatrixCard,
   type Trends,
@@ -13,8 +14,13 @@ import {
 /**
  * Trends.
  *
- * Every card here is charted or gathering; absent cards never reach this
- * component. See src/lib/trends/index.ts for why those three states exist.
+ * A card only reaches this component if the instrument has been answered — an
+ * instrument nobody has taken produces no card at all. See
+ * src/lib/trends/index.ts.
+ *
+ * Lines draw at any number of readings, so only the habit grid still has a
+ * waiting state. A line whose selected range is empty is a third case, handled
+ * below, and is not the same thing as having no readings.
  *
  * CONTENT PASS: all copy in this file is placeholder — the gathering lines, the
  * "Plainly" heading and its footnote, and the instrument provenance strings.
@@ -83,11 +89,12 @@ function ChartCard({
 }
 
 /**
- * Started, but not enough yet.
+ * Started, but not enough yet. The habit grid only — a line chart draws at one
+ * reading and never waits.
  *
- * Deliberately not an empty state: someone who answered twice and sees nothing
- * will conclude it was not recorded. This says the readings exist and what the
- * chart is waiting for.
+ * Deliberately not an empty state: someone who checked in twice and sees nothing
+ * will conclude it was not recorded. This says the days exist and what the grid
+ * is waiting for.
  */
 function Gathering({
   label,
@@ -120,17 +127,6 @@ function Gathering({
 }
 
 function Line({ card }: { card: LineCard }) {
-  if (card.state === "gathering") {
-    return (
-      <Gathering
-        label={card.label}
-        count={card.count}
-        needed={MIN_LINE_READINGS}
-        unit="reading"
-      />
-    );
-  }
-
   /*
    * Charted, but nothing falls in the range on screen.
    *
@@ -163,7 +159,9 @@ function Line({ card }: { card: LineCard }) {
     <LineChart
       data={card.points}
       labels={card.labels}
+      dates={card.dates}
       max={card.max}
+      unit={card.unit}
       color={card.bandKey ? "var(--rf-accent)" : "var(--rf-accent-2)"}
       ariaLabel={`${card.label}: ${card.count} readings, most recent ${card.reading}`}
     />
@@ -192,6 +190,26 @@ function Line({ card }: { card: LineCard }) {
       ) : (
         chart
       )}
+    </ChartCard>
+  );
+}
+
+/**
+ * An instrument read across its areas. No chart, no range — see the note on
+ * `DomainsCard` in src/lib/trends/index.ts.
+ *
+ * Always full width: seven labelled bars in a half-width column puts the label,
+ * the bar and the number in about 170px between them.
+ */
+function Domains({ card }: { card: DomainsCard }) {
+  return (
+    <ChartCard
+      label={card.label}
+      meta={card.meta}
+      reading={card.reading}
+      wide
+    >
+      <DomainBars bars={card.bars} max={card.max} anchors={card.anchors} />
     </ChartCard>
   );
 }
@@ -233,6 +251,8 @@ export function TrendsPanel({ trends }: { trends: Trends }) {
         {trends.cards.map((card) =>
           card.kind === "line" ? (
             <Line key={card.id} card={card} />
+          ) : card.kind === "domains" ? (
+            <Domains key={card.id} card={card} />
           ) : (
             <Matrix key={card.id} card={card} />
           )

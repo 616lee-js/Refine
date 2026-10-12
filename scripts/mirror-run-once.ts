@@ -7,7 +7,7 @@ import { SUPABASE_ROOT_CA_2021 } from "../src/lib/db/supabase-ca";
 import { encrypt, decrypt } from "../src/lib/crypto";
 import { authoritativeSummary } from "../src/lib/summaries/read";
 import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
-import { parseReport } from "../src/lib/mirror/review";
+import { parseReport, trendsToLines } from "../src/lib/mirror/review";
 import { domainLabel, domainPromptBlock } from "../src/lib/mirror/domains";
 import {
   reportToText,
@@ -241,15 +241,11 @@ async function main() {
         /* left out */
       }
     }
-    let checkins: string[] = [];
-    if (responses.length > 0) {
-      const t = buildTrends(responses);
-      checkins = t.cards.map((card) => `${card.label} — ${card.meta}`);
-      if (t.plainly) checkins.push(t.plainly);
-      // Trends strings carry the [COPY] draft marker for the screen. It must not
-      // travel into the report or the prompt. Same strip as review.ts.
-      checkins = checkins.map((l) => l.replace(/\[COPY\]\s*/g, ""));
-    }
+    // The formatting, and the [COPY] strip, come from review.ts rather than
+    // being repeated here — a figure phrased differently in a test run than in a
+    // scheduled report makes the test run useless for judging the wording.
+    const checkins: string[] =
+      responses.length > 0 ? [...trendsToLines(buildTrends(responses))] : [];
 
     const { rows: priorRows } = await c.query(
       `SELECT encrypted_report, encrypted_user_report, created_at

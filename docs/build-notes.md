@@ -631,8 +631,10 @@ them."*
      one. Across 2 readings it is not a correlation in any register, and a
      confident sentence about noise teaches the wrong lesson about the feature.
 
-   As of 2026-10-12: 2 GAD-7 readings, 2 PHQ-9, 1 PWI, 1 SWLS, 9 check-ins. So
-   reporting works today; relationships do not yet.
+   As of 2026-10-12: 2 GAD-7 readings, 2 PHQ-9, 1 PWI, 9 check-ins. So reporting
+   works today; relationships do not yet. (There was also 1 SWLS reading. The
+   instrument was removed on 2026-10-12 as redundant beside the PWI, and its
+   responses deleted at the owner's instruction.)
 
 A relationship between writing behaviour and a wellbeing score is more tempting
 and more fragile than either signal alone, because the sample is one person and

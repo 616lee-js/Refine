@@ -196,7 +196,8 @@ export function maxTotal(q: LikertQuestionnaire): number {
  * half-finished response produces a low number that is indistinguishable from a
  * genuinely low one. On GAD-7 that reads as less anxiety than was reported; on an
  * averaged scale it is subtler and no better. It was recorded as a known problem
- * in swls.ts and deferred until a score was charted.
+ * in the SWLS instrument file and deferred until a score was charted; that file
+ * has since been deleted, which is why the note lives here now.
  *
  * Partial responses are still stored — someone may finish later — they are simply
  * not treated as measurements.

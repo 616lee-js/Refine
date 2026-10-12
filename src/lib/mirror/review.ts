@@ -15,7 +15,11 @@ import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
 import { replyText } from "@/lib/model-reply";
 import { authoritativeSummary } from "@/lib/summaries/read";
-import { buildTrends, type DecryptedResponse } from "@/lib/trends";
+import {
+  buildTrends,
+  type DecryptedResponse,
+  type Trends,
+} from "@/lib/trends";
 import type { Answers } from "@/lib/questionnaires";
 import {
   MIRROR_REVIEW_INTERVAL_DAYS,
@@ -225,8 +229,32 @@ async function checkinLines(userId: string): Promise<CheckinLines> {
 
   if (decrypted.length === 0) return [];
 
-  const trends = buildTrends(decrypted);
-  const lines = trends.cards.map((c) => `${c.label} — ${c.meta}`);
+  return trendsToLines(buildTrends(decrypted));
+}
+
+/**
+ * Trends cards, as the lines the report is given.
+ *
+ * Exported because `scripts/mirror-run-once.ts` builds the same block and the
+ * two must not drift: a figure phrased one way in a scheduled report and another
+ * in a test run would make the test run useless for judging the wording.
+ *
+ * A card contributes its label and its meta line, except the one card whose
+ * figures are the point. An instrument read by area has no figure in its meta
+ * line — "as answered 9 Oct, every 3 months" is all it says — so its ratings are
+ * listed instead. That is also the one place the report can join a figure to a
+ * section: the areas a report breaks out into and the areas that instrument asks
+ * about are deliberately the same seven. See ./domains.ts.
+ */
+export function trendsToLines(trends: Trends): CheckinLines {
+  const lines = trends.cards.flatMap((c) =>
+    c.kind === "domains"
+      ? [
+          `${c.label} — ${c.reading}, ${c.meta}`,
+          ...c.bars.map((b) => `  ${b.label}: ${b.value} out of ${c.max}`),
+        ]
+      : [`${c.label} — ${c.meta}`]
+  );
   if (trends.plainly) lines.push(trends.plainly);
   return lines.map(stripCopyMarker);
 }

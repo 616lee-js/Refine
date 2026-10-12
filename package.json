@@ -18,7 +18,8 @@
     "invites": "node --env-file=.env.local --import tsx scripts/invite-codes.ts",
     "backup": "node --env-file=.env.local --import tsx scripts/backup.ts",
     "mirror:once": "node --env-file=.env.local --import tsx scripts/mirror-run-once.ts",
-    "fix:mirror-windows": "node --env-file=.env.local --import tsx scripts/fix-mirror-window-start.ts"
+    "fix:mirror-windows": "node --env-file=.env.local --import tsx scripts/fix-mirror-window-start.ts",
+    "delete:instrument": "node --env-file=.env.local --import tsx scripts/delete-instrument-responses.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",

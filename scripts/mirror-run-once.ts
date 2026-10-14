@@ -7,7 +7,18 @@ import { SUPABASE_ROOT_CA_2021 } from "../src/lib/db/supabase-ca";
 import { encrypt, decrypt } from "../src/lib/crypto";
 import { authoritativeSummary } from "../src/lib/summaries/read";
 import { buildTrends, type DecryptedResponse } from "../src/lib/trends";
-import { parseReport, trendsToLines } from "../src/lib/mirror/review";
+import {
+  accountText,
+  parseReport,
+  trendsToLines,
+  DEFAULT_INTERVAL_DAYS,
+  MAX_ENTRY_CHARS,
+  MAX_SUMMARIES,
+  PRIOR_FULL_REPORTS,
+  PRIOR_PERIOD_NOTES,
+  SUMMARY_PERIODS,
+} from "../src/lib/mirror/review";
+import { authoritativeReport, periodNote } from "../src/lib/mirror/read";
 import { domainLabel, domainPromptBlock } from "../src/lib/mirror/domains";
 import {
   reportToText,
@@ -57,8 +68,9 @@ const PROMPT_PATH = join(
   "src/lib/layer2/memory-extraction.md"
 );
 const MODEL = "claude-sonnet-5";
-const MAX_SUMMARIES = 200;
-const MAX_ENTRY_CHARS = 20_000;
+// MAX_SUMMARIES, MAX_ENTRY_CHARS and the three reach constants are imported from
+// review.ts rather than redeclared. They were copies here until 2026-10-12, which
+// is exactly the drift this file's header warns about.
 
 function connect(): Client {
   const url = process.env.DATABASE_URL_DIRECT;
@@ -128,6 +140,55 @@ async function main() {
     const windowStart: Date =
       since ?? earliestRows[0]?.completed_at ?? windowEnd;
 
+    /*
+     * The history first, because how far the summaries reach depends on whether
+     * there is any. Mirrors the order in reviewUser().
+     */
+    const { rows: priorRows } = await c.query(
+      `SELECT encrypted_report, encrypted_user_report, user_edited_at,
+              encrypted_period_note, created_at
+         FROM mirror_reviews WHERE user_id = $1
+        ORDER BY created_at DESC LIMIT ${PRIOR_FULL_REPORTS + PRIOR_PERIOD_NOTES}`,
+      [userId]
+    );
+
+    let account: { date: string; text: string } | null = null;
+    const notes: string[] = [];
+    for (const [i, r] of priorRows.entries()) {
+      // Through the same resolvers as the real run. This used to decrypt the
+      // column and interpolate it, which put raw JSON in the preview's prompt
+      // once reports became structured.
+      const row = {
+        encryptedReport: r.encrypted_report as string,
+        encryptedUserReport: r.encrypted_user_report as string | null,
+        userEditedAt: r.user_edited_at as Date | null,
+        encryptedPeriodNote: r.encrypted_period_note as string,
+      };
+      const at = (r.created_at as Date).toISOString().slice(0, 10);
+      try {
+        if (i < PRIOR_FULL_REPORTS) {
+          account = { date: at, text: accountText(authoritativeReport(row).report) };
+        } else {
+          notes.push(`${at}: ${periodNote(row)}`);
+        }
+      } catch {
+        /* left out */
+      }
+    }
+    notes.reverse();
+
+    // The cadence as the real run reads it, so the reach is the same. Falls back
+    // to the default when nobody has set it.
+    const { rows: settingRows } = await c.query<{ value: unknown }>(
+      `SELECT value FROM app_settings WHERE key = 'mirror_review_interval_days'`
+    );
+    const intervalDays =
+      typeof settingRows[0]?.value === "number" &&
+      Number.isFinite(settingRows[0].value)
+        ? (settingRows[0].value as number)
+        : DEFAULT_INTERVAL_DAYS;
+
+    const summaryDays = SUMMARY_PERIODS * intervalDays;
     const { rows: summaryRows } = await c.query(
       `SELECT j.completed_at, s.encrypted_content, s.encrypted_user_content,
               s.user_edited_at, s.generated_at, s.generation_version
@@ -135,6 +196,7 @@ async function main() {
          JOIN journal_entries j ON j.id = s.journal_entry_id
         WHERE j.user_id = $1 AND j.completed_at IS NOT NULL
           AND j.deleted_at IS NULL AND j.purged_at IS NULL
+          ${account ? `AND j.completed_at > now() - interval '${summaryDays} days'` : ""}
         ORDER BY j.completed_at DESC LIMIT ${MAX_SUMMARIES}`,
       [userId]
     );
@@ -247,22 +309,6 @@ async function main() {
     const checkins: string[] =
       responses.length > 0 ? [...trendsToLines(buildTrends(responses))] : [];
 
-    const { rows: priorRows } = await c.query(
-      `SELECT encrypted_report, encrypted_user_report, created_at
-         FROM mirror_reviews WHERE user_id = $1
-        ORDER BY created_at DESC LIMIT 6`,
-      [userId]
-    );
-    const prior: string[] = [];
-    for (const r of priorRows) {
-      try {
-        const text = decrypt(r.encrypted_user_report ?? r.encrypted_report);
-        prior.push(`${r.created_at.toISOString().slice(0, 10)}: ${text}`);
-      } catch {
-        /* left out */
-      }
-    }
-
     if (recent.length === 0) {
       console.log(
         "Nothing written since the last report. The scheduled run would do nothing here."
@@ -285,7 +331,9 @@ async function main() {
       "## Confirmed in their Mirror",
       memory.join("\n") || "(nothing)",
       "",
-      "## Summaries of everything written so far — ALL of their history, not this window",
+      account
+        ? `## Summaries of their entries — the last ${summaryDays} days only, not their whole history`
+        : "## Summaries of everything written so far — ALL of their history, not this window",
       summaries.join("\n\n") || "(none)",
       "",
       "## Entries written in this window, in full",
@@ -294,8 +342,11 @@ async function main() {
       "## Check-in figures — ALL of their history. Stated wording, do not restate in your own words",
       checkins.join("\n") || "(none)",
       "",
-      "## What previous reports said",
-      prior.join("\n\n") || "(none)",
+      "## The current account, carried over from the most recent report — everything older than the summaries above lives here",
+      account ? `${account.date}\n${account.text}` : "(none — this is their first report)",
+      "",
+      "## What each earlier period noted at the time — oldest first",
+      notes.join("\n") || "(none)",
     ].join("\n");
 
     console.log("─".repeat(70));
@@ -306,7 +357,8 @@ async function main() {
     console.log(`entries in full ${recent.length}`);
     console.log(`memory items   ${memory.length}`);
     console.log(`check-in lines ${checkins.length}`);
-    console.log(`prior reports  ${prior.length}`);
+    console.log(`account        ${account ? `carried over from ${account.date}` : "none — first report"}`);
+    console.log(`period notes   ${notes.length}`);
     console.log(`profile        ${profile ? "present" : "empty"}`);
     console.log(`input size     ${message.length} characters`);
     console.log("─".repeat(70));
@@ -329,7 +381,9 @@ async function main() {
       [
         "summaries",
         summaries.join("\n\n").length,
-        `ONE PER ENTRY, all history — ${summaries.length} now, capped at 200`,
+        account
+          ? `${summaries.length} entries in the last ${summaryDays} days — bounded by writing rate`
+          : `ALL history, ${summaries.length} now, capped at ${MAX_SUMMARIES} — first report only`,
       ],
       [
         "entries in full",
@@ -342,9 +396,14 @@ async function main() {
         "grows with instruments, not with responses",
       ],
       [
-        "previous reports",
-        prior.join("\n\n").length,
-        `fixed — newest ${prior.length} of them`,
+        "carried-over account",
+        account ? `${account.date}\n${account.text}`.length : 0,
+        `the whole record, compressed — ${PRIOR_FULL_REPORTS} report, flat forever`,
+      ],
+      [
+        "period notes",
+        notes.join("\n").length,
+        `${notes.length} of ${PRIOR_PERIOD_NOTES} max — about ${Math.round((PRIOR_PERIOD_NOTES * intervalDays) / 30)} months`,
       ],
     ];
     for (const [name, size, note] of blocks) {

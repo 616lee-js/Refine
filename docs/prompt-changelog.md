@@ -19,6 +19,53 @@ Entries below are written when a change actually lands, so these are pointers on
 
 ---
 
+## `memory-extraction.md` v4 — 2026-10-12
+
+**A period's detail is read once, and after that the report about it is what
+later reports work from.** The product owner's direction: *"a Mirror report should
+only ever view the details of entries/frameworks/check-ins during the current
+time period once, and any viewing of future Mirror reports should refer to that
+period's report or summaries only… refer to written entry summaries within the
+last 2 Mirror report periods, but have a primary reliance on Mirror reports,
+Memory, and Trends."*
+
+The prompt changed because what it is given changed. Measured on a real account
+before the change: summaries of every entry ever written were 31% of the message
+and the six most recent reports in full were 46%. The second was six
+regenerations of one narrative — a report is the whole running account rewritten
+each time, so reports 2 to 6 were superseded drafts of the newest one.
+
+What the model is given now:
+
+- Entry summaries reach back **two reporting periods**. On a first report they
+  still reach everything, because nothing else would carry the older history.
+- **One** previous report, carried over in full, instead of six.
+- The earlier periods arrive as their **period notes** — what each one found at
+  the time, in two to four sentences. That column was already written on every
+  run and had never been read.
+- The carried-over account no longer brings the figures it was written with. The
+  live figures arrive separately with an instruction to repeat them exactly, and
+  two copies of the same numbers left nothing to say which was current.
+
+Four claims in the prompt became false and were rewritten: what each input
+section covers, the list of inputs, what previous reports are for, and an example
+that said *"in summaries going back to March"*.
+
+**The one that matters most is additive.** The description of `overall` now says
+it is the only place the long history survives — the next report is given the
+account and not the entries behind it, so anything still worth knowing has to be
+carried into it. That is the whole risk of the change, stated to the model that
+has to manage it.
+
+Measured after: the message went from 28,601 characters to 12,890, and the reply
+from 5,436 output tokens to 3,074. The input is now bounded by writing rate
+rather than by how long someone has kept a journal.
+
+Nothing stored changed. Every past report stays whole in the person's Mirror
+history.
+
+---
+
 ## `memory-extraction.md` v3 — 2026-10-09
 
 **The report breaks out by area of life.** The product owner found it read as an

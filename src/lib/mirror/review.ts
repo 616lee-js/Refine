@@ -31,7 +31,7 @@ import extractionPrompt from "@/lib/layer2/memory-extraction.md";
 
 import {
   authoritativeReport,
-  reportToText,
+  periodNote,
   serialiseReport,
   type StructuredReport,
 } from "./read";
@@ -114,14 +114,53 @@ export const PROMPT_UNWRITTEN = promptVersion(extractionPrompt) === "UNWRITTEN";
 /** 14 days, per the product owner. Changeable without a deploy. */
 export const DEFAULT_INTERVAL_DAYS = 14;
 
-/** Guards the long view against unbounded growth years from now. */
-const MAX_SUMMARIES = 200;
+/**
+ * The ceiling on summaries, which only a FIRST report can reach.
+ *
+ * Every later report is bounded by `SUMMARY_PERIODS` instead — see `gather()`.
+ * This remains because a first report has no earlier report to carry the older
+ * history, so it genuinely does read everything.
+ */
+export const MAX_SUMMARIES = 200;
 /** One pathological paste must not run up an unbounded bill. */
-const MAX_ENTRY_CHARS = 20_000;
+export const MAX_ENTRY_CHARS = 20_000;
 /** Users processed per run. Bounded to fit inside the function's maxDuration. */
 export const REVIEW_BATCH_SIZE = 5;
-/** Previous reports shown to the run, so it does not repeat itself. */
-const PRIOR_REPORTS = 6;
+
+/**
+ * ── How much of the past a report is given, and why it is this shape ──────────
+ * Changed 2026-10-12 at the product owner's direction: *"a Mirror report should
+ * only ever view the details of entries during the current time period once, and
+ * any viewing of future Mirror reports should refer to that period's report or
+ * summaries only."*
+ *
+ * What it replaces: summaries of every entry ever written, plus the SIX most
+ * recent reports in full. Measured on a real account, those two were 31% and 46%
+ * of the message, and the second was six regenerations of one narrative — each
+ * report is the whole running account rewritten, so reports 2 to 6 were
+ * superseded drafts of report 1.
+ *
+ * What the three numbers below do:
+ *
+ *   - One full account, because the newest report IS the compression of
+ *     everything before it. The prompt requires it to stand alone, which is what
+ *     makes it safe to carry forward alone.
+ *   - Twelve period notes, because a note says what one period found at the time
+ *     in two to four sentences. Twelve is about six months at the 14-day cadence.
+ *     That is a guess and nothing validates it until reports have run under it.
+ *   - Two reporting periods of entry summaries, so recent detail is still
+ *     readable while older detail is reached only through the account above.
+ *
+ * The result is bounded by writing RATE rather than by how long someone has kept
+ * a journal, which was the point.
+ *
+ * Nothing stored changes. Every past report stays whole in the person's history
+ * and the Mirror history screen still shows all of them; this governs only what
+ * the prompt is given.
+ */
+export const PRIOR_FULL_REPORTS = 1;
+export const PRIOR_PERIOD_NOTES = 12;
+export const SUMMARY_PERIODS = 2;
 
 export class ReviewError extends Error {}
 
@@ -277,13 +316,40 @@ function stripCopyMarker(line: string): string {
 }
 
 /** Everything the model is shown, assembled from what is already stored. */
-async function gather(userId: string, since: Date | null) {
+async function gather(
+  userId: string,
+  since: Date | null,
+  opts: { intervalDays: number; hasPriorAccount: boolean }
+) {
   const base = [
     eq(journalEntries.userId, userId),
     isNotNull(journalEntries.completedAt),
     isNull(journalEntries.deletedAt),
     isNull(journalEntries.purgedAt),
   ];
+
+  /*
+   * Summaries reach back two reporting periods, not all the way.
+   *
+   * Anything older is reached through the account carried over from the last
+   * report, which is the whole point of the change: a period's detail is read
+   * once, and after that the report about it is what later reports work from.
+   *
+   * Measured from the interval SETTING rather than a fixed day count, so moving
+   * the cadence moves the reach with it — "two reporting periods" has to mean two
+   * of whatever a period currently is.
+   *
+   * ── Except on a first report ──────────────────────────────────────────────
+   * With no earlier report there is nothing carrying the older history, so a
+   * date bound would produce a report that read four weeks and presented itself
+   * as the whole picture. A first report genuinely does read everything, up to
+   * MAX_SUMMARIES.
+   */
+  const summaryCutoff = opts.hasPriorAccount
+    ? new Date(
+        Date.now() - SUMMARY_PERIODS * opts.intervalDays * 86_400_000
+      )
+    : null;
 
   const summaryRows = await db
     .select({
@@ -299,7 +365,14 @@ async function gather(userId: string, since: Date | null) {
       journalEntries,
       eq(journalEntries.id, journalEntrySummaries.journalEntryId)
     )
-    .where(and(...base))
+    .where(
+      and(
+        ...base,
+        summaryCutoff
+          ? gt(journalEntries.completedAt, summaryCutoff)
+          : undefined
+      )
+    )
     .orderBy(desc(journalEntries.completedAt))
     .limit(MAX_SUMMARIES);
 
@@ -424,8 +497,22 @@ async function gather(userId: string, since: Date | null) {
   };
 }
 
-/** What previous reports said, so this run does not repeat itself. */
-async function priorReports(userId: string): Promise<string[]> {
+/**
+ * The history the run is given: one account, carried forward, plus what each
+ * earlier period noted at the time.
+ *
+ * `account` is null only when no report has ever been written for this person.
+ * That is also what tells `gather()` it is a first report and may read every
+ * summary — see the constants above.
+ */
+type History = {
+  /** The newest report's running account, already flattened for the prompt. */
+  account: { date: string; text: string } | null;
+  /** Older periods, oldest first, one line each. */
+  notes: string[];
+};
+
+async function priorReports(userId: string): Promise<History> {
   const rows = await db
     .select({
       encryptedReport: mirrorReviews.encryptedReport,
@@ -437,30 +524,48 @@ async function priorReports(userId: string): Promise<string[]> {
     .from(mirrorReviews)
     .where(eq(mirrorReviews.userId, userId))
     .orderBy(desc(mirrorReviews.createdAt))
-    .limit(PRIOR_REPORTS);
+    .limit(PRIOR_FULL_REPORTS + PRIOR_PERIOD_NOTES);
 
-  const out: string[] = [];
-  for (const row of rows) {
+  let account: History["account"] = null;
+  const notes: string[] = [];
+
+  for (const [i, row] of rows.entries()) {
     try {
-      // Through the resolver: where the person rewrote a report, the rewrite is
-      // what the next run builds on. Showing it the superseded version would
-      // rebuild an account they had already corrected.
-      const r = authoritativeReport(row);
-      /*
-       * Flattened through `reportToText`, not interpolated.
-       *
-       * A report is an object now, and `${r.report}` is valid TypeScript that
-       * produces "[object Object]" — so every past report would have reached the
-       * prompt as that string, the model would have had no history to avoid
-       * repeating, and nothing would have errored. The typechecker does not catch
-       * this; it is why the helper exists.
-       */
-      out.push(`${day(row.createdAt)}: ${reportToText(r.report)}`);
+      if (i < PRIOR_FULL_REPORTS) {
+        // Through the resolver: where the person rewrote a report, the rewrite
+        // is what the next run builds on. Carrying the superseded version
+        // forward would rebuild an account they had already corrected.
+        const r = authoritativeReport(row);
+        account = { date: day(row.createdAt), text: accountText(r.report) };
+      } else {
+        notes.push(`${day(row.createdAt)}: ${periodNote(row)}`);
+      }
     } catch {
       // Unreadable history degrades the run; it does not stop it.
     }
   }
-  return out;
+
+  // Oldest first, so the notes read as a sequence rather than a reverse list.
+  notes.reverse();
+  return { account, notes };
+}
+
+/**
+ * The carried-over account as text — the prose and the areas, and NOT the
+ * figures.
+ *
+ * `reportToText` appends `report.figures`, which is right for the Mirror screen
+ * and wrong here: the figures are the Trends strings as they stood when that
+ * report was written, and the run is given the current ones separately with an
+ * instruction to repeat them exactly. Carrying the old copies alongside handed
+ * the model two versions of the same numbers and no way to tell which was live.
+ *
+ * `reportToText` is left alone because the UI and the word count both use it.
+ */
+export function accountText(report: StructuredReport): string {
+  return [report.overall, ...report.sections.map((s) => `${s.domain}: ${s.text}`)]
+    .filter((p) => p.trim())
+    .join("\n\n");
 }
 
 /**
@@ -533,7 +638,10 @@ export function parseReport(raw: string): RawReport {
  */
 export async function reviewUser(
   userId: string,
-  { force = false }: { force?: boolean } = {}
+  {
+    force = false,
+    intervalDays,
+  }: { force?: boolean; intervalDays?: number } = {}
 ): Promise<boolean> {
   if (PROMPT_UNWRITTEN) {
     throw new ReviewError(
@@ -551,9 +659,27 @@ export async function reviewUser(
   const since = last?.windowEnd ?? null;
   const windowEnd = new Date();
 
+  /*
+   * The history comes first, because how far the summaries reach depends on
+   * whether there is any.
+   *
+   * The scheduled run has already read the interval and passes it in rather than
+   * querying the same setting once per person in the batch. A manual run reads
+   * it, so it cannot silently use a different reach from the real thing.
+   */
+  const days =
+    intervalDays ??
+    (await getNumberSetting(
+      MIRROR_REVIEW_INTERVAL_DAYS,
+      DEFAULT_INTERVAL_DAYS
+    ));
+
+  const prior = await priorReports(userId);
+
   const { summaries, recent, memory, profile, earliestEntryAt } = await gather(
     userId,
-    since
+    since,
+    { intervalDays: days, hasPriorAccount: prior.account !== null }
   );
 
   /*
@@ -575,10 +701,7 @@ export async function reviewUser(
   // it can still rewrite the running report even with an empty window.
   if (recent.length === 0 && !force) return false;
 
-  const [checkins, prior] = await Promise.all([
-    checkinLines(userId),
-    priorReports(userId),
-  ]);
+  const checkins = await checkinLines(userId);
 
   const client = new Anthropic({ apiKey: getAnthropicApiKey() });
   const response = await client.messages.create({
@@ -635,7 +758,9 @@ export async function reviewUser(
           // Each section says how far back it reaches. Without that, everything
           // below reads as though it belonged to the window above, and a figure
           // spanning a year gets described as recent.
-          "## Summaries of everything written so far — ALL of their history, not this window",
+          prior.account
+            ? `## Summaries of their entries — the last ${SUMMARY_PERIODS * days} days only, not their whole history`
+            : "## Summaries of everything written so far — ALL of their history, not this window",
           summaries.join("\n\n") || "(none)",
           "",
           "## Entries written in this window, in full",
@@ -644,8 +769,22 @@ export async function reviewUser(
           "## Check-in figures — ALL of their history. Stated wording, do not restate in your own words",
           checkins.join("\n") || "(none)",
           "",
-          "## What previous reports said",
-          prior.join("\n\n") || "(none)",
+          /*
+           * The history, in two parts, and the split is the whole change.
+           *
+           * The account is the compression of everything older than the
+           * summaries above — the only input that covers the whole record. The
+           * notes say what each earlier period found at the time, which is what
+           * lets a report say a pattern has recurred without being handed those
+           * entries again.
+           */
+          "## The current account, carried over from the most recent report — everything older than the summaries above lives here",
+          prior.account
+            ? `${prior.account.date}\n${prior.account.text}`
+            : "(none — this is their first report)",
+          "",
+          "## What each earlier period noted at the time — oldest first",
+          prior.notes.join("\n") || "(none)",
         ].join("\n"),
       },
     ],
@@ -778,7 +917,9 @@ export async function runMirrorReviews(limit = REVIEW_BATCH_SIZE) {
 
   for (const { userId } of due) {
     try {
-      if (await reviewUser(userId)) reviewed++;
+      // Interval passed down: it decides how far the summaries reach, and it has
+      // already been read once for the due check.
+      if (await reviewUser(userId, { intervalDays })) reviewed++;
     } catch (err) {
       failed++;
       console.error(

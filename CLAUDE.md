@@ -110,6 +110,23 @@ Reasoning behind decisions: `docs/refine_brainstorm_summary.md`
       ("detail tends to reveal more than a summary") and instructions to a model
       about its own output ("a short summary is better than a padded one").
 
+11. **Update `docs/current-state.md` at the end of every build session. It is
+    part of done, not a follow-up.** A session that changed code and did not
+    update it is unfinished.
+
+    It is the sync point between this repo and planning conversations that cannot
+    see the code, so it has to be true on the day it is written — check claims
+    against the code rather than against this file or memory.
+
+    - **Replace stale content. Never append.** Keep only the latest "changes
+      since" section; the previous one goes.
+    - **Do not duplicate the planning or roadmap docs.** Reference them. This file
+      says what exists; `refine_v1_planning.md` and `v2-roadmap.md` say what
+      should.
+    - Record build decisions that are written down nowhere else. Anything already
+      in the prompt changelog, the limitations register or build notes gets a
+      pointer, not a copy.
+
 ## Naming conventions
 
 Names throughout this codebase must reinforce the reflective journaling framing —

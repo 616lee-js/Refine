@@ -4,6 +4,15 @@ Index of project documentation. Source of truth for what to build is `refine_v1_
 
 ---
 
+## Where things stand
+
+**[current-state.md](current-state.md)**
+What exists in the repo right now: what is built, the schema, what changed in the
+last build session, open items, and which copy is still placeholder. Written for
+planning conversations that cannot see the code. Updated at the end of every
+build session — see rule 11 in `CLAUDE.md`. Says what *is*; the planning doc and
+the roadmap say what *should be*.
+
 ## Planning and design
 
 **[refine_v1_planning.md](refine_v1_planning.md)**

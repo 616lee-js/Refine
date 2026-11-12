@@ -32,6 +32,15 @@ export const EVAL_SNAPSHOTS_ENABLED = "eval_snapshots_enabled";
 export const MIRROR_REVIEW_INTERVAL_DAYS = "mirror_review_interval_days";
 
 /**
+ * The day the report schedule starts, `YYYY-MM-DD`, and the zone whose midnight
+ * it keeps. Runs happen on that day and every interval after it, at midnight in
+ * that zone — see src/lib/mirror/schedule.ts. Set 2026-11-11 by the product
+ * owner: Sunday 2026-11-15, America/Los_Angeles.
+ */
+export const MIRROR_REVIEW_ANCHOR_DAY = "mirror_review_anchor_day";
+export const MIRROR_REVIEW_ANCHOR_TIME_ZONE = "mirror_review_anchor_time_zone";
+
+/**
  * Reads a boolean flag.
  *
  * Defaults are passed in rather than assumed, so a missing row means "nobody
@@ -91,6 +100,34 @@ export async function setBooleanSetting(
   key: string,
   value: boolean
 ): Promise<void> {
+  await db
+    .insert(appSettings)
+    .values({ key, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: appSettings.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+/** Reads a text flag. Anything that is not a non-empty string falls back. */
+export async function getStringSetting(
+  key: string,
+  fallback: string | null
+): Promise<string | null> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, key))
+    .limit(1);
+
+  return typeof row?.value === "string" && row.value ? row.value : fallback;
+}
+
+export async function setStringSetting(
+  key: string,
+  value: string
+): Promise<void> {
+  if (!value) throw new Error(`${key} must be a non-empty string`);
   await db
     .insert(appSettings)
     .values({ key, value, updatedAt: new Date() })

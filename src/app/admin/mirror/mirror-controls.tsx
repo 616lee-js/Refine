@@ -25,10 +25,19 @@ type RunResult = { ran: number; failed: number; errors: string[]; ms: number };
 
 export function MirrorControls({
   initialDays,
+  initialAnchorDay,
+  anchorTimeZone,
+  nextRunLabel,
   accounts,
   disabled,
 }: {
   initialDays: number;
+  /** `YYYY-MM-DD` the schedule starts on, or null when none is set. */
+  initialAnchorDay: string | null;
+  /** The zone whose midnight the schedule keeps, or null. */
+  anchorTimeZone: string | null;
+  /** The next scheduled run, already formatted, or null. */
+  nextRunLabel: string | null;
   accounts: number;
   /** True while the instructions are unwritten — nothing can run. */
   disabled: boolean;
@@ -38,6 +47,30 @@ export function MirrorControls({
   const [days, setDays] = useState(initialDays);
   const [savingDays, setSavingDays] = useState<number | null>(null);
   const [daysError, setDaysError] = useState<string | null>(null);
+
+  const [anchorDay, setAnchorDay] = useState(initialAnchorDay ?? "");
+  const [savingAnchor, setSavingAnchor] = useState(false);
+  const [anchorError, setAnchorError] = useState<string | null>(null);
+
+  async function saveAnchor() {
+    setSavingAnchor(true);
+    setAnchorError(null);
+    try {
+      // The schedule keeps midnight in THIS device's zone — the admin's.
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch("/api/admin/mirror/cadence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anchorDay, timeZone }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      router.refresh();
+    } catch {
+      setAnchorError("Couldn't save that. The schedule is unchanged.");
+    } finally {
+      setSavingAnchor(false);
+    }
+  }
 
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -107,6 +140,22 @@ export function MirrorControls({
           skipped entirely when they have written nothing since the last one — no
           run, no record, nothing charged.
         </p>
+        <p
+          className="mt-1"
+          style={{ fontSize: "12.5px", lineHeight: 1.55, color: "var(--rf-text-3)" }}
+        >
+          {initialAnchorDay && anchorTimeZone ? (
+            <>
+              On a fixed schedule: from{" "}
+              <strong style={{ color: "var(--rf-text)" }}>{initialAnchorDay}</strong>{" "}
+              at midnight ({anchorTimeZone}), then every {days} days. Next run{" "}
+              <strong style={{ color: "var(--rf-text)" }}>{nextRunLabel}</strong>.
+              Running by hand does not move it.
+            </>
+          ) : (
+            <>No fixed schedule: each account is due {days} days after its last report.</>
+          )}
+        </p>
 
         <div className="mt-3 flex flex-wrap gap-[6px]">
           {CHOICES.map((choice) => {
@@ -140,6 +189,45 @@ export function MirrorControls({
             style={{ fontSize: "12px", color: "var(--color-error)" }}
           >
             {daysError}
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center gap-[8px]">
+          <label className="flex items-center gap-[8px]">
+            <Eyebrow size={9}>Schedule starts</Eyebrow>
+            <input
+              type="date"
+              value={anchorDay}
+              onChange={(e) => setAnchorDay(e.target.value)}
+              className="rf-input"
+              style={{ fontSize: "12px" }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void saveAnchor()}
+            disabled={savingAnchor || !anchorDay || anchorDay === (initialAnchorDay ?? "")}
+            className="rounded-full transition-colors disabled:opacity-50"
+            style={{
+              padding: "5px 13px",
+              fontSize: "12px",
+              color: "var(--rf-text-3)",
+              boxShadow: "inset 0 0 0 1px var(--rf-border)",
+            }}
+          >
+            {savingAnchor ? "Saving…" : "Save schedule"}
+          </button>
+          <span style={{ fontSize: "11px", color: "var(--rf-text-4)" }}>
+            Midnight in this device&apos;s zone.
+          </span>
+        </div>
+        {anchorError && (
+          <p
+            aria-live="polite"
+            className="mt-2"
+            style={{ fontSize: "12px", color: "var(--color-error)" }}
+          >
+            {anchorError}
           </p>
         )}
       </Sheet>

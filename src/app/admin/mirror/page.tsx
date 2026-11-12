@@ -12,7 +12,9 @@ import {
   PROMPT_UNWRITTEN,
   PROMPT_VERSION,
   accountsWithEntries,
+  loadSchedule,
 } from "@/lib/mirror/review";
+import { latestRunAt, nextRunAt } from "@/lib/mirror/schedule";
 import { MirrorControls } from "./mirror-controls";
 import { fmtDateTime } from "@/lib/time";
 import { timeZoneFor } from "@/lib/time-zone";
@@ -62,6 +64,9 @@ export default async function AdminMirrorPage() {
   const total = rows.reduce((n, r) => n + r.n, 0);
   const byUser = new Map(rows.map((r) => [r.userId, r]));
   const now = Date.now();
+  const schedule = await loadSchedule(intervalDays);
+  const runAt = schedule ? latestRunAt(schedule, new Date(now)) : null;
+  const nextRun = schedule ? nextRunAt(schedule, new Date(now)) : null;
 
   /*
    * When each account is next due: last report + the interval. Shown so a missed
@@ -72,6 +77,14 @@ export default async function AdminMirrorPage() {
    */
   const fmt = (d: Date) => fmtDateTime(d, tz);
   const nextDue = (last: Date | string | null | undefined) => {
+    if (schedule) {
+      // Fixed schedule: due at the most recent run time unless reported since.
+      const lastAt = last ? new Date(last).getTime() : null;
+      if (runAt && (lastAt === null || lastAt < runAt.getTime())) {
+        return `now — scheduled ${fmt(runAt)}`;
+      }
+      return nextRun ? fmt(nextRun) : "—";
+    }
     if (!last) return "now — first report";
     const at = new Date(last).getTime() + intervalDays * 86_400_000;
     return at <= now ? `now — was ${fmt(new Date(at))}` : fmt(new Date(at));
@@ -178,6 +191,9 @@ export default async function AdminMirrorPage() {
 
       <MirrorControls
         initialDays={intervalDays}
+        initialAnchorDay={schedule?.anchorDay ?? null}
+        anchorTimeZone={schedule?.timeZone ?? null}
+        nextRunLabel={nextRun ? fmt(nextRun) : null}
         accounts={accounts.length}
         disabled={PROMPT_UNWRITTEN}
       />

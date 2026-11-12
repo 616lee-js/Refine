@@ -1,8 +1,12 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import {
+  MIRROR_REVIEW_ANCHOR_DAY,
+  MIRROR_REVIEW_ANCHOR_TIME_ZONE,
   MIRROR_REVIEW_INTERVAL_DAYS,
   setNumberSetting,
+  setStringSetting,
 } from "@/lib/settings";
+import { isTimeZone, parseLocalDay } from "@/lib/time";
 
 /**
  * How often reports are produced.
@@ -29,12 +33,28 @@ export async function POST(req: Request) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const { days } = body as { days?: unknown };
-  if (typeof days !== "number" || !CHOICES.includes(days)) {
-    return new Response("days must be 7, 14 or 30", { status: 400 });
+  const { days, anchorDay, timeZone } = body as {
+    days?: unknown;
+    anchorDay?: unknown;
+    timeZone?: unknown;
+  };
+
+  // Either the interval, or the schedule's start (day + zone). Not neither.
+  if (days !== undefined) {
+    if (typeof days !== "number" || !CHOICES.includes(days)) {
+      return new Response("days must be 7, 14 or 30", { status: 400 });
+    }
+    await setNumberSetting(MIRROR_REVIEW_INTERVAL_DAYS, days);
+    return Response.json({ days });
   }
 
-  await setNumberSetting(MIRROR_REVIEW_INTERVAL_DAYS, days);
-
-  return Response.json({ days });
+  const day = parseLocalDay(anchorDay);
+  if (!day || !isTimeZone(timeZone)) {
+    return new Response("anchorDay (YYYY-MM-DD) and a valid timeZone required", {
+      status: 400,
+    });
+  }
+  await setStringSetting(MIRROR_REVIEW_ANCHOR_DAY, day);
+  await setStringSetting(MIRROR_REVIEW_ANCHOR_TIME_ZONE, timeZone);
+  return Response.json({ anchorDay: day, timeZone });
 }

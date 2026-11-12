@@ -14,6 +14,8 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
 import { timeZoneFor } from "@/lib/time-zone";
+import { isTimeZone, parseLocalDay } from "@/lib/time";
+import { latestRunAt, type Schedule } from "./schedule";
 import { replyText } from "@/lib/model-reply";
 import { authoritativeSummary } from "@/lib/summaries/read";
 import {
@@ -23,8 +25,11 @@ import {
 } from "@/lib/trends";
 import type { Answers } from "@/lib/questionnaires";
 import {
+  MIRROR_REVIEW_ANCHOR_DAY,
+  MIRROR_REVIEW_ANCHOR_TIME_ZONE,
   MIRROR_REVIEW_INTERVAL_DAYS,
   getNumberSetting,
+  getStringSetting,
 } from "@/lib/settings";
 
 // Bundled at build time, not read from disk — see next.config.ts.
@@ -188,9 +193,38 @@ function day(at: Date): string {
   return at.toISOString().slice(0, 10);
 }
 
-/** A user is due when they have written since their last report, long enough ago. */
-async function usersDue(intervalDays: number, limit: number) {
-  const cutoff = new Date(Date.now() - intervalDays * 86_400_000);
+/**
+ * The schedule from settings, or null when no anchor has been set.
+ *
+ * With an anchor, reports run on fixed days (see ./schedule.ts). Without one,
+ * the older rule applies: a report every `intervalDays` since the last one.
+ */
+export async function loadSchedule(intervalDays: number): Promise<Schedule | null> {
+  const [anchorDay, timeZone] = await Promise.all([
+    getStringSetting(MIRROR_REVIEW_ANCHOR_DAY, null),
+    getStringSetting(MIRROR_REVIEW_ANCHOR_TIME_ZONE, null),
+  ]);
+  const day = parseLocalDay(anchorDay);
+  if (!day || !isTimeZone(timeZone)) return null;
+  return { anchorDay: day, timeZone, intervalDays };
+}
+
+/**
+ * Who is due.
+ *
+ * On a schedule: anyone whose last report predates the most recent scheduled
+ * run time — and nobody before the first one. Without a schedule: anyone whose
+ * last report is older than the interval. Either way, only if they have written
+ * since; a report over an empty window says nothing and still costs a call.
+ */
+async function usersDue(
+  schedule: Schedule | null,
+  intervalDays: number,
+  limit: number
+) {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - intervalDays * 86_400_000);
+  const runAt = schedule ? latestRunAt(schedule, now) : null;
 
   /*
    * Derived rather than stored, like the summariser queue: a run that dies
@@ -244,8 +278,12 @@ async function usersDue(intervalDays: number, limit: number) {
   }));
 
   const due = parsed.filter((r) => {
-    if (!r.lastAt) return true;
-    if (r.lastAt > cutoff) return false;
+    if (schedule) {
+      if (!runAt) return false; // the schedule has not started
+      if (r.lastAt && r.lastAt >= runAt) return false; // reported since the run time
+    } else if (r.lastAt && r.lastAt > cutoff) {
+      return false;
+    }
     // Due, but nothing new written: a report on an empty window says
     // nothing and still costs a call. Skipped.
     return r.lastEnd === null || r.newest > r.lastEnd;
@@ -961,7 +999,8 @@ export async function runMirrorReviews(limit = REVIEW_BATCH_SIZE) {
     DEFAULT_INTERVAL_DAYS
   );
 
-  const due = await usersDue(intervalDays, limit);
+  const schedule = await loadSchedule(intervalDays);
+  const due = await usersDue(schedule, intervalDays, limit);
 
   let reviewed = 0;
   let failed = 0;

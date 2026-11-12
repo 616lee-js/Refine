@@ -107,8 +107,17 @@ which is always false — one account got 11 reports in 30 days), and the daily
 job had 60 seconds, so the second account's report was cut off every day with
 nothing logged. The job now has 300 seconds, stops starting reports after 240,
 orders longest-waiting first, and `/admin/mirror` shows each account's next due
-date. **The first scheduled run under the fix has not happened yet** — expected
-05:00 UTC on 2026-11-12: one report for the owner, none for the other account.
+date.
+
+**Reports now run on a fixed schedule** (owner's instruction, same day): from
+**Sunday 2026-11-15 at midnight Pacific**, then every 14 days on that anchor —
+Sundays at midnight, kept at midnight across clock changes. Not "14 days since
+the last report": running one by hand does not move the schedule. A missed run
+is caught up the next day. Anchor and zone are settings, editable on
+`/admin/mirror`; the interval is the existing 7/14/30 choice. The daily job
+moved from 05:00 UTC to **08:00 UTC** (midnight Pacific in winter, 1 AM in
+summer; the hosting plan runs it sometime within that hour). Still skipped for
+anyone who has written nothing since their last report.
 
 **Every date is now the person's own time zone** (`4b956e9`). The device
 reports its zone on every page; the server formats every date in it; nothing
@@ -172,8 +181,9 @@ Proposals awaiting a decision: [build-notes.md](build-notes.md).
 - **The report characterised figures in its own words** in the last run —
   "scored lowest on achieving in life", "mid-to-low on health". The prompt forbids
   it and so does rule 10. Not yet fixed; a prompt change needs the owner's pass.
-- **The schedule fix is unobserved.** Fixed and deployed 2026-11-11; the first
-  05:00 UTC run after it is the proof. Check `mirror_reviews` on 2026-11-12.
+- **The schedule is unobserved.** First scheduled run is Sunday 2026-11-15,
+  midnight Pacific (08:00 UTC). Check `mirror_reviews` that morning: one
+  report per account that has written since its last report, none otherwise.
 - **No instrument wording is verified** against a primary source, which is what
   withholds every severity-range key in Trends.
 

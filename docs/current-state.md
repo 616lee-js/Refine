@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-11-11 · commit `4b956e9` · working tree clean
-**Round in progress:** `build-package-2026-11.md` — Part 1 of 9 done, awaiting review
+**Last updated:** 2026-11-12 · commit `5ee6b80` · working tree clean
+**Round in progress:** `build-package-2026-11.md` — Parts 1–2 of 9 done, awaiting review
 
 The sync point between the repo and planning conversations that cannot see the
 code. Everything here is checked against the code on the day it is written.
@@ -18,16 +18,19 @@ says what exists right now.
 
 ### Writing
 - Write an entry, edit it, title it. Entry body and title encrypted.
-- **Footholds** — writing prompts, collapsed by default. Some generic
+- **Footholds** — writing prompts, **always closed when an entry opens**; opening
+  them lasts for that entry only and nothing is saved. Some generic
   (`lib/journal/guidance.ts`), some drawn from the person's own past entries
-  (`lib/journal/personal-guidance.ts`).
+  (`lib/journal/personal-guidance.ts`). The panel never lengthens the page.
+- Enter starts a new paragraph (a blank line); Shift+Enter is a single line
+  break. Writing area is 682px wide.
 - Trash with restore; permanent purge after 30 days via a daily job.
 - **No conversation loop.** There is no `/api/chat` and no `/api/classify`. The
   product is write-and-reflect, not chat. Claude never writes into an entry.
 
 ### Summaries (Cabinet 2)
 - One summary per entry, **generated when the entry is marked done** (since
-  2026-08-04). The daily 5am UTC job is a backstop: retries after a failure,
+  2026-08-04). The daily job (08:00 UTC) is a backstop: retries after a failure,
   re-summarises after an edit, and redoes the archive after a prompt change.
   (An earlier version of this file said the job wrote them. It does not.)
 - The person can read and rewrite any summary. Their version wins everywhere —
@@ -48,16 +51,23 @@ Three tabs: **Report**, **Memory**, **Trends**.
   bar-per-area card for the PWI. Range picker: 1 month / year to date / all / custom.
 
 ### Frameworks and check-ins
-- Daily check-in (sleep, mood, energy, a set of toggles).
+- Daily check-in (sleep, mood, energy, a set of toggles). Version
+  `v3-2026-11-11`: the screens toggle now reads "Screen time within one hour
+  before sleep" (tapping it means screens were used). Same key as before.
 - GAD-7, PHQ-9, Personal Wellbeing Index. SWLS was removed 2026-10-12.
-- Partly answered responses are stored but never charted.
+- A completed framework shows its score out of the total possible ("12 / 21")
+  on the record and on its card in Reflections. Only when every item is
+  answered. Severity ranges stay hidden.
+- Partly answered responses are stored but never charted and never scored on
+  screen.
 
 ### Accounts and admin
 - Email/password, invite-code gated. Codes and password-reset codes are managed
   both by CLI and from `/admin/access`.
 - Login throttling: 8 failures, 15-minute lockout.
-- Admin screens: access, Mirror runs and cadence, safety log, evaluations,
-  feedback. All self-gated with `requireAdmin()`.
+- Admin screens: access, Mirror runs and schedule, safety log, evaluations,
+  feedback. Reached from one **"Admin settings"** item in the top nav, which
+  opens a menu; shown to admins only. All self-gated with `requireAdmin()`.
 
 ### Not built
 Voice and dictation (flagged off — serverless has no disk for audio), guided
@@ -99,7 +109,26 @@ Drizzle owns the schema. Migrations are applied by hand, never on deploy.
 
 ---
 
-## Changes since the previous update — 2026-11-11 (Part 1 of the November round)
+## Changes since the previous update — 2026-11-11 to 11-12 (November round, Parts 1–2)
+
+### Part 2 — six small fixes (`5ee6b80`, 2026-11-12)
+
+- **Reflections on a phone:** no empty band above the folded list; choosing a
+  record folds the list so the record has the screen.
+- **Check-in toggle:** "Screens after 11" → "Screen time within one hour before
+  sleep" (approved, no marker). Same key, version bumped. Trends' habit grid
+  still draws days answered under the old wording and says so in one line under
+  the grid, naming the date and the old text.
+- **Footholds:** closed on every entry, always. The saved preference that was
+  reopening them is no longer read or written.
+- **Framework scores:** "12 / 21" on the record and the Reflections card;
+  nothing for a partial response.
+- **Admin settings** menu replaces the row of five links in the nav.
+- **Writing area** 682px (from 620). **Enter starts a paragraph** — a blank
+  line, so the gap is real text and shows the same everywhere; Shift+Enter is
+  a single line break.
+
+### Part 1 — time, dates, schedule (2026-11-11)
 
 **Mirror schedule fixed** (`15dc4e6`). Two defects: the 14-day interval was never
 enforced (the "last report" time came back as text and was compared to a date,
@@ -160,6 +189,12 @@ Both nullable, nothing else touched, applied by hand after a backup.
   the first page view. Rule: nothing in a client component formats a date; it
   receives text. `src/lib/time.ts` holds the arithmetic and is the one place
   that handles clock changes.
+- **A wording change that changes what an answer means keeps its key, bumps
+  the version, and is listed in `CHECKIN_REWORDINGS`** (`daily-checkin.ts`)
+  with the date and the old text, so a chart mixing old and new answers can
+  say so. First use: the screens toggle, 2026-11-11.
+- **Reports run on a fixed anchor** (day + zone in `app_settings`), not "N days
+  since the last one". Manual runs never move the schedule.
 
 ---
 
@@ -209,12 +244,15 @@ Heaviest, if a review starts anywhere: the record rail and Memory panel (~45 lin
 each), the summary and report assessment screens (~34 each), foothold guidance
 (~30), onboarding and signup (~20 each), home (~19), Trends card copy (~18).
 
-**New this session:** `[COPY] edited <time>` on the entry read-back header.
+**New this round:** `[COPY] edited <time>` on the entry read-back header;
+`[COPY] Score` above a framework's "12 / 21"; `[COPY] Before <date> this asked
+"Screens after 11".` under the habit grid.
 
 **Named items the owner has already flagged:**
 - `[COPY] Life satisfaction by area` — the PWI's title, now shown on two Trends
   cards, which is why it reads awkwardly.
 - `[COPY] Every 3 months` — the PWI's suggested rhythm.
-- The daily check-in's "What happened" field and its toggle labels.
+- The daily check-in's "What happened" field and its toggle labels — except
+  "Screen time within one hour before sleep", approved 2026-11-11.
 - Crisis-resource panel content, which is additionally pending clinician review
   (LIM-015).

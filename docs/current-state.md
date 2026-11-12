@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-11-12 · commit `5ee6b80` · working tree clean
-**Round in progress:** `build-package-2026-11.md` — Parts 1–2 of 9 done, awaiting review
+**Last updated:** 2026-11-12 · pushed `7ecb22d` · **`7d263da` (summariser v4) committed locally, not pushed — awaiting the owner's approval of sample output**
+**Round in progress:** `build-package-2026-11.md` — Parts 1, 2 and 6 built; Part 6 awaiting two decisions (below)
 
 The sync point between the repo and planning conversations that cannot see the
 code. Everything here is checked against the code on the day it is written.
@@ -24,6 +24,15 @@ says what exists right now.
   (`lib/journal/personal-guidance.ts`). The panel never lengthens the page.
 - Enter starts a new paragraph (a blank line); Shift+Enter is a single line
   break. Writing area is 682px wide.
+- **Categories are the person's own** (since 2026-11-12). Add, rename, remove
+  and attach them from the entry header, the editor, or the entry's card in
+  Reflections; filter Reflections by one. Refine never suggests or assigns a
+  category. Names are encrypted.
+- **Sensitive flag** on the entry header. A flagged entry stays readable and
+  editable, is still classified for safety, and is kept out of Mirror reports
+  and the personal footholds (Trends and Threads apply it when built). Flagging
+  an entry a report already read makes the next report rebuild without the
+  carried-over account, once.
 - Trash with restore; permanent purge after 30 days via a daily job.
 - **No conversation loop.** There is no `/api/chat` and no `/api/classify`. The
   product is write-and-reflect, not chat. Claude never writes into an entry.
@@ -35,6 +44,10 @@ says what exists right now.
   (An earlier version of this file said the job wrote them. It does not.)
 - The person can read and rewrite any summary. Their version wins everywhere —
   `authoritativeSummary()`.
+- A summary's `topics` are the summariser's phrases for what the entry is
+  about. **Deployed:** still the nine fixed labels (v3). **Built, not deployed:**
+  v4, the writer's own words — two to five phrases, no list. Pushing it
+  re-summarises the archive (37 entries).
 - No length cap on a summary since 2026-10-12. There is a 20,000-character
   refusal limit on the *input*.
 
@@ -77,7 +90,7 @@ reflections, Cabinets 3–5.
 
 ## Schema
 
-15 tables. Everything holding a person's words is encrypted at the field level
+17 tables. Everything holding a person's words is encrypted at the field level
 (AES-256-GCM); column names below say `encrypted_*` where that applies.
 
 | Table | Key columns |
@@ -87,8 +100,10 @@ reflections, Cabinets 3–5.
 | `password_reset_codes` | `user_id`, `code_hash` (bcrypt), `expires_at`, `used_at`, `revoked_at` |
 | `login_attempts` | `email_hmac` (PK), `failed_count`, `locked_until` |
 | `user_profiles` | one row per user, `encrypted_content` = JSON of tendencies/goals/background |
-| `journal_entries` | `encrypted_body`, `encrypted_title`, `modality`, `completed_at`, `edited_at` (body/title changed after finishing), `tier_classification`, `deleted_at`, `purged_at`, `summary_attempts` |
+| `journal_entries` | `encrypted_body`, `encrypted_title`, `modality`, `completed_at`, `edited_at` (body/title changed after finishing), `sensitive_at` (flagged by the person; null = not), `tier_classification`, `deleted_at`, `purged_at`, `summary_attempts` |
 | `journal_entry_summaries` | `encrypted_content` (AI), `encrypted_user_content` (their rewrite), `user_edited_at`, `generation_version` |
+| `entry_categories` | the person's own categories: `user_id`, `encrypted_name` |
+| `journal_entry_categories` | which entries carry which categories; primary key (`journal_entry_id`, `category_id`), both cascade |
 | `questionnaire_responses` | `questionnaire_slug`, `questionnaire_version`, `encrypted_answers`, `encrypted_scoring` (`{total, band, items}`), `completed_at`, `deleted_at` |
 | `mirror_reviews` | `window_start`, `window_end`, `entries_read`, `encrypted_report`, `encrypted_user_report`, `encrypted_period_note`, `model_version` |
 | `user_memory` | `kind`, `encrypted_content`, `source`, `is_active`, `last_confirmed_at` |
@@ -109,7 +124,33 @@ Drizzle owns the schema. Migrations are applied by hand, never on deploy.
 
 ---
 
-## Changes since the previous update — 2026-11-11 to 11-12 (November round, Parts 1–2)
+## Changes since the previous update — 2026-11-11 to 11-12 (November round, Parts 1, 2, 6)
+
+### Part 6 — categories, sensitive flag, summariser v4 (2026-11-12)
+
+**Pushed (`7ecb22d`):**
+- **Categories belong to the person.** Two new tables. One control on the entry
+  header, the editor and the Reflections card: pick from your list, create by
+  typing, rename or delete under "Manage". Reflections filters by category as a
+  database join; the list no longer decrypts summaries at all.
+- **Sensitive flag** on the entry header, with what it does stated under the
+  button. Excluded from the report's summaries, window entries and counts, and
+  from personal footholds. Flag after a report read it → next run withholds the
+  carried-over account once.
+- Report input: summariser `topics` labelled "topics", the person's categories
+  on a separate "their categories" line.
+- Two scripts: `npm run categories:backfill` (dry-run; `--apply` writes) turns
+  the nine old labels into each person's starting categories — **must run
+  before v4 deploys**, or there is nothing to read. `npm run summarise:preview`
+  runs the working-tree summariser over real entries, stores nothing.
+- Migration `0015`: two tables, one nullable column. Applied after a backup.
+
+**Committed locally, not pushed (`7d263da`) — waiting on the owner:**
+- **Summariser v4** — topics in the writer's own words. Sample output on three
+  real entries was produced and shown. Pushing re-summarises the archive.
+
+**Two decisions open:** (1) run the backfill, or start every account with no
+categories; (2) approve v4 from the samples, then push.
 
 ### Part 2 — six small fixes (`5ee6b80`, 2026-11-12)
 
@@ -195,6 +236,17 @@ Both nullable, nothing else touched, applied by hand after a backup.
   say so. First use: the screens toggle, 2026-11-11.
 - **Reports run on a fixed anchor** (day + zone in `app_settings`), not "N days
   since the last one". Manual runs never move the schedule.
+- **Categories are rows, not words inside a summary** (2026-11-12). That is
+  what lets the archive filter by category as a join and stop decrypting
+  summaries for its list. The summariser's `topics` are a description of an
+  entry; the person's categories are a filing system. Separate things, both
+  reach the report, on separate lines.
+- **A flagged entry leaves the report chain by withholding one carried-over
+  account**, not by asking the model to forget. The window's start still
+  counts every entry: when the record began is a fact, not something the
+  report reads.
+- **The category filter stays a select**, not a row of labels: it absorbs any
+  number of categories, which was the package's requirement.
 
 ---
 
@@ -207,6 +259,13 @@ Proposals awaiting a decision: [build-notes.md](build-notes.md).
 - **Phase 6 is blocked** on a focused Layer 2 system-prompt review.
 
 **Live gaps**
+- **Summariser v4 is built and not deployed.** Deployed summaries still carry
+  the nine old labels as `topics`. Push `7d263da` once approved.
+- **The category backfill has not run.** Every account's category list is
+  empty until it does (or until the person creates categories by hand).
+  Dry-run counts: 16 categories, 115 entry links, across 2 accounts.
+- **The sensitive flag is not yet honoured by Trends or Threads** — neither
+  reads entries today. Each applies it when it is built (Parts 4 and 3).
 - **Memory generates nothing.** Only the person writes to `user_memory`. The
   "proposed" state is unreachable, so the Keep control and the "waiting on you"
   callout are dead code. Proposal open in `build-notes.md`, which argues the
@@ -246,7 +305,12 @@ each), the summary and report assessment screens (~34 each), foothold guidance
 
 **New this round:** `[COPY] edited <time>` on the entry read-back header;
 `[COPY] Score` above a framework's "12 / 21"; `[COPY] Before <date> this asked
-"Screens after 11".` under the habit grid.
+"Screens after 11".` under the habit grid; the whole category control
+(`+ Category`, `Find or create…`, `Create "x"`, `Manage`, `Rename`, `Delete`,
+the delete confirmation); the sensitive button and its note (`Mark sensitive`,
+`Sensitive · unmark`, "A sensitive entry stays yours to read and edit, and is
+kept out of Mirror reports, Threads and Trends."); `[COPY] Sensitive` on a
+card; `[COPY] Topics` replacing "Categories" in the summary editor.
 
 **Named items the owner has already flagged:**
 - `[COPY] Life satisfaction by area` — the PWI's title, now shown on two Trends

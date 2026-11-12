@@ -1,6 +1,7 @@
 # Current state
 
-**Last updated:** 2026-11-11 · commit `02a0ec3` (2026-10-14) · working tree clean
+**Last updated:** 2026-11-11 · commit `4b956e9` · working tree clean
+**Round in progress:** `build-package-2026-11.md` — Part 1 of 9 done, awaiting review
 
 The sync point between the repo and planning conversations that cannot see the
 code. Everything here is checked against the code on the day it is written.
@@ -25,7 +26,10 @@ says what exists right now.
   product is write-and-reflect, not chat. Claude never writes into an entry.
 
 ### Summaries (Cabinet 2)
-- One summary per entry, written by a background job (daily, 5am UTC).
+- One summary per entry, **generated when the entry is marked done** (since
+  2026-08-04). The daily 5am UTC job is a backstop: retries after a failure,
+  re-summarises after an edit, and redoes the archive after a prompt change.
+  (An earlier version of this file said the job wrote them. It does not.)
 - The person can read and rewrite any summary. Their version wins everywhere —
   `authoritativeSummary()`.
 - No length cap on a summary since 2026-10-12. There is a 20,000-character
@@ -68,12 +72,12 @@ reflections, Cabinets 3–5.
 
 | Table | Key columns |
 |---|---|
-| `users` | `email_encrypted`, `email_hmac` (login lookup), `password_hash`, `display_name`, `preferences` |
+| `users` | `email_encrypted`, `email_hmac` (login lookup), `password_hash`, `display_name`, `preferences`, `time_zone` (from the device; every date is formatted in it) |
 | `invite_codes` | `code`, `expires_at`, `used_at`, `used_by_user_id`, `revoked_at` |
 | `password_reset_codes` | `user_id`, `code_hash` (bcrypt), `expires_at`, `used_at`, `revoked_at` |
 | `login_attempts` | `email_hmac` (PK), `failed_count`, `locked_until` |
 | `user_profiles` | one row per user, `encrypted_content` = JSON of tendencies/goals/background |
-| `journal_entries` | `encrypted_body`, `encrypted_title`, `modality`, `completed_at`, `tier_classification`, `deleted_at`, `purged_at`, `summary_attempts` |
+| `journal_entries` | `encrypted_body`, `encrypted_title`, `modality`, `completed_at`, `edited_at` (body/title changed after finishing), `tier_classification`, `deleted_at`, `purged_at`, `summary_attempts` |
 | `journal_entry_summaries` | `encrypted_content` (AI), `encrypted_user_content` (their rewrite), `user_edited_at`, `generation_version` |
 | `questionnaire_responses` | `questionnaire_slug`, `questionnaire_version`, `encrypted_answers`, `encrypted_scoring` (`{total, band, items}`), `completed_at`, `deleted_at` |
 | `mirror_reviews` | `window_start`, `window_end`, `entries_read`, `encrypted_report`, `encrypted_user_report`, `encrypted_period_note`, `model_version` |
@@ -95,38 +99,32 @@ Drizzle owns the schema. Migrations are applied by hand, never on deploy.
 
 ---
 
-## Changes since the previous update — 2026-10-12 to 2026-10-14
+## Changes since the previous update — 2026-11-11 (Part 1 of the November round)
 
-First version of this file, so this covers the last build session.
+**Mirror schedule fixed** (`15dc4e6`). Two defects: the 14-day interval was never
+enforced (the "last report" time came back as text and was compared to a date,
+which is always false — one account got 11 reports in 30 days), and the daily
+job had 60 seconds, so the second account's report was cut off every day with
+nothing logged. The job now has 300 seconds, stops starting reports after 240,
+orders longest-waiting first, and `/admin/mirror` shows each account's next due
+date. **The first scheduled run under the fix has not happened yet** — expected
+05:00 UTC on 2026-11-12: one report for the owner, none for the other account.
 
-**Trends**
-- Lines now draw at **any** number of readings. Previously a chart needed 5 and
-  showed a line of text below that. The floors moved onto the *claims* instead:
-  movement still needs 2 readings, the sleep median and the "Plainly" paragraph
-  keep theirs, and the habit grid still waits for 7 days.
-- Hovering, tapping or arrow-keying a point shows its date and value.
-- New **by-area** card for the PWI: one bar per area of life, one colour, the
-  number beside each bar, `(was n)` only where an earlier answer differs.
+**Every date is now the person's own time zone** (`4b956e9`). The device
+reports its zone on every page; the server formats every date in it; nothing
+formats a date in the browser. Day boundaries follow — Home's "today", the
+calendar, Trends ranges and buckets, the check-in guard, the archive filters.
+An entry finished at 8:54 PM Pacific now reads 8:54 PM on that date instead
+of 3:54 AM the next day. Zone is UTC until a person's first page view after
+this shipped.
 
-**SWLS removed** (2026-10-12). Both stored responses permanently deleted at the
-owner's instruction, rows first, then the instrument file. Backup taken.
+**Edited time on entries.** `edited_at` is written only when a finished entry's
+body or title changes; the read-back header shows it beside the completed time.
 
-**Mirror report failure fixed** (2026-10-12). Reports were failing with "reply was
-not JSON". There was no reply: the token budget covers the model's reasoning *and*
-the report, and on a full account the reasoning consumed all 4,000 and wrote
-nothing. Raised to 16,000; the error now names the real cause.
+**Schema:** migration `0014` — `users.time_zone`, `journal_entries.edited_at`.
+Both nullable, nothing else touched, applied by hand after a backup.
 
-**Report input bounded** (2026-10-14, prompt v4). A period's detail is now read
-once. Entry summaries reach back two reporting periods instead of all history;
-one previous report is carried over in full instead of six, with the earlier ones
-contributing their period note only. Measured: **28,601 → 12,890 characters** of
-input, reply 5,436 → 3,074 tokens. Input is now bounded by how often someone
-writes rather than by how long they have been writing.
-
-**Tooling.** `npm run delete:instrument`, `npm run mirror:once -- <id> --measure`
-(free, no model call, prints what each part of a report costs), and
-`scripts/node-shims.cjs` — without which `mirror:once` had been dying at startup
-since 2026-10-12.
+**Docs:** summary timing corrected above (on submit, not the daily job).
 
 ---
 
@@ -148,6 +146,11 @@ since 2026-10-12.
 - **`[COPY]` markers are left visible on screen** rather than hidden, so unreviewed
   copy is obvious in use.
 - **Quantities, never comparison words.** Now rule 10 in CLAUDE.md.
+- **Time zone (2026-11-11):** recorded from the device into `users.time_zone`,
+  formatted on the server, locale fixed to `en-US`, UTC as the fallback before
+  the first page view. Rule: nothing in a client component formats a date; it
+  receives text. `src/lib/time.ts` holds the arithmetic and is the one place
+  that handles clock changes.
 
 ---
 
@@ -169,8 +172,8 @@ Proposals awaiting a decision: [build-notes.md](build-notes.md).
 - **The report characterised figures in its own words** in the last run —
   "scored lowest on achieving in life", "mid-to-low on health". The prompt forbids
   it and so does rule 10. Not yet fixed; a prompt change needs the owner's pass.
-- **Two screens still format dates in the browser** — `trash-list` and
-  `mirror/report-panel`. This caused a real page-breaking mismatch before.
+- **The schedule fix is unobserved.** Fixed and deployed 2026-11-11; the first
+  05:00 UTC run after it is the proof. Check `mirror_reviews` on 2026-11-12.
 - **No instrument wording is verified** against a primary source, which is what
   withholds every severity-range key in Trends.
 
@@ -195,6 +198,8 @@ deliberately visible on screen.
 Heaviest, if a review starts anywhere: the record rail and Memory panel (~45 lines
 each), the summary and report assessment screens (~34 each), foothold guidance
 (~30), onboarding and signup (~20 each), home (~19), Trends card copy (~18).
+
+**New this session:** `[COPY] edited <time>` on the entry read-back header.
 
 **Named items the owner has already flagged:**
 - `[COPY] Life satisfaction by area` — the PWI's title, now shown on two Trends

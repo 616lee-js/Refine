@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useRouter } from "next/navigation";
 import { DictationButton } from "@/components/ui/dictation-button";
 import { JournalGuidanceSidebar } from "@/components/ui/journal-guidance-sidebar";
+import { EntryCategories } from "@/components/ui/entry-categories";
+import type { Category } from "@/lib/journal/categories";
 import { PageBg } from "@/components/ui/page-bg";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
@@ -116,6 +118,8 @@ export default function JournalEntry({
   initialText,
   initialCompletedAt,
   dateLabel,
+  tags,
+  userCategories,
   guidance,
   embedded = false,
 }: {
@@ -130,6 +134,9 @@ export default function JournalEntry({
    * server's, which could differ. See lib/time.ts.
    */
   dateLabel: string;
+  /** The person's categories on this entry, and all of theirs for the picker. */
+  tags: Category[];
+  userCategories: Category[];
   /**
    * Footholds, built on the server because the personal ones read and decrypt.
    * See lib/journal/personal-guidance.ts.
@@ -455,6 +462,16 @@ export default function JournalEntry({
                 >
                   {dateLabel}
                 </span>
+              </div>
+
+              {/* Categories — the person's own, same control as the read-back
+                  page. Here so an entry can be filed while it is being written. */}
+              <div className="pt-[10px]">
+                <EntryCategories
+                  entryId={entryId}
+                  initial={tags}
+                  all={userCategories}
+                />
               </div>
 
               {/* The writing */}

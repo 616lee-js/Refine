@@ -15,6 +15,9 @@ import {
   type ResolvedSummary,
 } from "@/lib/summaries/read";
 import { EntryTitle } from "./entry-title";
+import { EntryCategories } from "@/components/ui/entry-categories";
+import { SensitiveToggle } from "@/components/ui/sensitive-toggle";
+import { categoriesForEntries, listCategories } from "@/lib/journal/categories";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
 import { type ArchiveSearchParams } from "../records";
@@ -181,9 +184,7 @@ export default async function ReflectionDetailPage({
         id: randomUUID(),
         userId,
         journalEntryId: id,
-        context: summaryRow
-          ? "journal_entry_detail_view (+summary)"
-          : "journal_entry_detail_view",
+        context: `journal_entry_detail_view${summaryRow ? " (+summary)" : ""} (${userCategories.length} category names read)`,
       });
     } catch (err) {
       console.error(
@@ -222,6 +223,14 @@ export default async function ReflectionDetailPage({
     entry.completedAt
   );
 
+  // The person's categories: the ones on this entry, and all of them for the
+  // picker. Names are content; counted into the access-log row below.
+  const [tagsByEntry, userCategories] = await Promise.all([
+    categoriesForEntries(authSession.userId, [entry.id]),
+    listCategories(authSession.userId),
+  ]);
+  const tags = tagsByEntry.get(entry.id) ?? [];
+
 
   const written = entry.completedAt ?? entry.createdAt;
   // In the person's zone — see lib/time.ts. This is the line where an entry
@@ -253,9 +262,20 @@ export default async function ReflectionDetailPage({
                   fallback={dateLong}
                 />
               </div>
+              <div className="mt-[10px]">
+                <EntryCategories
+                  entryId={entry.id}
+                  initial={tags}
+                  all={userCategories.map(({ id, name }) => ({ id, name }))}
+                />
+              </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 items-start gap-3">
+              <SensitiveToggle
+                entryId={entry.id}
+                initial={entry.sensitiveAt !== null}
+              />
               <Link
                 href={`/reflections/${entry.id}/edit`}
                 className="rounded-full transition-colors"

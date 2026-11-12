@@ -14,6 +14,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
 import { timeZoneFor } from "@/lib/time-zone";
+import { categoriesForEntries } from "@/lib/journal/categories";
 import { isTimeZone, parseLocalDay } from "@/lib/time";
 import { latestRunAt, type Schedule } from "./schedule";
 import { replyText } from "@/lib/model-reply";
@@ -416,6 +417,14 @@ async function gather(
   ];
 
   /*
+   * A sensitive entry is never read by a report — not its text, not its
+   * summary, not its count. Owner's decision, 2026-11-11. `base` deliberately
+   * does NOT exclude it, because the window's start (the earliest entry) is a
+   * fact about when the record began, not about what the report may read.
+   */
+  const readable = [...base, isNull(journalEntries.sensitiveAt)];
+
+  /*
    * Summaries reach back two reporting periods, not all the way.
    *
    * Anything older is reached through the account carried over from the last
@@ -440,6 +449,7 @@ async function gather(
 
   const summaryRows = await db
     .select({
+      entryId: journalEntries.id,
       completedAt: journalEntries.completedAt,
       encryptedContent: journalEntrySummaries.encryptedContent,
       encryptedUserContent: journalEntrySummaries.encryptedUserContent,
@@ -454,7 +464,7 @@ async function gather(
     )
     .where(
       and(
-        ...base,
+        ...readable,
         summaryCutoff
           ? gt(journalEntries.completedAt, summaryCutoff)
           : undefined
@@ -463,6 +473,12 @@ async function gather(
     .orderBy(desc(journalEntries.completedAt))
     .limit(MAX_SUMMARIES);
 
+  // The person's own categories on each entry, beside the summariser's topics.
+  const tagsByEntry = await categoriesForEntries(
+    userId,
+    summaryRows.map((r) => r.entryId)
+  );
+
   const summaries: string[] = [];
   for (const row of summaryRows) {
     try {
@@ -470,10 +486,12 @@ async function gather(
       // they corrected it, never as the superseded original.
       const s = authoritativeSummary(row).summary;
       const date = row.completedAt ? day(row.completedAt) : "undated";
+      const tags = (tagsByEntry.get(row.entryId) ?? []).map((t) => t.name);
       summaries.push(
         [
           `${date}: ${s.summary}`,
-          s.topics.length ? `  categories: ${s.topics.join(", ")}` : null,
+          s.topics.length ? `  topics: ${s.topics.join(", ")}` : null,
+          tags.length ? `  their categories: ${tags.join(", ")}` : null,
           s.people.length ? `  people: ${s.people.join(", ")}` : null,
         ]
           .filter(Boolean)
@@ -492,7 +510,7 @@ async function gather(
     })
     .from(journalEntries)
     .where(
-      and(...base, since ? gt(journalEntries.completedAt, since) : undefined)
+      and(...readable, since ? gt(journalEntries.completedAt, since) : undefined)
     )
     .orderBy(asc(journalEntries.completedAt));
 
@@ -737,7 +755,7 @@ export async function reviewUser(
   }
 
   const [last] = await db
-    .select({ windowEnd: mirrorReviews.windowEnd })
+    .select({ windowEnd: mirrorReviews.windowEnd, createdAt: mirrorReviews.createdAt })
     .from(mirrorReviews)
     .where(eq(mirrorReviews.userId, userId))
     .orderBy(desc(mirrorReviews.createdAt))
@@ -763,10 +781,36 @@ export async function reviewUser(
 
   const prior = await priorReports(userId);
 
+  /*
+   * ── An entry marked sensitive since the last report ───────────────────────
+   * The carried-over account was written with that entry in front of the
+   * model, and prose cannot be un-read. So for this one run the account is
+   * withheld: the report is rebuilt from the summaries, the period notes and
+   * what follows, and the next run carries THIS report forward instead. One
+   * thinner report, in exchange for the flagged content leaving the chain.
+   * Owner's decision, 2026-11-11 (the package's item 13).
+   */
+  const [flagged] = last
+    ? await db
+        .select({ id: journalEntries.id })
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.userId, userId),
+            isNotNull(journalEntries.sensitiveAt),
+            gt(journalEntries.sensitiveAt, last.createdAt)
+          )
+        )
+        .limit(1)
+    : [];
+  const accountWithheld = Boolean(flagged) && prior.account !== null;
+  if (accountWithheld) prior.account = null;
+
   const { summaries, recent, memory, profile, earliestEntryAt } = await gather(
     userId,
     since,
-    { intervalDays: days, hasPriorAccount: prior.account !== null }
+    // Reach is about whether a report exists, not whether its account is shown.
+    { intervalDays: days, hasPriorAccount: prior.account !== null || accountWithheld }
   );
 
   /*
@@ -845,7 +889,7 @@ export async function reviewUser(
           // Each section says how far back it reaches. Without that, everything
           // below reads as though it belonged to the window above, and a figure
           // spanning a year gets described as recent.
-          prior.account
+          prior.account || accountWithheld
             ? `## Summaries of their entries — the last ${SUMMARY_PERIODS * days} days only, not their whole history`
             : "## Summaries of everything written so far — ALL of their history, not this window",
           summaries.join("\n\n") || "(none)",
@@ -868,7 +912,9 @@ export async function reviewUser(
           "## The current account, carried over from the most recent report — everything older than the summaries above lives here",
           prior.account
             ? `${prior.account.date}\n${prior.account.text}`
-            : "(none — this is their first report)",
+            : accountWithheld
+              ? "(withheld for this run — an entry was marked sensitive after the last report was written. Rebuild the account from the summaries, the period notes and what follows; do not refer to anything you are not given here.)"
+              : "(none — this is their first report)",
           "",
           "## What each earlier period noted at the time — oldest first",
           prior.notes.join("\n") || "(none)",

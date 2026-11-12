@@ -76,6 +76,7 @@ export default async function ReflectionsLayout({
             initial={{
               records: rail.records,
               categories: rail.categories,
+              userCategories: rail.userCategories,
               total: rail.total,
               capped: rail.capped,
             }}

@@ -128,6 +128,9 @@ async function main() {
 
     const entryFilter = `user_id = $1 AND completed_at IS NOT NULL
        AND deleted_at IS NULL AND purged_at IS NULL`;
+    // What a report may READ: sensitive entries out. The window start above
+    // uses entryFilter, as the real run does — see gather() in review.ts.
+    const readableFilter = `${entryFilter} AND sensitive_at IS NULL`;
 
     // When the record begins, for a first report's window start. Mirrors
     // gather() in src/lib/mirror/review.ts.
@@ -190,18 +193,44 @@ async function main() {
 
     const summaryDays = SUMMARY_PERIODS * intervalDays;
     const { rows: summaryRows } = await c.query(
-      `SELECT j.completed_at, s.encrypted_content, s.encrypted_user_content,
+      `SELECT j.id AS entry_id, j.completed_at, s.encrypted_content, s.encrypted_user_content,
               s.user_edited_at, s.generated_at, s.generation_version
          FROM journal_entry_summaries s
          JOIN journal_entries j ON j.id = s.journal_entry_id
         WHERE j.user_id = $1 AND j.completed_at IS NOT NULL
-          AND j.deleted_at IS NULL AND j.purged_at IS NULL
+          AND j.deleted_at IS NULL AND j.purged_at IS NULL AND j.sensitive_at IS NULL
           ${account ? `AND j.completed_at > now() - interval '${summaryDays} days'` : ""}
         ORDER BY j.completed_at DESC LIMIT ${MAX_SUMMARIES}`,
       [userId]
     );
 
     const summaries: string[] = [];
+    // The person's own categories, beside the summariser's topics. Same shape
+    // as the real run: decrypt the person's list once, join by id.
+    const { rows: catRows } = await c.query<{ id: string; encrypted_name: string }>(
+      `SELECT id, encrypted_name FROM entry_categories WHERE user_id = $1`,
+      [userId]
+    );
+    const catName = new Map<string, string>();
+    for (const r of catRows) {
+      try {
+        catName.set(r.id, decrypt(r.encrypted_name));
+      } catch {
+        /* unreadable name is never shown */
+      }
+    }
+    const { rows: linkRows } = await c.query<{ journal_entry_id: string; category_id: string }>(
+      `SELECT l.journal_entry_id, l.category_id FROM journal_entry_categories l
+         JOIN journal_entries j ON j.id = l.journal_entry_id WHERE j.user_id = $1`,
+      [userId]
+    );
+    const tagsFor = new Map<string, string[]>();
+    for (const l of linkRows) {
+      const name = catName.get(l.category_id);
+      if (!name) continue;
+      tagsFor.set(l.journal_entry_id, [...(tagsFor.get(l.journal_entry_id) ?? []), name]);
+    }
+
     for (const r of summaryRows) {
       try {
         const s = authoritativeSummary({
@@ -212,10 +241,12 @@ async function main() {
           generationVersion: r.generation_version,
         }).summary;
         const date = r.completed_at?.toISOString().slice(0, 10) ?? "undated";
+        const tags = (tagsFor.get(r.entry_id) ?? []).sort();
         summaries.push(
           [
             `${date}: ${s.summary}`,
-            s.topics.length ? `  categories: ${s.topics.join(", ")}` : null,
+            s.topics.length ? `  topics: ${s.topics.join(", ")}` : null,
+            tags.length ? `  their categories: ${tags.join(", ")}` : null,
             s.people.length ? `  people: ${s.people.join(", ")}` : null,
           ]
             .filter(Boolean)
@@ -228,7 +259,7 @@ async function main() {
 
     const { rows: recentRows } = await c.query(
       `SELECT id, completed_at, encrypted_body FROM journal_entries
-        WHERE ${entryFilter} ${since ? "AND completed_at > $2" : ""}
+        WHERE ${readableFilter} ${since ? "AND completed_at > $2" : ""}
         ORDER BY completed_at ASC`,
       since ? [userId, since] : [userId]
     );

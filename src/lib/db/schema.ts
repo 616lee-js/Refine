@@ -8,6 +8,7 @@ import {
   jsonb,
   index,
   pgEnum,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -193,6 +194,16 @@ export const journalEntries = pgTable("journal_entries", {
    * `completed_at` is set: edits to a draft are just writing.
    */
   editedAt: timestamp("edited_at", { withTimezone: true }),
+  /**
+   * Marked sensitive by the person. NULL means not.
+   *
+   * A sensitive entry is theirs to read, edit and keep, and it is still
+   * classified for safety — but it is left out of Mirror reports, Threads,
+   * Trends and the personal footholds. A time rather than a yes/no, so a
+   * report can tell whether an entry was flagged after it had already been
+   * read. Owner's decision, 2026-11-11.
+   */
+  sensitiveAt: timestamp("sensitive_at", { withTimezone: true }),
   /** Highest tier across the entry's paragraphs at the last classification. */
   tierClassification: integer("tier_classification"),
   classifiedAt: timestamp("classified_at", { withTimezone: true }),
@@ -898,3 +909,48 @@ export const loginAttempts = pgTable("login_attempts", {
   /** Set once the count passes the threshold. Null means not locked. */
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
 });
+
+// ── Entry categories ─────────────────────────────────────────────────────────
+
+/**
+ * The person's own categories for their entries.
+ *
+ * Theirs entirely: Refine neither suggests nor assigns one. Owner's decision,
+ * 2026-11-11, replacing the summariser's fixed list of nine — a bucket a model
+ * chose was never a way for someone to find their own writing again.
+ *
+ * Names are the person's words about their own writing, so they are encrypted
+ * like a title. "Does this name already exist" is answered after decrypting
+ * the person's own list, which is small.
+ */
+export const entryCategories = pgTable("entry_categories", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedName: text("encrypted_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (t) => [index("entry_categories_user_idx").on(t.userId)]);
+
+/** Which entries carry which categories. Removing either side removes the link. */
+export const journalEntryCategories = pgTable("journal_entry_categories", {
+  journalEntryId: text("journal_entry_id")
+    .notNull()
+    .references(() => journalEntries.id, { onDelete: "cascade" }),
+  categoryId: text("category_id")
+    .notNull()
+    .references(() => entryCategories.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.journalEntryId, t.categoryId] }),
+  /** The category filter in Reflections looks up entries by category. */
+  index("journal_entry_categories_category_idx").on(t.categoryId),
+]);
+

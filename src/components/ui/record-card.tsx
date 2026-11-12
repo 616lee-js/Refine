@@ -52,6 +52,11 @@ export type RecordCardProps = {
   statusLabel?: string;
   /** Fired when the card is chosen. The rail uses it to fold the list on a phone. */
   onSelect?: () => void;
+  /**
+   * Rendered under the card, OUTSIDE the link — a control inside a link would
+   * navigate on every click. The rail puts the entry's category control here.
+   */
+  footer?: React.ReactNode;
 };
 
 export function RecordCard({
@@ -63,8 +68,10 @@ export function RecordCard({
   accent = false,
   statusLabel,
   onSelect,
+  footer,
 }: RecordCardProps) {
   return (
+    <div>
     <Link
       href={href}
       onClick={onSelect}
@@ -138,6 +145,8 @@ export function RecordCard({
         )}
       </Sheet>
     </Link>
+    {footer && <div className="mt-[6px] px-[15px]">{footer}</div>}
+    </div>
   );
 }
 

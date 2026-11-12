@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { authoritativeSummary } from "@/lib/summaries/read";
+import { categoriesForEntries } from "./categories";
 import { genericSections, type GuidanceItem, type GuidanceSection } from "./guidance";
 
 /**
@@ -122,6 +123,7 @@ async function personalItems(userId: string): Promise<GuidanceItem[]> {
   // ── What recurs across recent summaries ─────────────────────────────────────
   const summaryRows = await db
     .select({
+      entryId: journalEntries.id,
       completedAt: journalEntries.completedAt,
       encryptedContent: journalEntrySummaries.encryptedContent,
       encryptedUserContent: journalEntrySummaries.encryptedUserContent,
@@ -139,7 +141,9 @@ async function personalItems(userId: string): Promise<GuidanceItem[]> {
         eq(journalEntries.userId, userId),
         isNotNull(journalEntries.completedAt),
         isNull(journalEntries.deletedAt),
-        isNull(journalEntries.purgedAt)
+        isNull(journalEntries.purgedAt),
+        // A sensitive entry never feeds a foothold. Owner's decision, 2026-11-11.
+        isNull(journalEntries.sensitiveAt)
       )
     )
     .orderBy(desc(journalEntries.completedAt))
@@ -148,15 +152,25 @@ async function personalItems(userId: string): Promise<GuidanceItem[]> {
   const categoryCounts = new Map<string, number>();
   const peopleCounts = new Map<string, number>();
 
+  // Categories are the person's own now, not words in the summary. Counted
+  // over the same recent entries the people are counted over.
+  const tagsByEntry = await categoriesForEntries(
+    userId,
+    summaryRows.map((r) => r.entryId)
+  );
+  for (const tags of tagsByEntry.values()) {
+    for (const t of tags) {
+      categoryCounts.set(t.name, (categoryCounts.get(t.name) ?? 0) + 1);
+    }
+  }
+  decrypted += tagsByEntry.size;
+
   for (const row of summaryRows) {
     try {
       // Through authoritativeSummary: where the writer corrected a summary, the
-      // categories counted are the ones they chose, never the superseded ones.
+      // people counted are the ones they kept, never the superseded ones.
       const s = authoritativeSummary(row).summary;
       decrypted++;
-      for (const c of s.topics) {
-        categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
-      }
       for (const p of s.people) {
         peopleCounts.set(p, (peopleCounts.get(p) ?? 0) + 1);
       }

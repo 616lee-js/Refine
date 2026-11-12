@@ -6,12 +6,17 @@ import { db } from "@/lib/db";
 import {
   contentAccessLog,
   journalEntries,
+  journalEntryCategories,
   journalEntrySummaries,
   questionnaireResponses,
 } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, maxTotal, type Answers } from "@/lib/questionnaires";
-import { authoritativeSummary } from "@/lib/summaries/read";
+import {
+  categoriesForEntries,
+  listCategories,
+  type Category,
+} from "@/lib/journal/categories";
 import {
   addDays,
   dayEnd,
@@ -85,8 +90,12 @@ export type ArchiveRecord = {
   kindLabel: string;
   /** Categories, or a check-in's values. The card's subheader. */
   detail: string[];
-  /** Categories only — what the category filter matches on. */
+  /** Category names only — what the category filter matches on. */
   categories: string[];
+  /** The same categories with their ids, for the control on the card. */
+  tags: Category[];
+  /** Marked sensitive by the person. Shown; kept out of Mirror and Trends. */
+  sensitive: boolean;
   /** The user's own title, shown in the main view, never on the card. */
   title: string | null;
   draft: boolean;
@@ -132,7 +141,7 @@ function trackerDetail(slug: string, answers: Answers): string[] {
 /**
  * Every record the rail can show, newest first, already decrypted.
  *
- * Filtering happens after loading rather than in SQL because categories live
+ * Search happens after loading rather than in SQL because titles live
  * inside an encrypted blob — there is nothing for Postgres to filter on. The
  * date bounds ARE applied in SQL, since those are real columns and narrowing
  * there is what keeps the decryption count down.
@@ -144,6 +153,7 @@ export async function loadRecords(
 ): Promise<{
   records: ArchiveRecord[];
   categories: CategoryOption[];
+  userCategories: Category[];
   total: number;
   /** The row limit cut the list short, so `total` is a floor, not a total. */
   capped: boolean;
@@ -171,15 +181,28 @@ export async function loadRecords(
    * rather than on what was done, so the cost grew with total history on every
    * record view — the rail renders on all of them.
    *
-   * ── Search and category are deliberately not bounded ────────────────────────
-   * Categories and titles live inside encrypted blobs, so Postgres cannot
-   * filter on them; the matching happens here, after decryption. Applying a
-   * limit first would silently drop older matches and make search quietly
-   * wrong. So an explicit search stays exhaustive and pays for it, while the
-   * ordinary case — no filter — is fast.
+   * ── Search is deliberately not bounded ──────────────────────────────────────
+   * Titles live inside encrypted blobs, so Postgres cannot filter on them; the
+   * matching happens here, after decryption. Applying a limit first would
+   * silently drop older matches and make search quietly wrong. So an explicit
+   * search stays exhaustive and pays for it, while the ordinary case — no
+   * filter — is fast. A category filter is a join (below) and stays bounded.
    */
-  const needsFullScan = filters.category !== null || filters.q !== null;
+  const needsFullScan = filters.q !== null;
   const rowLimit = needsFullScan ? undefined : RAIL_LIMIT;
+
+  /*
+   * The person's categories, read once: they are the filter's options, the
+   * names on every card, and — when a category is being filtered on — the id
+   * to filter by. Categories are rows now rather than words inside an
+   * encrypted summary, so the category filter is a join rather than a scan.
+   */
+  const userCategories = await listCategories(userId);
+  const filterCategory = filters.category
+    ? userCategories.find(
+        (c) => c.name.toLowerCase() === filters.category!.toLowerCase()
+      ) ?? null
+    : null;
 
   const entryQuery = db
     .select({
@@ -188,6 +211,7 @@ export async function loadRecords(
       updatedAt: journalEntries.updatedAt,
       completedAt: journalEntries.completedAt,
       encryptedTitle: journalEntries.encryptedTitle,
+      sensitiveAt: journalEntries.sensitiveAt,
     })
     .from(journalEntries)
     .where(
@@ -195,7 +219,19 @@ export async function loadRecords(
         eq(journalEntries.userId, userId),
         isNull(journalEntries.deletedAt),
         isNull(journalEntries.purgedAt),
-        ...entryDateBounds
+        ...entryDateBounds,
+        // A category that matches nothing matches nothing — not everything.
+        filters.category
+          ? inArray(
+              journalEntries.id,
+              db
+                .select({ id: journalEntryCategories.journalEntryId })
+                .from(journalEntryCategories)
+                .where(
+                  eq(journalEntryCategories.categoryId, filterCategory?.id ?? "")
+                )
+            )
+          : undefined
       )
     )
     .orderBy(desc(journalEntries.updatedAt))
@@ -229,39 +265,35 @@ export async function loadRecords(
 
   const [entries, responses] = await Promise.all([
     rowLimit ? entryQuery.limit(rowLimit) : entryQuery,
-    rowLimit ? responseQuery.limit(rowLimit) : responseQuery,
+    // Check-ins and frameworks carry no categories, so a category filter
+    // excludes them outright.
+    filters.category
+      ? Promise.resolve([] as Awaited<typeof responseQuery>)
+      : rowLimit
+        ? responseQuery.limit(rowLimit)
+        : responseQuery,
   ]);
 
   const entryIds = entries.map((e) => e.id);
-  const summaryRows = entryIds.length
-    ? await db
-        .select({
-          journalEntryId: journalEntrySummaries.journalEntryId,
-          encryptedContent: journalEntrySummaries.encryptedContent,
-          encryptedUserContent: journalEntrySummaries.encryptedUserContent,
-          userEditedAt: journalEntrySummaries.userEditedAt,
-          generatedAt: journalEntrySummaries.generatedAt,
-          generationVersion: journalEntrySummaries.generationVersion,
-        })
-        .from(journalEntrySummaries)
-        .where(inArray(journalEntrySummaries.journalEntryId, entryIds))
-    : [];
+
+  /*
+   * Until 2026-11-12 this decrypted every entry's summary to read its
+   * categories off it. Categories are the person's own rows now, so the only
+   * thing a summary row tells this list is that it exists — which is all the
+   * "summarising…" marker needs, and it needs no decryption to learn it.
+   */
+  const [summarised, tagsByEntry] = await Promise.all([
+    entryIds.length
+      ? db
+          .select({ journalEntryId: journalEntrySummaries.journalEntryId })
+          .from(journalEntrySummaries)
+          .where(inArray(journalEntrySummaries.journalEntryId, entryIds))
+          .then((rows) => new Set(rows.map((r) => r.journalEntryId)))
+      : new Set<string>(),
+    categoriesForEntries(userId, entryIds),
+  ]);
 
   let failures = 0;
-
-  const categoriesByEntry = new Map<string, string[]>();
-  for (const row of summaryRows) {
-    try {
-      // Through authoritativeSummary, so a corrected summary's categories are
-      // what the rail shows — never the version the user already fixed.
-      categoriesByEntry.set(
-        row.journalEntryId,
-        authoritativeSummary(row).summary.topics
-      );
-    } catch {
-      failures += 1;
-    }
-  }
 
   const all: ArchiveRecord[] = [
     ...entries.map((e): ArchiveRecord => {
@@ -276,7 +308,8 @@ export async function loadRecords(
           failures += 1;
         }
       }
-      const categories = categoriesByEntry.get(e.id) ?? [];
+      const tags = tagsByEntry.get(e.id) ?? [];
+      const categories = tags.map((t) => t.name);
       return {
         id: e.id,
         // Both stay inside the archive: a finished entry opens to read, an
@@ -292,9 +325,11 @@ export async function loadRecords(
         kindLabel: "Writing",
         detail: categories,
         categories,
+        tags,
+        sensitive: e.sensitiveAt !== null,
         title,
         draft: !e.completedAt,
-        awaitingSummary: e.completedAt !== null && !categoriesByEntry.has(e.id),
+        awaitingSummary: e.completedAt !== null && !summarised.has(e.id),
       };
     }),
     ...responses.map((r): ArchiveRecord => {
@@ -347,6 +382,8 @@ export async function loadRecords(
         kindLabel: q?.shortName ?? r.slug,
         detail,
         categories: [],
+        tags: [],
+        sensitive: false,
         // A questionnaire's name is the instrument's, not the user's.
         title: q?.title ?? r.slug,
         draft: false,
@@ -362,36 +399,14 @@ export async function loadRecords(
   }
 
   /*
-   * The picker's options — derived from the unfiltered set, so choosing one
-   * does not empty the list of the others.
-   *
-   * Counted and ordered most-used first rather than alphabetically. With
-   * categories as specific as they currently are, alphabetical order buries the
-   * few that recur among a long tail of one-offs; frequency puts the usable
-   * ones first. Ties break alphabetically so the order is stable.
-   *
-   * ── Scoped to what was loaded ───────────────────────────────────────────────
-   * Since the unfiltered load is bounded (see above), these are the categories
-   * present in the most recent RAIL_LIMIT records, not in the whole archive. A
-   * category that appears only in much older writing is not offered.
-   *
-   * That is the price of not decrypting the entire archive on every record
-   * view, and it mostly resolves itself: once categories become broad groupings
-   * rather than one-off phrases, the handful of real ones all appear in recent
-   * records anyway. Search is the exhaustive path in the meantime — it scans
-   * everything precisely so nothing old becomes unreachable.
+   * The filter's options: every category the person has, most used first,
+   * with how many live entries carry it. Exhaustive — counted from the link
+   * table, not from the records that happened to load — because a category
+   * on only older writing must still be offered.
    */
-  const counts = new Map<string, number>();
-  for (const r of all) {
-    for (const c of r.categories) {
-      const key = c.trim();
-      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-
-  const categories: CategoryOption[] = [...counts.entries()]
-    .map(([value, count]) => ({ value, count }))
-    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+  const categories: CategoryOption[] = userCategories
+    .filter((c) => c.count > 0)
+    .map((c) => ({ value: c.name, count: c.count }))
     .slice(0, CATEGORY_LIMIT);
 
   const records = all
@@ -423,14 +438,14 @@ export async function loadRecords(
    * summariser uses; see src/lib/after-response.ts for why an un-awaited
    * promise would not be safe here.
    */
-  const decrypted = categoriesByEntry.size + responses.length;
+  const decrypted = userCategories.length + responses.length;
   if (decrypted > 0) {
     after(async () => {
       try {
         await db.insert(contentAccessLog).values({
           id: randomUUID(),
           userId,
-          context: `archive_rail_view (${categoriesByEntry.size} summaries, ${responses.length} responses read)`,
+          context: `archive_rail_view (${userCategories.length} category names, ${responses.length} responses read)`,
         });
       } catch (err) {
         // The response is already sent; there is nobody left to report to, and
@@ -456,6 +471,8 @@ export async function loadRecords(
   return {
     records: records.slice(0, RAIL_LIMIT),
     categories,
+    // For the category control on each card: ids as well as names.
+    userCategories: userCategories.map(({ id, name }) => ({ id, name })),
     total: records.length,
     capped,
   };
@@ -482,7 +499,7 @@ export async function loadRail(userId: string, params: ArchiveSearchParams) {
   // Day boundaries and date labels are the person's, not the server's.
   const tz = await timeZoneFor(userId);
   const { range, ...filters } = parseFilters(params, tz);
-  const { records, categories, total, capped } = await loadRecords(
+  const { records, categories, userCategories, total, capped } = await loadRecords(
     userId,
     filters,
     tz
@@ -491,6 +508,7 @@ export async function loadRail(userId: string, params: ArchiveSearchParams) {
   return {
     records,
     categories,
+    userCategories,
     total,
     capped,
     view: {

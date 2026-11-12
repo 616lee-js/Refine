@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RecordCard, RecordCardList } from "@/components/ui/record-card";
+import { EntryCategories } from "@/components/ui/entry-categories";
+import type { Category } from "@/lib/journal/categories";
 import { instrumentLabel, listStartable } from "@/lib/questionnaires";
 import { useStartRecord } from "../use-start-record";
 import type { ArchiveRecord, CategoryOption, RecordKind } from "./records";
@@ -107,6 +109,7 @@ const COPY = {
   rangeYear: "[COPY] This year",
   rangeAll: "[COPY] Any time",
 
+  sensitive: "[COPY] Sensitive",
   categoryLabel: "[COPY] Category",
   categoryAny: "[COPY] Any category",
   categoryNote: "[COPY] Most used first",
@@ -376,6 +379,8 @@ export function RecordRail({
   initial: {
     records: ArchiveRecord[];
     categories: CategoryOption[];
+    /** Every category the person has, for the control on each entry card. */
+    userCategories: Category[];
     total: number;
     capped: boolean;
   };
@@ -450,7 +455,7 @@ export function RecordRail({
     };
   }, [query]);
 
-  const { records, categories, total, capped } = data;
+  const { records, categories, userCategories, total, capped } = data;
 
   /** Applies a filter change without a full page navigation. */
   function apply(next: Partial<RailView>) {
@@ -851,9 +856,23 @@ export function RecordRail({
               statusLabel={
                 r.draft
                   ? COPY.unfinished
-                  : r.awaitingSummary
-                    ? COPY.summarising
-                    : undefined
+                  : r.sensitive
+                    ? COPY.sensitive
+                    : r.awaitingSummary
+                      ? COPY.summarising
+                      : undefined
+              }
+              // Categories are the person's own, changed from the card as well
+              // as from the entry. Writing only; a check-in or framework has none.
+              footer={
+                r.kind === "open" ? (
+                  <EntryCategories
+                    compact
+                    entryId={r.id}
+                    initial={r.tags}
+                    all={userCategories}
+                  />
+                ) : undefined
               }
             />
           ))}

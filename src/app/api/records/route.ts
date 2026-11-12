@@ -39,6 +39,7 @@ export async function GET(req: Request) {
   return Response.json({
     records: rail.records,
     categories: rail.categories,
+    userCategories: rail.userCategories,
     total: rail.total,
     capped: rail.capped,
   });

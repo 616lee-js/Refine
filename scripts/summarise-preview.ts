@@ -9,9 +9,10 @@ import { generateSummary, SUMMARISER_VERSION } from "../src/lib/summaries/genera
  *
  * ── Why this exists ───────────────────────────────────────────────────────────
  * Every summariser change is approved against sample output before it runs —
- * the package's rule for this round — and the daily job re-summarises the
- * whole archive the moment a new version deploys. This is how sample output is
- * produced without deploying anything.
+ * the package's rule for this round. A new version applies to entries submitted
+ * or edited after it ships (nothing already summarised is redone), so the only
+ * way to see what it would write beforehand is to run it here, on real entries,
+ * and store nothing.
  *
  *   npm run summarise:preview -- <user-id-prefix> [count]
  *

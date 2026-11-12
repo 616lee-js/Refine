@@ -236,11 +236,12 @@ export const journalEntries = pgTable("journal_entries", {
   /**
    * Which summariser prompt version those attempts were spent under.
    *
-   * Without this, the cap and the reflow fight each other: an entry that failed
-   * five times under prompt v1 would be excluded forever, including from the
-   * v2 reflow that might well have summarised it fine. Attempts are therefore
-   * consecutive failures *under one prompt version*, not for all time — a new
-   * version is a new trial and earns fresh attempts, exactly as an edit does.
+   * Without this, an entry that failed five times under prompt v1 would be
+   * excluded forever, even once it becomes due again under v2 (after an edit)
+   * and v2 might well summarise it fine. Attempts are therefore consecutive
+   * failures *under one prompt version*, not for all time — a new version is a
+   * new trial and earns fresh attempts, exactly as an edit does. (A prompt
+   * change on its own no longer makes anything due; see lib/summaries/queue.ts.)
    *
    * The cap still bites: five failures under v2 stops v2 retrying. Poison-entry
    * protection is preserved, it is just scoped to the prompt that was failing.
@@ -307,10 +308,10 @@ export const journalEntrySummaries = pgTable("journal_entry_summaries", {
    * have not.
    *
    * ── Why this is a separate column ─────────────────────────────────────────
-   * Summaries regenerate: editing an entry makes its summary stale, and editing
-   * `entry-summariser.md` reflows the whole archive. If a correction lived in
-   * `encrypted_content`, the next regeneration would silently destroy it — no
-   * error, no warning, the user's words simply gone.
+   * Summaries regenerate: editing an entry makes its summary stale and the
+   * queue rewrites it. If a correction lived in `encrypted_content`, the next
+   * regeneration would silently destroy it — no error, no warning, the user's
+   * words simply gone.
    *
    * Keeping it in a column the queue never writes to means regeneration needs no
    * special case and cannot get one wrong. The AI original is preserved by

@@ -40,9 +40,12 @@ category fingerprint into the version; `lib/summaries/categories.ts` is deleted.
 The person's own categories reach the Mirror report on a separate line beside
 the topics. The summary editor's nine toggles are a single text field.
 
-Deploying this re-versions every summary, so the daily job re-summarises the
-whole archive (37 entries, Haiku). Sample output on three real entries was shown
-to the owner before this ran — see `npm run summarise:preview`.
+This applies to entries submitted or edited after it ships. Nothing already
+summarised is regenerated: the queue's "summary from an older prompt counts as
+due" rule was removed in the same change, at the owner's direction — a summary
+is made when an entry is submitted, and what was written stays as written.
+Sample output on three real entries was shown to the owner before this shipped
+— see `npm run summarise:preview`.
 
 ---
 

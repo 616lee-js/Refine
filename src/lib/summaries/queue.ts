@@ -31,7 +31,9 @@ import { generateSummary, SUMMARISER_VERSION } from "./generate";
  * 2. Autosave edits. A debounced PUT to a completed entry bumps `updated_at`
  *    without going through PATCH, so it is caught here rather than costing an
  *    AI call per keystroke pause.
- * 3. Prompt-version reflow — see below. Nothing else walks the whole archive.
+ *
+ * (It used to also re-summarise the whole archive after a prompt change. Not
+ * since 2026-11-12 — see the note in dueConditions.)
  *
  * What was traded away, deliberately: edit coalescing. Five saves to a completed
  * entry are now five AI calls where the cron would have summarised once. The
@@ -43,15 +45,13 @@ import { generateSummary, SUMMARISER_VERSION } from "./generate";
  * because the tier drives the crisis panel; adding a second blocking Anthropic
  * call would double the failure surface of finishing an entry.
  *
- * ── Prompt changes reflow automatically ───────────────────────────────────────
- * An entry is also due when its summary was generated under a different prompt
- * version. Editing `entry-summariser.md` therefore re-summarises the whole
- * archive, 25 a day, with no script to remember and no rows to hand-edit.
- *
- * This is what makes the content pass non-destructive: the prompt can be
- * rewritten against real accumulated entries without stranding weeks of
- * summaries generated under wording that was rejected. Cabinet 2 is derived
- * data, and derived data should follow its deriver.
+ * ── A prompt change reaches only what comes after it ──────────────────────────
+ * Until 2026-11-12 an entry was also due when its summary came from an older
+ * prompt version, so editing `entry-summariser.md` re-summarised the whole
+ * archive overnight. The product owner's direction: a summary is made when an
+ * entry is submitted, and what was already written stays as written. So a
+ * prompt change applies to entries submitted or edited after it, and to
+ * nothing else. `generation_version` still says which prompt made each summary.
  */
 
 /**
@@ -104,13 +104,20 @@ function dueConditions() {
       isNull(journalEntries.summaryAttemptVersion),
       ne(journalEntries.summaryAttemptVersion, SUMMARISER_VERSION)
     ),
+    /*
+     * Never summarised, or edited since. Nothing else.
+     *
+     * There was a third clause here until 2026-11-12: a summary generated under
+     * an older prompt version counted as due, so any prompt change re-summarised
+     * the whole archive overnight. Removed at the product owner's direction —
+     * a summary is made when an entry is submitted, and a prompt change reaches
+     * only entries submitted or edited after it. What was already written stays
+     * as it was written. `generation_version` still records which prompt made
+     * each one, so the vintages remain distinguishable.
+     */
     or(
-      // Never summarised.
       isNull(journalEntrySummaries.id),
-      // Entry edited since it was summarised.
-      lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt),
-      // Summarised under a prompt that no longer exists — reflow.
-      ne(journalEntrySummaries.generationVersion, SUMMARISER_VERSION)
+      lt(journalEntrySummaries.generatedAt, journalEntries.updatedAt)
     ),
   ];
 }

@@ -39,15 +39,17 @@ says what exists right now.
 
 ### Summaries (Cabinet 2)
 - One summary per entry, **generated when the entry is marked done** (since
-  2026-08-04). The daily job (08:00 UTC) is a backstop: retries after a failure,
-  re-summarises after an edit, and redoes the archive after a prompt change.
-  (An earlier version of this file said the job wrote them. It does not.)
+  2026-08-04). The daily job (08:00 UTC) is a backstop: retries after a failure
+  and re-summarises after an edit. **A prompt change never regenerates existing
+  summaries** (rule removed 2026-11-12); it applies to entries submitted or
+  edited after it. (An earlier version of this file said the job wrote them. It
+  does not.)
 - The person can read and rewrite any summary. Their version wins everywhere —
   `authoritativeSummary()`.
 - A summary's `topics` are the summariser's phrases for what the entry is
-  about. **Deployed:** still the nine fixed labels (v3). **Built, not deployed:**
-  v4, the writer's own words — two to five phrases, no list. Pushing it
-  re-summarises the archive (37 entries).
+  about — since v4 (2026-11-12), two to five phrases in the writer's own words.
+  Summaries written before that still carry the old nine labels as topics and
+  are left as they are.
 - No length cap on a summary since 2026-10-12. There is a 20,000-character
   refusal limit on the *input*.
 
@@ -139,18 +141,18 @@ Drizzle owns the schema. Migrations are applied by hand, never on deploy.
   carried-over account once.
 - Report input: summariser `topics` labelled "topics", the person's categories
   on a separate "their categories" line.
-- Two scripts: `npm run categories:backfill` (dry-run; `--apply` writes) turns
-  the nine old labels into each person's starting categories — **must run
-  before v4 deploys**, or there is nothing to read. `npm run summarise:preview`
-  runs the working-tree summariser over real entries, stores nothing.
+- Two scripts: `npm run categories:backfill` (dry-run; `--apply` writes) would
+  turn the nine old labels into each person's starting categories — **decided
+  not to run**; lists start empty. `npm run summarise:preview` runs the
+  working-tree summariser over real entries, stores nothing.
 - Migration `0015`: two tables, one nullable column. Applied after a backup.
 
-**Committed locally, not pushed (`7d263da`) — waiting on the owner:**
-- **Summariser v4** — topics in the writer's own words. Sample output on three
-  real entries was produced and shown. Pushing re-summarises the archive.
-
-**Two decisions open:** (1) run the backfill, or start every account with no
-categories; (2) approve v4 from the samples, then push.
+**Summariser v4** — topics in the writer's own words, approved from sample
+output on three real entries. Shipped with one correction the owner called out:
+the queue no longer treats a summary from an older prompt as due, so **nothing
+already summarised is regenerated** — v4 applies to entries submitted or
+edited from now on. That re-summarise-everything rule had been in the queue
+since Phase 6; it is gone.
 
 ### Part 2 — six small fixes (`5ee6b80`, 2026-11-12)
 
@@ -259,11 +261,8 @@ Proposals awaiting a decision: [build-notes.md](build-notes.md).
 - **Phase 6 is blocked** on a focused Layer 2 system-prompt review.
 
 **Live gaps**
-- **Summariser v4 is built and not deployed.** Deployed summaries still carry
-  the nine old labels as `topics`. Push `7d263da` once approved.
-- **The category backfill has not run.** Every account's category list is
-  empty until it does (or until the person creates categories by hand).
-  Dry-run counts: 16 categories, 115 entry links, across 2 accounts.
+- **Category lists are empty** on both accounts until the person creates some.
+  Decided 2026-11-12: the old labels are not carried over.
 - **The sensitive flag is not yet honoured by Trends or Threads** — neither
   reads entries today. Each applies it when it is built (Parts 4 and 3).
 - **Memory generates nothing.** Only the person writes to `user_memory`. The

@@ -16,10 +16,13 @@ import { authoritativeSummary } from "../src/lib/summaries/read";
  * them. It reads the AUTHORITATIVE summary, so a label the person removed in a
  * correction is not put back.
  *
- * ── Run before the summariser changes ─────────────────────────────────────────
- * Summariser v4 rewrites `topics` as free phrases in the writer's words. Once
- * that has re-summarised the archive, the nine labels are gone from the
- * summaries and there is nothing here to read. Order matters.
+ * ── Optional, and not load-bearing ────────────────────────────────────────────
+ * Decided 2026-11-12: not run. Category lists start empty and the person
+ * builds their own. Kept as a one-off tool in case that changes. Reports and
+ * insights read entry content and summaries, never categories, so nothing
+ * waits on this. The labels it reads survive in existing summaries, since a
+ * prompt change no longer regenerates them; an entry edited after summariser
+ * v4 loses its labels, so the later this runs the less it finds.
  *
  * ── Safety ────────────────────────────────────────────────────────────────────
  *   - Prints counts per label per account. Never prints an entry, a summary or

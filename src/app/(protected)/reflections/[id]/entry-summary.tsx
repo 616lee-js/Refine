@@ -12,7 +12,6 @@ import {
   type EntrySummary,
   type SummaryQuote,
 } from "@/lib/summaries/types";
-import { CATEGORY_VALUES, canonicalCategory } from "@/lib/summaries/categories";
 
 /**
  * What Refine took from an entry, shown on the read-back page so it can be
@@ -49,13 +48,12 @@ import { CATEGORY_VALUES, canonicalCategory } from "@/lib/summaries/categories";
  * the entry (2026-09-21); whether it should open by default there is the
  * owner's call.
  *
- * ── Categories are a fixed list, for the model only ───────────────────────────
- * The summariser must pick from the nine in lib/summaries/categories.ts, and
- * anything else it returns is discarded before storage. The writer is not held
- * to that: the nine are toggles here, with a free-text field beside them for
- * anything that does not fit. The machine is constrained so its output groups;
- * the person is not, because a correction is their own words about their own
- * entry.
+ * ── Topics are the writer's words; categories are elsewhere ───────────────────
+ * Since summariser v4 (2026-11-12) `topics` is a few phrases in the writer's
+ * own words about what the entry is about, edited here as plain text. The
+ * fixed list of nine that used to be toggled here is gone: categories are the
+ * person's own now, set from the entry's header, and are not part of the
+ * summary at all.
  *
  * `people` stays free text throughout — the writer's own naming is the point
  * there, and always was.
@@ -72,11 +70,9 @@ const COPY = {
   staleKept: "[COPY] ; your correction is kept either way",
   thin: "[COPY] Short entry — deliberately minimal",
   summaryLabel: "[COPY] Summary",
-  // "Categories", not "Topics": these are the buckets a record sorts into.
-  // The stored field is still `topics` — renaming a key inside a stored JSON
-  // blob is a data migration for no benefit.
-  topicsLabel: "[COPY] Categories",
-  topicsExtraLabel: "[COPY] Something else",
+  // "Topics" since summariser v4: what the entry is about, in the writer's own
+  // words. Categories are the person's own and live on the entry's header.
+  topicsLabel: "[COPY] Topics",
   peopleLabel: "[COPY] People",
   commaHint: "[COPY] — separated by commas",
   quotesLabel: "[COPY] Quotes",
@@ -139,25 +135,10 @@ export function EntrySummaryPanel({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(summary?.summary ?? "");
-  /*
-   * Stored categories split two ways: the ones on the fixed list become
-   * toggles, anything else stays editable as text.
-   *
-   * The model is held to the nine (see refineCategories in
-   * lib/summaries/parse.ts), so extras only ever arrive from a correction the
-   * writer made — or from a summary written before the list existed, which is
-   * why this has to tolerate them rather than discard them.
-   */
-  const splitCategories = (all: string[]) => ({
-    picked: all.map(canonicalCategory).filter((c): c is string => c !== null),
-    extra: all.filter((c) => canonicalCategory(c) === null),
-  });
-
-  const initialSplit = splitCategories(summary?.topics ?? []);
-  const [pickedCategories, setPickedCategories] = useState(initialSplit.picked);
-  const [extraCategories, setExtraCategories] = useState(
-    initialSplit.extra.join(", ")
-  );
+  // Topics are the summariser's phrases in the writer's own words (v4), edited
+  // here as comma-separated text. The person's categories are a separate
+  // control on the entry's header, not part of the summary.
+  const [topics, setTopics] = useState((summary?.topics ?? []).join(", "));
   const [people, setPeople] = useState((summary?.people ?? []).join(", "));
   const [quotes, setQuotes] = useState<SummaryQuote[]>(summary?.quotes ?? []);
   const [busy, setBusy] = useState(false);
@@ -196,17 +177,9 @@ export function EntrySummaryPanel({
     textTransform: "uppercase" as const,
   };
 
-  function toggleCategory(c: string) {
-    setPickedCategories((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
-    );
-  }
-
   function resetDraft() {
     setDraft(summary?.summary ?? "");
-    const split = splitCategories(summary?.topics ?? []);
-    setPickedCategories(split.picked);
-    setExtraCategories(split.extra.join(", "));
+    setTopics((summary?.topics ?? []).join(", "));
     setPeople((summary?.people ?? []).join(", "));
     setQuotes(summary?.quotes ?? []);
     setError(null);
@@ -225,15 +198,7 @@ export function EntrySummaryPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           summary: draft,
-          // Toggles first, then anything typed. Order is stable so a save
-          // that changes nothing does not reshuffle what is stored.
-          topics: [
-            ...pickedCategories,
-            ...extraCategories
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean),
-          ],
+          topics: topics.split(",").map((t) => t.trim()).filter(Boolean),
           people: people.split(",").map((p) => p.trim()).filter(Boolean),
           quotes: quotes.map((q) => q.text),
         }),
@@ -380,10 +345,9 @@ export function EntrySummaryPanel({
                 />
               </div>
 
-              {/* Categories: the nine as toggles, plus a box for anything
-                  else. The model is held to the nine — see refineCategories in
-                  lib/summaries/parse.ts — but the writer is not: a correction
-                  is their own words about their own entry. */}
+              {/* Topics: the summariser's phrases in the writer's words,
+                  as plain text. A correction is their own words about their
+                  own entry, so nothing here is checked against a list. */}
               <div>
                 <p
                   className="mb-[6px]"
@@ -391,46 +355,11 @@ export function EntrySummaryPanel({
                 >
                   {COPY.topicsLabel}
                 </p>
-                <div className="flex flex-wrap gap-[6px]">
-                  {CATEGORY_VALUES.map((c) => {
-                    const on = pickedCategories.includes(c);
-                    return (
-                      <button
-                        key={c}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggleCategory(c)}
-                        className="rounded-full transition-colors"
-                        style={{
-                          padding: "5px 11px",
-                          fontSize: "12px",
-                          color: on ? "var(--rf-paper)" : "var(--rf-text-3)",
-                          background: on ? "var(--rf-text)" : "transparent",
-                          boxShadow: on
-                            ? "none"
-                            : "inset 0 0 0 1px var(--rf-border)",
-                        }}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <label
-                  htmlFor="summary-topics-extra"
-                  className="mb-[6px] mt-3 block"
-                  style={{ fontSize: "12.5px", color: "var(--rf-text-2)" }}
-                >
-                  {COPY.topicsExtraLabel}{" "}
-                  <span style={{ color: "var(--rf-text-4)" }}>
-                    {COPY.commaHint}
-                  </span>
-                </label>
                 <input
-                  id="summary-topics-extra"
-                  value={extraCategories}
-                  onChange={(e) => setExtraCategories(e.target.value)}
+                  id="summary-topics"
+                  aria-label={COPY.topicsLabel}
+                  value={topics}
+                  onChange={(e) => setTopics(e.target.value)}
                   className="w-full rounded-[4px] px-3 py-2 outline-none"
                   style={{
                     fontSize: "13px",
@@ -439,6 +368,12 @@ export function EntrySummaryPanel({
                     boxShadow: "inset 0 0 0 1px var(--rf-border)",
                   }}
                 />
+                <p
+                  className="mt-1"
+                  style={{ fontSize: "11px", color: "var(--rf-text-4)" }}
+                >
+                  {COPY.commaHint}
+                </p>
               </div>
 
               <div>

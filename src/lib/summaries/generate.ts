@@ -9,7 +9,6 @@ import summariserPrompt from "@/lib/layer2/entry-summariser.md";
 
 import type { EntrySummary } from "./types";
 import { parse, SummaryGenerationError } from "./parse";
-import { CATEGORY_FINGERPRINT, categoryPromptBlock } from "./categories";
 
 export { SummaryGenerationError };
 
@@ -18,27 +17,14 @@ export { SummaryGenerationError };
  * editing the prompt makes old and new summaries distinguishable without anyone
  * remembering to bump a literal.
  *
- * The category fingerprint is folded in because the vocabulary lives in
- * TypeScript, not in the markdown. Without it, editing that list would change
- * what the model is told while leaving the version identical — nothing would be
- * regenerated, and the archive would hold two incompatible vintages with no way
- * to tell them apart. Changing the list is now self-announcing: every summary
- * becomes due, exactly as a prompt edit does.
+ * From v2 to v3 a fingerprint of the fixed category list was folded in here, so
+ * that editing the list re-versioned every summary. The list was retired on
+ * 2026-11-12 — categories are the person's own now — so the prompt is the whole
+ * of what the model is told, and its header is the whole of the version.
  */
-export const SUMMARISER_VERSION = `${promptVersion(
-  summariserPrompt
-)}+${CATEGORY_FINGERPRINT}`;
+export const SUMMARISER_VERSION = promptVersion(summariserPrompt);
 
-/**
- * The prompt with the category list substituted in.
- *
- * Interpolated rather than pasted into the markdown so the two cannot drift.
- * Built once at module load — the list is static.
- */
-const SYSTEM_PROMPT = summariserPrompt.replace(
-  "{{CATEGORIES}}",
-  categoryPromptBlock()
-);
+const SYSTEM_PROMPT = summariserPrompt;
 
 const MODEL = "claude-haiku-4-5-20251001";
 

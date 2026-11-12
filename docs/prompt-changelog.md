@@ -19,6 +19,33 @@ Entries below are written when a change actually lands, so these are pointers on
 
 ---
 
+## `entry-summariser.md` v4 — 2026-11-12
+
+**Topics return to the writer's own words.** The fixed list of nine categories
+(v2, 2026-09-24) is retired. The product owner's decision: entry categories are
+the person's to set, in their own words, from the entry itself — a bucket a
+model chose was never a way for someone to find their own writing again. So the
+summariser no longer assigns buckets, and `topics` is what the entry is about,
+said the way the writer would: *"the argument with Dad", "not sleeping",
+"whether to leave the job"*. Two to five of them; not a category and not a
+judgement — "work stress" is fine, "burnout" is a diagnosis and is not.
+
+What changed in the file: the categories rule became the topics rule above, the
+`## The categories` section and its interpolated list are gone, and the output
+note for `topics` says two to five phrases. Nothing else moved.
+
+What changed around it: `parse.ts` no longer filters topics against a
+vocabulary (trim, de-duplicate, cap at five); `generate.ts` no longer folds a
+category fingerprint into the version; `lib/summaries/categories.ts` is deleted.
+The person's own categories reach the Mirror report on a separate line beside
+the topics. The summary editor's nine toggles are a single text field.
+
+Deploying this re-versions every summary, so the daily job re-summarises the
+whole archive (37 entries, Haiku). Sample output on three real entries was shown
+to the owner before this ran — see `npm run summarise:preview`.
+
+---
+
 ## `memory-extraction.md` v4 — 2026-10-12
 
 **A period's detail is read once, and after that the report about it is what

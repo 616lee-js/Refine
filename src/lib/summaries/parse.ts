@@ -1,4 +1,3 @@
-import { canonicalCategory } from "./categories";
 import {
   MAX_PEOPLE,
   MAX_QUOTES,
@@ -107,28 +106,26 @@ export function refineQuotes(quotes: SummaryQuote[], body: string): SummaryQuote
 }
 
 /**
- * Model categories, resolved against the fixed vocabulary.
+ * The model's topics — phrases in the writer's own words, since v4.
  *
- * This is what makes the closed list a guarantee rather than an instruction:
- * anything the model invents is dropped here, before storage, so a one-off
- * phrase can never reach the database however the prompt is interpreted.
- *
- * Case and surrounding space are forgiven and mapped to the canonical spelling
- * — failing an otherwise-correct category over a capital letter would be
- * pedantry, and "Work" and "work" splitting into two buckets is the exact
- * problem this exists to prevent.
- *
- * Order is preserved and duplicates collapse.
+ * There is no vocabulary to check against any more (the fixed list was retired
+ * on 2026-11-12; categories are the person's own now, in their own table).
+ * What remains is mechanical: trimmed, collapsed whitespace, duplicates
+ * dropped without regard to case, capped. Order is preserved — the model lists
+ * what the entry is most about first.
  */
-export function refineCategories(raw: unknown): string[] {
+export function refineTopics(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
 
-  const seen = new Set<string>();
+  const seen = new Map<string, string>();
   for (const value of raw) {
-    const canonical = canonicalCategory(value);
-    if (canonical) seen.add(canonical);
+    if (typeof value !== "string") continue;
+    const phrase = value.replace(/\s+/g, " ").trim();
+    if (!phrase) continue;
+    const key = phrase.toLowerCase();
+    if (!seen.has(key)) seen.set(key, phrase);
   }
-  return [...seen].slice(0, MAX_TOPICS);
+  return [...seen.values()].slice(0, MAX_TOPICS);
 }
 
 export function parse(raw: string, body: string): EntrySummary {
@@ -155,7 +152,7 @@ export function parse(raw: string, body: string): EntrySummary {
     // Trimmed, not truncated. A long entry earns a long summary; see the note
     // where MAX_SUMMARY_CHARS used to be in ./types.ts.
     summary: obj.summary.trim(),
-    topics: refineCategories(obj.topics),
+    topics: refineTopics(obj.topics),
     people: asStringArray(obj.people, MAX_PEOPLE),
     // Located, then refined, then capped — the cap applies after the weak
     // picks are gone, so a bad first pick does not cost a good fourth one.

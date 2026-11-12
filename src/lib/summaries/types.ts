@@ -46,11 +46,11 @@ export type RawSummary = {
 };
 
 /**
- * The cap is the vocabulary itself — see src/lib/summaries/categories.ts. There
- * is no arbitrary limit per entry: the prompt asks for restraint, and a long
- * entry that genuinely ranges across most of the domains may carry them.
+ * Topics are phrases in the writer's own words (summariser v4, 2026-11-12), and
+ * the prompt asks for two to five. This is the hard stop behind that, applied
+ * to the model's reply and to a correction alike.
  */
-export const MAX_TOPICS = 9;
+export const MAX_TOPICS = 5;
 export const MAX_PEOPLE = 5;
 /** What the model may pick. */
 export const MAX_QUOTES = 3;

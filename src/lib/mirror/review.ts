@@ -315,6 +315,7 @@ async function checkinLines(userId: string): Promise<CheckinLines> {
       completedAt: questionnaireResponses.completedAt,
       encryptedAnswers: questionnaireResponses.encryptedAnswers,
       encryptedScoring: questionnaireResponses.encryptedScoring,
+      version: questionnaireResponses.questionnaireVersion,
     })
     .from(questionnaireResponses)
     .where(
@@ -338,7 +339,13 @@ async function checkinLines(userId: string): Promise<CheckinLines> {
         ? ((JSON.parse(decrypt(row.encryptedScoring)) as { total?: number })
             .total ?? null)
         : null;
-      decrypted.push({ slug: row.slug, completedAt: row.completedAt, answers, total });
+      decrypted.push({
+        slug: row.slug,
+        completedAt: row.completedAt,
+        answers,
+        total,
+        version: row.version,
+      });
     } catch {
       // One unreadable response must not stop the report.
     }

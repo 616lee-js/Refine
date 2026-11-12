@@ -26,7 +26,14 @@ export const dailyCheckin: TrackerQuestionnaire = {
    * which wording was actually on screen when it was answered — the keys and the
    * values are unchanged, so nothing about the data moves.
    */
-  version: "v2-2026-10-09",
+  /*
+   * v3 (2026-11-11): `late_screens` was "Screens after 11", which did not say
+   * whether tapping it meant screens were used or avoided. It now asks about
+   * screen time in the hour before sleep — a different question under the same
+   * key, hence the version bump; Trends notes the change under the habit grid
+   * for days answered before it (see CHECKIN_REWORDINGS).
+   */
+  version: "v3-2026-11-11",
   title: "Daily check-in",
   shortName: "Check-in",
   blurb: "Four taps. Then write, or don't.",
@@ -84,8 +91,26 @@ export const dailyCheckin: TrackerQuestionnaire = {
         { key: "moved", label: "Moved" },
         { key: "outside", label: "Outside" },
         { key: "alcohol", label: "Alcohol" },
-        { key: "late_screens", label: "Screens after 11" },
+        // Approved wording, 2026-11-11. Tapping it means screens WERE used.
+        { key: "late_screens", label: "Screen time within one hour before sleep" },
       ],
     },
   ],
 };
+
+/**
+ * Wording changes that altered what an answer MEANS, so a chart can say so.
+ *
+ * A key is frozen once answered (see CLAUDE.md), so a question that changes
+ * meaning keeps its key and bumps the version. Anything reading old answers
+ * beside new ones needs to know the line was different then.
+ */
+export const CHECKIN_REWORDINGS: {
+  /** Responses with a version earlier than this were asked the old wording. */
+  since: string;
+  field: string;
+  option: string;
+  before: string;
+}[] = [
+  { since: "2026-11-11", field: "kept_up", option: "late_screens", before: "Screens after 11" },
+];

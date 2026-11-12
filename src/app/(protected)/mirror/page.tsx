@@ -360,6 +360,7 @@ async function loadTrends(
       completedAt: questionnaireResponses.completedAt,
       encryptedAnswers: questionnaireResponses.encryptedAnswers,
       encryptedScoring: questionnaireResponses.encryptedScoring,
+      version: questionnaireResponses.questionnaireVersion,
     })
     .from(questionnaireResponses)
     .where(
@@ -390,6 +391,7 @@ async function loadTrends(
         completedAt: row.completedAt,
         answers,
         total,
+        version: row.version,
       });
     } catch {
       // One unreadable response must not take the whole chart down. It is

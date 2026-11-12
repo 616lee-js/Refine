@@ -116,7 +116,6 @@ export default function JournalEntry({
   initialText,
   initialCompletedAt,
   dateLabel,
-  initialGuidanceOpen,
   guidance,
   embedded = false,
 }: {
@@ -131,7 +130,6 @@ export default function JournalEntry({
    * server's, which could differ. See lib/time.ts.
    */
   dateLabel: string;
-  initialGuidanceOpen: boolean;
   /**
    * Footholds, built on the server because the personal ones read and decrypt.
    * See lib/journal/personal-guidance.ts.
@@ -157,9 +155,26 @@ export default function JournalEntry({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [guidanceOpen, setGuidanceOpen] = useState(initialGuidanceOpen);
+  /*
+   * Closed on every entry, always. Product owner's decision, restated
+   * 2026-11-11 after a stored preference was found reopening them: "default to
+   * Footholds being collapsed ALWAYS". Nothing is saved when they are opened
+   * and nothing is read when an entry loads.
+   */
+  const [guidanceOpen, setGuidanceOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /** Where the caret should be after a programmatic insert. See onKeyDown. */
+  const pendingCaretRef = useRef<number | null>(null);
+
+  // Restore the caret after Enter inserted a paragraph break. Before paint, so
+  // the caret never visibly jumps to the end and back.
+  useLayoutEffect(() => {
+    const at = pendingCaretRef.current;
+    if (at === null) return;
+    pendingCaretRef.current = null;
+    textareaRef.current?.setSelectionRange(at, at);
+  }, [text]);
   /** Sizes the grid cell the textarea stretches into. See BODY_TYPE. */
   const sizeMirrorRef = useRef<HTMLDivElement>(null);
   /** Off-layout copy used only to find the caret's line. */
@@ -330,15 +345,9 @@ export default function JournalEntry({
     }
   }, [text]);
 
+  // For this entry only. Deliberately not persisted — see the state above.
   function toggleGuidance(next: boolean) {
     setGuidanceOpen(next);
-    // Fire-and-forget: a failed preference write must never interrupt writing,
-    // and the worst case is the rail reverting next visit.
-    fetch("/api/user/preferences", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guidanceOpen: next }),
-    }).catch(() => {});
   }
 
   /**
@@ -425,7 +434,8 @@ export default function JournalEntry({
           } pt-[38px]`}
           style={{ paddingBottom: grown ? "35vh" : 30 }}
         >
-          <div className="w-full" style={{ maxWidth: 620 }}>
+          {/* 682, from 620: 10% wider at the product owner's request, 2026-11-11. */}
+          <div className="w-full" style={{ maxWidth: 682 }}>
             <Sheet minHeight={330} className="px-[34px] pb-[22px] pt-[26px]">
               {/* Header */}
               <div
@@ -480,6 +490,36 @@ export default function JournalEntry({
                     ref={textareaRef}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
+                    /*
+                     * Enter starts a new paragraph: a blank line, so the gap is
+                     * real text and shows the same while writing, on read-back,
+                     * and anywhere else the entry is rendered. Shift+Enter keeps
+                     * the plain single line break. Product owner's choice,
+                     * 2026-11-11, over a richer editor — which is where cursor
+                     * and scroll jumping came from before.
+                     *
+                     * The safety classifier splits on blank lines, so each
+                     * paragraph is classified on its own. That is the existing
+                     * rule applied to more paragraphs, not a new one.
+                     */
+                    onKeyDown={(e) => {
+                      if (
+                        e.key !== "Enter" ||
+                        e.shiftKey ||
+                        e.ctrlKey ||
+                        e.metaKey ||
+                        e.altKey ||
+                        e.nativeEvent.isComposing
+                      ) {
+                        return;
+                      }
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const start = el.selectionStart;
+                      const end = el.selectionEnd;
+                      setText(el.value.slice(0, start) + "\n\n" + el.value.slice(end));
+                      pendingCaretRef.current = start + 2;
+                    }}
                     autoFocus
                     rows={1}
                     placeholder={COPY.placeholder}

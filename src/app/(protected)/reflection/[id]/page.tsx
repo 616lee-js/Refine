@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { journalEntries, users } from "@/lib/db/schema";
+import { journalEntries } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { guidanceFor } from "@/lib/journal/personal-guidance";
 import { fmtDateWeekday } from "@/lib/time";
@@ -63,29 +63,8 @@ export default async function JournalEntryPage({
     }
   }
 
-  /*
-   * Footholds start CLOSED. Product owner, 2026-10-09.
-   *
-   * They were open, on the reasoning that "guidance nobody can find does not
-   * exist" — written when closing them left nothing on screen. The collapsed
-   * state now shows a spine with the item count on a laptop, and a fixed edge
-   * tab below that, so it is findable — and a blank page should open blank.
-   *
-   * The stored preference still wins once the person has chosen either way.
-   */
-  const [user] = await db
-    .select({ preferences: users.preferences })
-    .from(users)
-    .where(eq(users.id, authSession.userId))
-    .limit(1);
-
-  const prefs =
-    user?.preferences && typeof user.preferences === "object"
-      ? (user.preferences as Record<string, unknown>)
-      : {};
-
-  const initialGuidanceOpen =
-    typeof prefs.guidanceOpen === "boolean" ? prefs.guidanceOpen : false;
+  // Footholds start closed on every entry. Product owner, 2026-10-09, restated
+  // 2026-11-11: no saved preference reopens them. See journal-entry.tsx.
 
   // Footholds, including any drawn from this person's own record. Built here
   // because the personal ones read the database and decrypt — see
@@ -100,7 +79,6 @@ export default async function JournalEntryPage({
       initialText={initialText}
       initialCompletedAt={entry.completedAt?.toISOString() ?? null}
       dateLabel={fmtDateWeekday(entry.completedAt ?? entry.createdAt, tz)}
-      initialGuidanceOpen={initialGuidanceOpen}
       guidance={guidance}
     />
   );

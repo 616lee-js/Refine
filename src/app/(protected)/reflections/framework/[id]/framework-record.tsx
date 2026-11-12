@@ -4,7 +4,12 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
 import { Toast } from "@/components/ui/toast";
-import type { LikertQuestionnaire } from "@/lib/questionnaires";
+import {
+  isComplete,
+  maxTotal,
+  score,
+  type LikertQuestionnaire,
+} from "@/lib/questionnaires";
 
 /**
  * A questionnaire response, in the archive's main view.
@@ -99,6 +104,7 @@ function answerColumns(options: { label: string }[]): string {
 const COPY = {
   eyebrow: (name: string) => `[COPY] Framework · ${name}`,
   lastTaken: (date: string) => `[COPY] Last taken ${date}`,
+  scoreLabel: "[COPY] Score",
   noteLabel: "[COPY] In your own words · optional",
   notePlaceholder: "[COPY] Anything the numbers miss.",
   noAnswer: "[COPY] Not answered",
@@ -144,6 +150,8 @@ export function FrameworkRecord({
   const [answers, setAnswers] = useState<Record<string, number>>(initialAnswers);
   const [note, setNote] = useState(initialNote);
   const [editing, setEditing] = useState(initialEditing);
+  // Becomes true the moment a fresh response is recorded, before the refresh.
+  const [recorded, setRecorded] = useState(initialCompleted);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -200,6 +208,7 @@ export function FrameworkRecord({
       // is here, and what was just recorded should be visible as a record.
       setEditing(false);
       setBusy(false);
+      setRecorded(true);
       setToast(COPY.recordedToast);
       router.refresh();
     } catch {
@@ -270,6 +279,22 @@ export function FrameworkRecord({
             >
               {q.cadence}
             </span>
+          )}
+          {/* The score, out of the total possible — "12 / 21". Shown once the
+              response is recorded and only when every item is answered: a
+              partial response scores low in a way that looks like a real
+              reading. The published severity ranges stay in Mirror, where they
+              have their provenance beside them. */}
+          {recorded && !editing && isComplete(q, answers) && (
+            <div className="flex flex-col items-end">
+              <Eyebrow size={9.5}>{COPY.scoreLabel}</Eyebrow>
+              <span
+                className="font-mono"
+                style={{ fontSize: "15px", color: "var(--rf-text)" }}
+              >
+                {score(q, answers)?.total ?? 0} / {maxTotal(q)}
+              </span>
+            </div>
           )}
           {lastTakenLabel && (
             <Eyebrow size={9.5}>{COPY.lastTaken(lastTakenLabel)}</Eyebrow>

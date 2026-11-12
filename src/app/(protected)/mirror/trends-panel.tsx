@@ -228,6 +228,14 @@ function Matrix({ card }: { card: MatrixCard }) {
   return (
     <ChartCard label={card.label} meta={card.meta} wide>
       <DotMatrix rows={card.rows} />
+      {card.note && (
+        <p
+          className="mt-[10px]"
+          style={{ fontSize: "11.5px", lineHeight: 1.5, color: "var(--rf-text-4)" }}
+        >
+          {card.note}
+        </p>
+      )}
     </ChartCard>
   );
 }

@@ -67,7 +67,10 @@ export default async function ReflectionsLayout({
             phone. Below `lg` the panel also collapses itself — see
             ./record-rail.tsx. */}
         <div className="flex w-full flex-col gap-8 pb-14 lg:flex-row lg:items-start lg:gap-7">
-          <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+          {/* `flex-1` only beside the list. In the stacked (phone) layout the
+              main pane was told to fill the screen height, which pushed the
+              collapsed list to the bottom behind a band of nothing. */}
+          <main className="flex min-w-0 flex-col lg:flex-1">{children}</main>
 
           <RecordRail
             initial={{

@@ -10,7 +10,7 @@ import {
   questionnaireResponses,
 } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
-import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
+import { getQuestionnaire, maxTotal, type Answers } from "@/lib/questionnaires";
 import { authoritativeSummary } from "@/lib/summaries/read";
 import {
   addDays,
@@ -208,6 +208,7 @@ export async function loadRecords(
       createdAt: questionnaireResponses.createdAt,
       completedAt: questionnaireResponses.completedAt,
       encryptedAnswers: questionnaireResponses.encryptedAnswers,
+      encryptedScoring: questionnaireResponses.encryptedScoring,
     })
     .from(questionnaireResponses)
     .where(
@@ -307,6 +308,27 @@ export async function loadRecords(
             (JSON.parse(decrypt(r.encryptedAnswers)) as { answers?: Answers })
               .answers ?? {};
           detail = trackerDetail(r.slug, answers);
+        } catch {
+          failures += 1;
+        }
+      } else if (q?.kind === "likert" && r.encryptedScoring) {
+        /*
+         * The score, out of the total possible — "12 / 21" — on the card.
+         *
+         * From the stored scoring, not the answers: it carries the per-item
+         * values, so "every item answered" can be checked without a second
+         * decrypt. A partial response shows nothing, because its low total
+         * looks like a real reading. Same rows, same access-log count.
+         */
+        try {
+          const scoring = JSON.parse(decrypt(r.encryptedScoring)) as {
+            total?: number;
+            items?: Record<string, number>;
+          };
+          const answered = Object.keys(scoring.items ?? {}).length;
+          if (typeof scoring.total === "number" && answered === q.items.length) {
+            detail = [`${scoring.total} / ${maxTotal(q)}`];
+          }
         } catch {
           failures += 1;
         }

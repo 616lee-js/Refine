@@ -200,6 +200,11 @@ export function JournalGuidanceSidebar({
           className={`${columnAt} shrink-0 overflow-y-auto px-[26px] pb-5 pt-[22px]`}
           style={{
             width: 306,
+            // Never taller than the window: long guidance scrolls inside the
+            // rail rather than lengthening the page under the writing.
+            maxHeight: "100vh",
+            position: "sticky",
+            top: 0,
             borderLeft: "1px solid var(--rf-border)",
           }}
         >

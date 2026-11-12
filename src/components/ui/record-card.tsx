@@ -50,6 +50,8 @@ export type RecordCardProps = {
   awaitingSummary?: boolean;
   /** Shown under the subheader — "Unfinished", "Summarising…". */
   statusLabel?: string;
+  /** Fired when the card is chosen. The rail uses it to fold the list on a phone. */
+  onSelect?: () => void;
 };
 
 export function RecordCard({
@@ -60,10 +62,12 @@ export function RecordCard({
   selected = false,
   accent = false,
   statusLabel,
+  onSelect,
 }: RecordCardProps) {
   return (
     <Link
       href={href}
+      onClick={onSelect}
       aria-current={selected ? "page" : undefined}
       className="block transition-colors"
     >

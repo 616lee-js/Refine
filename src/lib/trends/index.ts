@@ -4,6 +4,7 @@ import {
   type TrendRange,
 } from "./range";
 import {
+  CHECKIN_REWORDINGS,
   getQuestionnaire,
   isComplete,
   maxTotal,
@@ -98,6 +99,8 @@ const COPY = {
   matrixLabel: (field: string, days: number) => `[COPY] ${field} · last ${days} days`,
   matrixGathering: (logged: number, days: number) =>
     `[COPY] ${logged} of the last ${days} days logged`,
+  matrixReworded: (since: string, before: string) =>
+    `[COPY] Before ${since} this asked "${before}".`,
 
   level: (since: string) => `[COPY] level since ${since}`,
   moved: (dir: string, size: number, since: string) =>
@@ -221,6 +224,8 @@ export type MatrixCard = {
   count: number;
   rows: MatrixRow[];
   meta: string;
+  /** Under the grid: a wording change that affects some of the days shown. */
+  note: string | null;
 };
 
 export type TrendCard = LineCard | MatrixCard | DomainsCard;
@@ -309,6 +314,8 @@ export type DecryptedResponse = {
   answers: Answers;
   /** Present for likert instruments only. */
   total: number | null;
+  /** Which version of the instrument was answered. Optional for older callers. */
+  version?: string;
 };
 
 // ── Card builders ────────────────────────────────────────────────────────────
@@ -383,9 +390,12 @@ function lineCard(opts: {
   };
 }
 
+/** One day's check-in, with the version it was answered under. */
+type DayResponse = { answers: Answers; version?: string };
+
 function matrixCard(
   tracker: TrackerQuestionnaire,
-  byDay: Map<number, Answers>,
+  byDay: Map<number, DayResponse>,
   today: Date,
   tz: string
 ): MatrixCard | null {
@@ -416,13 +426,14 @@ function matrixCard(
       state: "gathering",
       rows: [],
       meta: COPY.matrixGathering(logged, MATRIX_DAYS),
+      note: null,
     };
   }
 
   const rows: MatrixRow[] = field.options.map((o) => ({
     label: o.label,
     days: days.map((d) => {
-      const answers = byDay.get(d);
+      const answers = byDay.get(d)?.answers;
       if (!answers) return "none";
       const picked = answers[field.key];
       if (typeof picked !== "object" || picked === null) return "no";
@@ -430,12 +441,27 @@ function matrixCard(
     }),
   }));
 
+  /*
+   * If any day on the grid was answered under an earlier wording of one of its
+   * questions, say so once under the grid. The days are still drawn — they were
+   * answered — but the reader should know the line read differently then.
+   */
+  const rewording = CHECKIN_REWORDINGS.find(
+    (r) =>
+      r.field === field.key &&
+      days.some((d) => {
+        const v = byDay.get(d)?.version;
+        return v !== undefined && v !== tracker.version;
+      })
+  );
+
   return {
     ...base,
     state: "charted",
     rows,
     // CONTENT PASS: placeholder. A record of what happened, never a target.
     meta: `${logged} of the last ${MATRIX_DAYS} days logged`,
+    note: rewording ? COPY.matrixReworded(rewording.since, rewording.before) : null,
   };
 }
 
@@ -550,12 +576,12 @@ export function buildTrends(
    * follow the selection.
    */
   const matrixSince = now.getTime() - MATRIX_DAYS * 86_400_000;
-  const byDay = new Map<number, Answers>();
+  const byDay = new Map<number, DayResponse>();
   for (const c of allCheckins) {
     if (c.completedAt.getTime() < matrixSince) continue;
     // One row per day. A second check-in on the same day replaces the first —
     // the screen is explicitly re-editable, so the latest is what was meant.
-    byDay.set(startOfDay(c.completedAt, tz), c.answers);
+    byDay.set(startOfDay(c.completedAt, tz), { answers: c.answers, version: c.version });
   }
 
   const numeric = (rows: DecryptedResponse[], key: string): Reading[] =>

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { isAdminUserId } from "@/lib/auth/admin";
+import { AdminMenu } from "./admin-menu";
 
 /**
  * Admin entry points in the header — visible only to an admin.
@@ -41,42 +41,7 @@ export async function AdminNav({ active = false }: { active?: boolean } = {}) {
   const session = await getSession();
   if (!session.userId || !isAdminUserId(session.userId)) return null;
 
-  return (
-    <div
-      className="flex items-center gap-[10px] rounded-full"
-      style={{
-        padding: "4px 11px 4px 9px",
-        // Deliberately not the accent: admin context must not read as part of
-        // the reflective surface. A cool grey against a warm paper page is the
-        // clearest available "you are somewhere else".
-        background: active ? "var(--rf-admin)" : "var(--rf-admin-soft)",
-        boxShadow: active ? "none" : "inset 0 0 0 1px var(--rf-admin-border)",
-      }}
-    >
-      <span
-        className="font-mono uppercase"
-        style={{
-          fontSize: "9px",
-          letterSpacing: "0.16em",
-          color: active ? "var(--rf-paper)" : "var(--rf-admin)",
-          opacity: active ? 0.75 : 1,
-        }}
-      >
-        Admin
-      </span>
-      {LINKS.map((l) => (
-        <Link
-          key={l.href}
-          href={l.href}
-          className="transition-opacity hover:opacity-70"
-          style={{
-            fontSize: "12.5px",
-            color: active ? "var(--rf-paper)" : "var(--rf-admin)",
-          }}
-        >
-          {l.label}
-        </Link>
-      ))}
-    </div>
-  );
+  // One item, "Admin settings", opening a menu of the screens. The gate above is
+  // what keeps it off every non-admin's page; the menu itself grants nothing.
+  return <AdminMenu links={LINKS} active={active} />;
 }

@@ -844,6 +844,10 @@ export function RecordRail({
               detail={r.detail}
               accent={r.kind === "framework"}
               selected={r.id === selectedId}
+              // On a phone, choosing a record folds the list so the record has
+              // the screen. At laptop width the list is always open; this is a
+              // no-op there.
+              onSelect={() => setBrowseOpen(false)}
               statusLabel={
                 r.draft
                   ? COPY.unfinished

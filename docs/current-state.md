@@ -1,7 +1,7 @@
 # Current state
 
-**Last updated:** 2026-11-12 · pushed `7ecb22d` · **`7d263da` (summariser v4) committed locally, not pushed — awaiting the owner's approval of sample output**
-**Round in progress:** `build-package-2026-11.md` — Parts 1, 2 and 6 built; Part 6 awaiting two decisions (below)
+**Last updated:** 2026-11-12 · commit `79ca836` · working tree clean
+**Round in progress:** `build-package-2026-11.md` — Parts 1, 2 and 6 done; next Part 4
 
 The sync point between the repo and planning conversations that cannot see the
 code. Everything here is checked against the code on the day it is written.

@@ -306,8 +306,16 @@ async function main() {
     // The formatting, and the [COPY] strip, come from review.ts rather than
     // being repeated here — a figure phrased differently in a test run than in a
     // scheduled report makes the test run useless for judging the wording.
+    // The person's zone, so the figures match their charts. See lib/time.ts.
+    const { rows: tzRows } = await c.query<{ time_zone: string | null }>(
+      `SELECT time_zone FROM users WHERE id = $1`,
+      [userId]
+    );
+    const tz = tzRows[0]?.time_zone ?? "UTC";
     const checkins: string[] =
-      responses.length > 0 ? [...trendsToLines(buildTrends(responses))] : [];
+      responses.length > 0
+        ? [...trendsToLines(buildTrends(responses, undefined, new Date(), tz))]
+        : [];
 
     if (recent.length === 0) {
       console.log(

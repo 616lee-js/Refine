@@ -92,6 +92,9 @@ export type ReportPeriod = {
   note: string;
   windowStart: string;
   windowEnd: string;
+  /** Formatted on the server, in the person's zone. See lib/time.ts. */
+  windowStartLabel: string;
+  windowEndLabel: string;
 };
 
 export type CurrentReport = {
@@ -102,16 +105,11 @@ export type CurrentReport = {
   edited: boolean;
   createdAt: string;
   windowStart: string;
+  /** Formatted on the server, in the person's zone. See lib/time.ts. */
+  createdAtLabel: string;
+  windowStartLabel: string;
   entriesRead: number;
 };
-
-function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 /**
  * One part of the report — the overall account, or one area.
@@ -365,9 +363,9 @@ export function ReportPanel({
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <Eyebrow size={9.5}>
             {COPY.asOf(
-              fmt(current.createdAt),
+              current.createdAtLabel,
               current.entriesRead,
-              fmt(current.windowStart)
+              current.windowStartLabel
             )}
           </Eyebrow>
 
@@ -535,7 +533,7 @@ export function ReportPanel({
             {history.map((h) => (
               <Sheet key={h.id} className="px-5 py-4">
                 <Eyebrow size={9}>
-                  {COPY.historyPeriod(fmt(h.windowStart), fmt(h.windowEnd))}
+                  {COPY.historyPeriod(h.windowStartLabel, h.windowEndLabel)}
                 </Eyebrow>
                 <p
                   className="mt-2 whitespace-pre-wrap"

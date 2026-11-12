@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { questionnaireResponses } from "@/lib/db/schema";
 import { getStartableQuestionnaire } from "@/lib/questionnaires";
+import { dayStart, localDay } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * Starts (or resumes) a questionnaire response.
@@ -69,8 +71,10 @@ export async function POST(req: Request) {
    * silently editing the morning's answer in the afternoon would destroy one.
    */
   if (q.kind === "tracker") {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // The person's today, not the server's: a check-in at 8pm Pacific is still
+    // that day's, even though it is already tomorrow in UTC. See lib/time.ts.
+    const tz = await timeZoneFor(session.userId);
+    const startOfToday = dayStart(localDay(new Date(), tz), tz);
 
     const [todays] = await db
       .select({ id: questionnaireResponses.id })

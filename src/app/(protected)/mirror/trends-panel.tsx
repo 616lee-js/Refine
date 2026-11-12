@@ -240,12 +240,19 @@ const COPY = {
     `[COPY] Nothing in this range. ${n} ${n === 1 ? "reading" : "readings"} outside it.`,
 } as const;
 
-export function TrendsPanel({ trends }: { trends: Trends }) {
+export function TrendsPanel({
+  trends,
+  today,
+}: {
+  trends: Trends;
+  /** The person's calendar day, YYYY-MM-DD, from the server. For the date pickers. */
+  today: string;
+}) {
   return (
     <div className="flex flex-col gap-[14px] pb-6">
       {/* Above the charts, closed, with the current selection on its row.
           See ./range-picker.tsx. */}
-      <RangePicker />
+      <RangePicker today={today} />
 
       <div className="grid gap-[14px] lg:grid-cols-2">
         {trends.cards.map((card) =>

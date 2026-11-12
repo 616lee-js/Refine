@@ -115,6 +115,7 @@ export default function JournalEntry({
   admin,
   initialText,
   initialCompletedAt,
+  dateLabel,
   initialGuidanceOpen,
   guidance,
   embedded = false,
@@ -124,6 +125,12 @@ export default function JournalEntry({
   entryId: string;
   initialText: string;
   initialCompletedAt: string | null;
+  /**
+   * The entry's date, formatted on the server in the person's zone. This was
+   * `new Date()` formatted here — the browser's day, and during hydration the
+   * server's, which could differ. See lib/time.ts.
+   */
+  dateLabel: string;
   initialGuidanceOpen: boolean;
   /**
    * Footholds, built on the server because the personal ones read and decrypt.
@@ -235,8 +242,11 @@ export default function JournalEntry({
           if (!res.ok) throw new Error(String(res.status));
           savedTextRef.current = value;
           setSaveState("saved");
+          // The one date formatted in the browser, deliberately: it is set in
+          // an event handler after hydration, so no server render is ever
+          // compared against it, and the browser's zone IS the person's.
           setSavedAt(
-            new Date().toLocaleTimeString(undefined, {
+            new Date().toLocaleTimeString("en-US", {
               hour: "numeric",
               minute: "2-digit",
             })
@@ -402,7 +412,6 @@ export default function JournalEntry({
   }
 
   const dirty = text !== savedTextRef.current;
-  const started = new Date();
 
   const surface = (
     <>
@@ -434,11 +443,7 @@ export default function JournalEntry({
                     color: "var(--rf-text-3)",
                   }}
                 >
-                  {started.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                  })}
+                  {dateLabel}
                 </span>
               </div>
 

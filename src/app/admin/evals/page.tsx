@@ -3,6 +3,8 @@ import { after } from "next/server";
 import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth/admin";
+import { fmtDateTimeYear } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import { db } from "@/lib/db";
 import {
   contentAccessLog,
@@ -58,19 +60,15 @@ import {
 // so protection never depends on that as a side effect. See CLAUDE.md.
 export const dynamic = "force-dynamic";
 
-function shortDate(d: Date): string {
-  return d.toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/** In the admin's zone. See lib/time.ts. */
+function shortDate(d: Date, tz: string): string {
+  return fmtDateTimeYear(d, tz);
 }
 
 export default async function AdminEvalsPage() {
   // Gate BEFORE any query runs.
   const adminId = await requireAdmin();
+  const tz = await timeZoneFor(adminId);
 
   const [summaryRows, reportRows, capture] = await Promise.all([
     db.select().from(summaryEvaluations).orderBy(desc(summaryEvaluations.createdAt)),
@@ -327,7 +325,7 @@ export default async function AdminEvalsPage() {
                 </div>
 
                 <div className="mt-[10px] flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <Eyebrow size={9.5}>{shortDate(row.createdAt)}</Eyebrow>
+                  <Eyebrow size={9.5}>{shortDate(row.createdAt, tz)}</Eyebrow>
                   <Meta>{row.promptVersion}</Meta>
                   <Meta>user {row.userId.slice(0, 8)}</Meta>
                   {row.mirrorReviewId ? (
@@ -396,7 +394,7 @@ export default async function AdminEvalsPage() {
                 </div>
 
                 <div className="mt-[10px] flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <Eyebrow size={9.5}>{shortDate(row.createdAt)}</Eyebrow>
+                  <Eyebrow size={9.5}>{shortDate(row.createdAt, tz)}</Eyebrow>
                   <Meta>{row.summariserVersion}</Meta>
                   <Meta>user {row.userId.slice(0, 8)}</Meta>
                   {row.journalEntryId ? (

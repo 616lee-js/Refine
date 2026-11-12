@@ -84,6 +84,18 @@ export const users = pgTable("users", {
     .notNull()
     .defaultNow(),
   preferences: jsonb("preferences").notNull().default({}),
+  /**
+   * The person's time zone, as an IANA name ("America/Los_Angeles").
+   *
+   * Written from the device on every signed-in page view when it differs, so it
+   * follows them when they travel. Every date and time they see is formatted on
+   * the server in this zone — see src/lib/time.ts. NULL until their first page
+   * view after 2026-11-11, and UTC is used until then.
+   *
+   * A column rather than a key in `preferences`, because queries that bucket
+   * by day (check-in "today", Trends, the calendar) need it in SQL.
+   */
+  timeZone: text("time_zone"),
 });
 
 /**
@@ -172,6 +184,15 @@ export const journalEntries = pgTable("journal_entries", {
   encryptedTitle: text("encrypted_title"),
   modality: entryModalityEnum("modality").notNull().default("text"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  /**
+   * When the body or title was last changed AFTER completion. NULL if never.
+   *
+   * Not `updated_at`, which trash, restore and purge also bump — so it cannot
+   * say whether the writing changed. This can. Written only by the body and
+   * title edit paths in src/app/api/reflections/[id]/route.ts, and only once
+   * `completed_at` is set: edits to a draft are just writing.
+   */
+  editedAt: timestamp("edited_at", { withTimezone: true }),
   /** Highest tier across the entry's paragraphs at the last classification. */
   tierClassification: integer("tier_classification"),
   classifiedAt: timestamp("classified_at", { withTimezone: true }),

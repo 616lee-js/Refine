@@ -9,6 +9,8 @@ import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire } from "@/lib/questionnaires";
 import { type ArchiveSearchParams } from "../../records";
 import { FrameworkRecord } from "./framework-record";
+import { fmtDateShort } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * A questionnaire response, open in the archive's main view.
@@ -35,6 +37,7 @@ export default async function ArchiveFrameworkPage({
   if (!authSession.userId) notFound();
   // Captured so the narrowing survives into the after() callback below.
   const userId = authSession.userId;
+  const tz = await timeZoneFor(userId);
 
   const [row] = await db
     .select()
@@ -131,7 +134,11 @@ export default async function ArchiveFrameworkPage({
         initialNote={note}
         initialCompleted={row.completedAt !== null}
         initialEditing={row.completedAt === null || sp.edit === "1"}
-        lastTakenAt={previousRows[0]?.completedAt?.toISOString() ?? null}
+        lastTakenLabel={
+          previousRows[0]?.completedAt
+            ? fmtDateShort(previousRows[0].completedAt, tz)
+            : null
+        }
       />
     </>
   );

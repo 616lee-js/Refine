@@ -18,6 +18,8 @@ import { EntryTitle } from "./entry-title";
 import { ReadBack } from "./read-back";
 import { CompletionNotice } from "./completion-notice";
 import { type ArchiveSearchParams } from "../records";
+import { fmtDateShort, fmtDateTime, fmtDateWeekdayLong, fmtTime } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * Reading back a completed entry.
@@ -48,6 +50,7 @@ import { type ArchiveSearchParams } from "../records";
 // COPY REVIEW: placeholders pending final wording.
 const COPY = {
   edit: "[COPY] Edit entry",
+  edited: (when: string) => `[COPY] edited ${when}`,
   unfinished: "[COPY] unfinished",
   earlier: "[COPY] ← Earlier",
   later: "[COPY] Later →",
@@ -116,6 +119,7 @@ export default async function ReflectionDetailPage({
 
   const authSession = await getSession();
   if (!authSession.userId) notFound();
+  const tz = await timeZoneFor(authSession.userId!);
   // Captured so the narrowing survives into the after() callback below.
   const userId = authSession.userId;
 
@@ -220,11 +224,13 @@ export default async function ReflectionDetailPage({
 
 
   const written = entry.completedAt ?? entry.createdAt;
-  const dateLong = written.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  // In the person's zone — see lib/time.ts. This is the line where an entry
+  // finished at 8:54 PM on a Monday used to read 3:54 AM on the Tuesday.
+  const dateLong = fmtDateWeekdayLong(written, tz);
+  const timeLabel = fmtTime(written, tz);
+  // Edited after it was finished, when it was. See `edited_at` in the schema.
+  const editedLabel =
+    entry.completedAt && entry.editedAt ? fmtDateTime(entry.editedAt, tz) : null;
   // No word count (removed 2026-09-21): a count is a target in disguise.
 
   return (
@@ -236,10 +242,8 @@ export default async function ReflectionDetailPage({
               <Eyebrow>
                 {dateLong}
                 {" · "}
-                {written.toLocaleTimeString(undefined, {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+                {timeLabel}
+                {editedLabel && ` · ${COPY.edited(editedLabel)}`}
                 {!entry.completedAt && ` · ${COPY.unfinished}`}
               </Eyebrow>
               <div className="mt-[9px]">
@@ -300,7 +304,9 @@ export default async function ReflectionDetailPage({
               aiOriginal: resolved?.aiOriginal ?? null,
               source: resolved?.source ?? null,
               generationVersion: summaryRow?.generationVersion ?? null,
-              generatedAt: summaryRow?.generatedAt.toISOString() ?? null,
+              generatedAtLabel: summaryRow
+                ? fmtDateShort(summaryRow.generatedAt, tz)
+                : null,
               stale: summaryRow ? isStale(summaryRow, entry.updatedAt) : false,
               unreadable: summaryUnreadable,
             }}

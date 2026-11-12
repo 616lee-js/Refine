@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { journalEntries, users } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { guidanceFor } from "@/lib/journal/personal-guidance";
+import { fmtDateWeekday } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import JournalEntry from "../../journal-entry";
 import { AdminNav } from "@/components/ui/admin-nav";
 
@@ -89,6 +91,7 @@ export default async function JournalEntryPage({
   // because the personal ones read the database and decrypt — see
   // lib/journal/personal-guidance.ts.
   const guidance = await guidanceFor(authSession.userId);
+  const tz = await timeZoneFor(authSession.userId);
 
   return (
     <JournalEntry
@@ -96,6 +99,7 @@ export default async function JournalEntryPage({
       entryId={entry.id}
       initialText={initialText}
       initialCompletedAt={entry.completedAt?.toISOString() ?? null}
+      dateLabel={fmtDateWeekday(entry.completedAt ?? entry.createdAt, tz)}
       initialGuidanceOpen={initialGuidanceOpen}
       guidance={guidance}
     />

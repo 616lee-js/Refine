@@ -3,6 +3,8 @@ import { PageBg } from "@/components/ui/page-bg";
 import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
 import { FeedbackWidget } from "@/components/ui/feedback-widget";
+import { TimeZoneSync } from "@/components/ui/time-zone-sync";
+import { storedTimeZone } from "@/lib/time-zone";
 
 /**
  * Shell for everything under /admin.
@@ -39,7 +41,9 @@ export default async function AdminLayout({
 }) {
   // Defence in depth only. Responds 404 to a non-admin, so the chrome below
   // never renders for one — but see the note above: the page still checks.
-  await requireAdmin();
+  const adminId = await requireAdmin();
+  // Admin lists show times in the admin's own zone; the device keeps it current.
+  const timeZone = await storedTimeZone(adminId);
 
   return (
     /*
@@ -56,6 +60,7 @@ export default async function AdminLayout({
     <div data-palette="dawn" data-mode="light">
       <PageBg>
       <TopNav admin={<AdminNav active />} />
+      <TimeZoneSync current={timeZone} />
 
       {/* A standing reminder of where you are. Admin surfaces decrypt other
           people's journal content; that should never feel like ordinary

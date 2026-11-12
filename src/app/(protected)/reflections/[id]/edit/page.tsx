@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { journalEntries, users } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
 import { guidanceFor } from "@/lib/journal/personal-guidance";
+import { fmtDateWeekday } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import JournalEntry from "../../../journal-entry";
 
 /**
@@ -102,6 +104,7 @@ export default async function EditEntryPage({
 
   // Same footholds as a new entry, including the personal ones.
   const guidance = await guidanceFor(authSession.userId);
+  const tz = await timeZoneFor(authSession.userId);
 
   return (
     <JournalEntry
@@ -109,6 +112,7 @@ export default async function EditEntryPage({
       entryId={entry.id}
       initialText={initialText}
       initialCompletedAt={entry.completedAt?.toISOString() ?? null}
+      dateLabel={fmtDateWeekday(entry.completedAt ?? entry.createdAt, tz)}
       initialGuidanceOpen={initialGuidanceOpen}
       guidance={guidance}
     />

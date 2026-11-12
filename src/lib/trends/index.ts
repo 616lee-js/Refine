@@ -12,6 +12,14 @@ import {
   type TrackerQuestionnaire,
 } from "@/lib/questionnaires";
 import { domainLabel } from "@/lib/mirror/domains";
+import {
+  DEFAULT_TIME_ZONE,
+  addDays,
+  dayStart,
+  fmtDate,
+  fmtDateShort,
+  localDay,
+} from "@/lib/time";
 
 /**
  * Trends — turning stored responses into the cards Mirror renders.
@@ -227,8 +235,9 @@ export type Trends = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function startOfDay(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+/** Midnight of the day an instant falls on, in the person's zone. */
+function startOfDay(d: Date, tz: string): number {
+  return dayStart(localDay(d, tz), tz).getTime();
 }
 
 function median(values: number[]): number {
@@ -237,20 +246,16 @@ function median(values: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-function shortDate(d: Date): string {
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+function shortDate(d: Date, tz: string): string {
+  return fmtDateShort(d, tz);
 }
 
 /**
  * With the year. Used in the chart's readout, where a bare "25 Sep" would be
  * ambiguous across a record covering two of them.
  */
-function fullDate(d: Date): string {
-  return d.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+function fullDate(d: Date, tz: string): string {
+  return fmtDate(d, tz);
 }
 
 /*
@@ -282,14 +287,14 @@ function cadenceOf(q: LikertQuestionnaire): string | null {
 }
 
 /** Movement in words. No arrows, no colour, no "worse". */
-function movement(readings: Reading[]): string | null {
+function movement(readings: Reading[], tz: string): string | null {
   if (readings.length < 2) return null;
   const first = readings[0];
   const last = readings[readings.length - 1];
   const delta = last.value - first.value;
-  if (delta === 0) return COPY.level(shortDate(first.at));
+  if (delta === 0) return COPY.level(shortDate(first.at, tz));
   const size = Math.abs(Math.round(delta * 10) / 10);
-  return COPY.moved(delta > 0 ? COPY.up : COPY.down, size, shortDate(first.at));
+  return COPY.moved(delta > 0 ? COPY.up : COPY.down, size, shortDate(first.at, tz));
 }
 
 // ── Input ────────────────────────────────────────────────────────────────────
@@ -329,8 +334,10 @@ function lineCard(opts: {
   provenance?: string | null;
   /** Formats the headline number. */
   format?: (v: number) => string;
+  /** The person's zone, for the date labels. */
+  tz: string;
 }): LineCard | null {
-  const { all, shown } = opts;
+  const { all, shown, tz } = opts;
   if (all.length === 0) return null;
 
   const base = {
@@ -366,12 +373,12 @@ function lineCard(opts: {
   return {
     ...base,
     points: shown.map((r) => r.value),
-    labels: shown.map((r) => shortDate(r.at)),
-    dates: shown.map((r) => fullDate(r.at)),
+    labels: shown.map((r) => shortDate(r.at, tz)),
+    dates: shown.map((r) => fullDate(r.at, tz)),
     // The headline and the movement describe the range on screen, not the whole
     // record — the number under a chart has to be the number the chart shows.
     reading: `${fmt(last)}${opts.unit ?? ""}`,
-    note: movement(shown),
+    note: movement(shown, tz),
     meta: opts.meta,
   };
 }
@@ -379,14 +386,18 @@ function lineCard(opts: {
 function matrixCard(
   tracker: TrackerQuestionnaire,
   byDay: Map<number, Answers>,
-  today: Date
+  today: Date,
+  tz: string
 ): MatrixCard | null {
   const field = tracker.fields.find((f) => f.kind === "toggles");
   if (!field || field.kind !== "toggles") return null;
 
+  // The last MATRIX_DAYS calendar days in the person's zone, not 24-hour
+  // slices back from now — a day is a day, including across a clock change.
+  const todayDay = localDay(today, tz);
   const days: number[] = [];
   for (let i = MATRIX_DAYS - 1; i >= 0; i--) {
-    days.push(startOfDay(new Date(today.getTime() - i * 86_400_000)));
+    days.push(dayStart(addDays(todayDay, -i), tz).getTime());
   }
 
   const logged = days.filter((d) => byDay.has(d)).length;
@@ -440,7 +451,8 @@ function matrixCard(
 function plainly(
   checkins: DecryptedResponse[],
   sleep: Reading[],
-  instrument: { label: string; readings: Reading[] } | null
+  instrument: { label: string; readings: Reading[] } | null,
+  tz: string
 ): string | null {
   if (checkins.length < MIN_PLAINLY_CHECKINS) return null;
   if (!instrument || instrument.readings.length < MIN_PLAINLY_READINGS) {
@@ -457,9 +469,9 @@ function plainly(
       instrument.readings.length,
       instrument.label,
       first.value,
-      shortDate(first.at),
+      shortDate(first.at, tz),
       last.value,
-      shortDate(last.at)
+      shortDate(last.at, tz)
     )
   );
 
@@ -479,7 +491,7 @@ function plainly(
         reading,
         window: sleep.filter(
           (s) =>
-            Math.abs(startOfDay(s.at) - startOfDay(reading.at)) <=
+            Math.abs(startOfDay(s.at, tz) - startOfDay(reading.at, tz)) <=
             7 * 86_400_000
         ),
       }))
@@ -504,7 +516,13 @@ function plainly(
 export function buildTrends(
   responses: DecryptedResponse[],
   range: TrendRange = { key: DEFAULT_RANGE, from: null, to: null },
-  now: Date = new Date()
+  now: Date = new Date(),
+  /**
+   * The person's zone. Every day bucket and every date label on a card is in
+   * it — see lib/time.ts. Defaults to UTC only so a caller that has no person
+   * (a test) still works; real callers pass the account's zone.
+   */
+  tz: string = DEFAULT_TIME_ZONE
 ): Trends {
   /*
    * Everything, in order — not a window.
@@ -537,7 +555,7 @@ export function buildTrends(
     if (c.completedAt.getTime() < matrixSince) continue;
     // One row per day. A second check-in on the same day replaces the first —
     // the screen is explicitly re-editable, so the latest is what was meant.
-    byDay.set(startOfDay(c.completedAt), c.answers);
+    byDay.set(startOfDay(c.completedAt, tz), c.answers);
   }
 
   const numeric = (rows: DecryptedResponse[], key: string): Reading[] =>
@@ -551,6 +569,7 @@ export function buildTrends(
   const cards: TrendCard[] = [];
 
   const sleepCard = lineCard({
+    tz,
     id: "sleep",
     label: COPY.sleepLabel,
     all: sleepAll,
@@ -575,6 +594,7 @@ export function buildTrends(
 
   // Mood and energy share a scale and are read together, so they share a card.
   const moodCard = lineCard({
+    tz,
     id: "mood",
     label: COPY.moodLabel,
     all: numeric(allCheckins, "mood"),
@@ -585,6 +605,7 @@ export function buildTrends(
   if (moodCard) cards.push(moodCard);
 
   const energyCard = lineCard({
+    tz,
     id: "energy",
     label: COPY.energyLabel,
     all: numeric(allCheckins, "energy"),
@@ -656,12 +677,12 @@ export function buildTrends(
 
     const readings = readingsAll.filter((r) => inRange(r.at, range));
 
-    const card = instrumentCard(q, readingsAll, readings);
+    const card = instrumentCard(q, readingsAll, readings, tz);
     if (card) cards.push(card);
 
     // An averaged scale also gets its areas read separately. Two cards from one
     // instrument, answering two different questions — see domainsCard.
-    const byArea = domainsCard(q, all, cadenceOf(q));
+    const byArea = domainsCard(q, all, cadenceOf(q), tz);
     if (byArea) cards.push(byArea);
 
     // The "Plainly" paragraph describes what is on screen, so it reads the range.
@@ -671,13 +692,13 @@ export function buildTrends(
   }
 
   if (tracker?.kind === "tracker") {
-    const m = matrixCard(tracker, byDay, now);
+    const m = matrixCard(tracker, byDay, now, tz);
     if (m) cards.push(m);
   }
 
   return {
     cards,
-    plainly: plainly(checkins, sleep, plainlyInstrument),
+    plainly: plainly(checkins, sleep, plainlyInstrument, tz),
     responsesRead: responses.length,
   };
 }
@@ -685,7 +706,8 @@ export function buildTrends(
 function instrumentCard(
   q: LikertQuestionnaire,
   all: Reading[],
-  shown: Reading[]
+  shown: Reading[],
+  tz: string
 ): LineCard | null {
   const max = maxTotal(q);
   const sorted = [...q.bands].sort((a, b) => a.min - b.min);
@@ -716,6 +738,7 @@ function instrumentCard(
   const cadence = cadenceOf(q);
 
   return lineCard({
+    tz,
     id: q.slug,
     label: `${q.title} · ${q.shortName}`,
     all,
@@ -758,7 +781,8 @@ function instrumentCard(
 function domainsCard(
   q: LikertQuestionnaire,
   responses: DecryptedResponse[],
-  cadence: string | null
+  cadence: string | null,
+  tz: string
 ): DomainsCard | null {
   if (q.scoring !== "mean-x10") return null;
 
@@ -800,6 +824,6 @@ function domainsCard(
     bars,
     max: top,
     anchors: q.scaleAnchors ?? null,
-    meta: COPY.domainsMeta(fullDate(latest.completedAt), cadence),
+    meta: COPY.domainsMeta(fullDate(latest.completedAt, tz), cadence),
   };
 }

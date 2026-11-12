@@ -3,12 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eyebrow } from "@/components/ui/sheet";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
-import {
-  DEFAULT_RANGE,
-  dateInputValue,
-  isRangeKey,
-  type RangeKey,
-} from "@/lib/trends/range";
+import { DEFAULT_RANGE, isRangeKey, type RangeKey } from "@/lib/trends/range";
 
 /**
  * How much of the record the charts show.
@@ -45,7 +40,13 @@ const COPY = {
 
 const PRESETS: RangeKey[] = ["1m", "ytd", "total"];
 
-export function RangePicker() {
+/**
+ * `today` comes from the server as text, in the person's zone. It was
+ * `new Date()` formatted here, which is the browser's day — and during
+ * hydration the server's — so the two could disagree around midnight. See
+ * lib/time.ts.
+ */
+export function RangePicker({ today }: { today: string }) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -131,7 +132,7 @@ export function RangePicker() {
               type="date"
               name="from"
               defaultValue={from}
-              max={dateInputValue(new Date())}
+              max={today}
               className="rf-input"
               style={{ fontSize: "11px" }}
             />
@@ -142,7 +143,7 @@ export function RangePicker() {
               type="date"
               name="to"
               defaultValue={to}
-              max={dateInputValue(new Date())}
+              max={today}
               className="rf-input"
               style={{ fontSize: "11px" }}
             />

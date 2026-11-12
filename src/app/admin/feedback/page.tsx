@@ -1,6 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth/admin";
+import { fmtDateTimeYear } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import { db } from "@/lib/db";
 import { feedback } from "@/lib/db/schema";
 import { Sheet, Eyebrow } from "@/components/ui/sheet";
@@ -51,6 +53,7 @@ async function toggleStatus(formData: FormData) {
 
 function Row({
   row,
+  tz,
 }: {
   row: {
     id: string;
@@ -60,6 +63,8 @@ function Row({
     createdAt: Date;
     page: string | null;
   };
+  /** The admin's zone, for the timestamp. See lib/time.ts. */
+  tz: string;
 }) {
   const done = row.status === "completed";
   return (
@@ -82,13 +87,7 @@ function Row({
             {TYPE_LABEL[row.type] ?? row.type}
           </span>
           <Eyebrow size={9.5}>
-            {row.createdAt.toLocaleString(undefined, {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
+            {fmtDateTimeYear(row.createdAt, tz)}
           </Eyebrow>
           {/* Where it was sent from. A route pattern, never a concrete path —
               see src/lib/feedback/pages.ts for why the id is stripped. */}
@@ -142,10 +141,12 @@ function Section({
   title,
   rows,
   openByDefault,
+  tz,
 }: {
   title: string;
   rows: Parameters<typeof Row>[0]["row"][];
   openByDefault: boolean;
+  tz: string;
 }) {
   return (
     // Native <details>: keyboard operation, screen-reader semantics and the
@@ -178,7 +179,7 @@ function Section({
             Nothing here.
           </p>
         ) : (
-          rows.map((r) => <Row key={r.id} row={r} />)
+          rows.map((r) => <Row key={r.id} row={r} tz={tz} />)
         )}
       </div>
     </details>
@@ -187,7 +188,9 @@ function Section({
 
 export default async function AdminFeedbackPage() {
   // Gate BEFORE any query runs.
-  await requireAdmin();
+  const adminId = await requireAdmin();
+  // Times in the admin's own zone. See lib/time.ts.
+  const tz = await timeZoneFor(adminId);
 
   const rows = await db
     .select()
@@ -220,8 +223,8 @@ export default async function AdminFeedbackPage() {
         </p>
       </div>
 
-      <Section title="New" rows={fresh} openByDefault />
-      <Section title="Completed" rows={done} openByDefault={false} />
+      <Section title="New" rows={fresh} openByDefault tz={tz} />
+      <Section title="Completed" rows={done} openByDefault={false} tz={tz} />
     </main>
   );
 }

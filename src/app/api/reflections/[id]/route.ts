@@ -107,6 +107,11 @@ export async function PUT(req: Request, { params }: Params) {
       // buy a regeneration that cannot possibly differ. Naming an entry from the
       // read-back page sends exactly that request.
       ...(hasText ? { updatedAt: new Date() } : {}),
+      // Edited after it was finished — body or title, a title being content
+      // too. A draft is just writing, so nothing is recorded until it is done.
+      ...((hasText || hasTitle) && entry.completedAt
+        ? { editedAt: new Date() }
+        : {}),
       /*
        * Some of this entry's words were spoken rather than typed.
        *
@@ -178,7 +183,13 @@ export async function PATCH(req: Request, { params }: Params) {
       // `summary_attempts` would hand fresh retries to an entry that had
       // genuinely exhausted them, without a word of new content to justify it.
       ...(bodyChanged
-        ? { encryptedBody: encrypt(text), summaryAttempts: 0, updatedAt: now }
+        ? {
+            encryptedBody: encrypt(text),
+            summaryAttempts: 0,
+            updatedAt: now,
+            // Re-completing with changed text is an edit of a finished entry.
+            ...(wasAlreadyComplete ? { editedAt: now } : {}),
+          }
         : {}),
       ...(typeof title === "string"
         ? { encryptedTitle: title.trim() ? encrypt(title.trim()) : null }

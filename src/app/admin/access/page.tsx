@@ -1,4 +1,6 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { localDay } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import { Eyebrow } from "@/components/ui/sheet";
 import {
   countLiveInvites,
@@ -44,14 +46,15 @@ const COPY = {
     `[COPY] ${live} invite ${live === 1 ? "code" : "codes"} ready to hand out. Refine cannot send email, so both kinds of code are given out by you directly.`,
 } as const;
 
-/** `YYYY-MM-DD`, UTC — matching the other admin screens. */
-function day(at: Date): string {
-  return at.toISOString().slice(0, 10);
+/** `YYYY-MM-DD` in the admin's zone. See lib/time.ts. */
+function day(at: Date, tz: string): string {
+  return localDay(at, tz);
 }
 
 export default async function AdminAccessPage() {
   // Gate BEFORE any query runs.
-  await requireAdmin();
+  const adminId = await requireAdmin();
+  const tz = await timeZoneFor(adminId);
 
   const [invites, live] = await Promise.all([
     listInviteCodes(),
@@ -83,8 +86,8 @@ export default async function AdminAccessPage() {
       <AccessControls
         invites={invites.map((row) => ({
           ...row,
-          createdLabel: day(row.createdAt),
-          expiresLabel: row.expiresAt ? day(row.expiresAt) : "[COPY] No expiry",
+          createdLabel: day(row.createdAt, tz),
+          expiresLabel: row.expiresAt ? day(row.expiresAt, tz) : "[COPY] No expiry",
         }))}
       />
     </div>

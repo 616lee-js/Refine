@@ -12,6 +12,8 @@ import { TopNav } from "@/components/ui/top-nav";
 import { AdminNav } from "@/components/ui/admin-nav";
 import { TrashList, type TrashedEntry } from "./trash-list";
 import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
+import { fmtDate } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * Trash.
@@ -41,6 +43,7 @@ const COPY = {
 export default async function TrashPage() {
   const authSession = await getSession();
   if (!authSession.userId) notFound();
+  const tz = await timeZoneFor(authSession.userId!);
 
   // Trashed but not yet purged. A purged row is a shell with no content — it
   // exists only so safety_log keeps its reference, and must never be listed.
@@ -76,7 +79,8 @@ export default async function TrashPage() {
     return {
       id: r.id,
       deletedAt: deletedAt.toISOString(),
-      writtenAt: (r.completedAt ?? r.createdAt).toISOString(),
+      // Formatted here, in the person's zone, never in the list. See lib/time.ts.
+      writtenAtLabel: fmtDate(r.completedAt ?? r.createdAt, tz),
       preview,
       daysLeft: Math.max(0, TRASH_RETENTION_DAYS - elapsedDays),
     };

@@ -12,6 +12,16 @@ import {
 import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import { authoritativeSummary } from "@/lib/summaries/read";
+import {
+  addDays,
+  dayEnd,
+  dayStart,
+  fmtDateWeekday,
+  localDay,
+  monthStartOf,
+  parseLocalDay,
+} from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * The records behind the archive rail.
@@ -83,13 +93,9 @@ export type ArchiveRecord = {
   awaitingSummary: boolean;
 };
 
-/** Server-side only. See the note on `dateLabel`. */
-export function formatRecordDate(at: Date): string {
-  return at.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+/** Server-side only, in the person's zone. See the note on `dateLabel` and lib/time.ts. */
+export function formatRecordDate(at: Date, tz: string): string {
+  return fmtDateWeekday(at, tz);
 }
 
 export type RecordFilters = {
@@ -133,7 +139,8 @@ function trackerDetail(slug: string, answers: Answers): string[] {
  */
 export async function loadRecords(
   userId: string,
-  filters: RecordFilters
+  filters: RecordFilters,
+  tz: string
 ): Promise<{
   records: ArchiveRecord[];
   categories: CategoryOption[];
@@ -279,7 +286,7 @@ export async function loadRecords(
           ? `/reflections/${e.id}`
           : `/reflections/${e.id}/edit`,
         at: e.completedAt ?? e.updatedAt,
-        dateLabel: formatRecordDate(e.completedAt ?? e.updatedAt),
+        dateLabel: formatRecordDate(e.completedAt ?? e.updatedAt, tz),
         kind: "open",
         kindLabel: "Writing",
         detail: categories,
@@ -313,7 +320,7 @@ export async function loadRecords(
           ? `/reflections/checkin/${r.id}`
           : `/reflections/framework/${r.id}`,
         at: r.completedAt ?? r.createdAt,
-        dateLabel: formatRecordDate(r.completedAt ?? r.createdAt),
+        dateLabel: formatRecordDate(r.completedAt ?? r.createdAt, tz),
         kind: tracker ? "checkin" : "framework",
         kindLabel: q?.shortName ?? r.slug,
         detail,
@@ -450,10 +457,13 @@ export type ArchiveSearchParams = {
  * bug. Returns the `RailView` shape that `record-rail.tsx` takes.
  */
 export async function loadRail(userId: string, params: ArchiveSearchParams) {
-  const { range, ...filters } = parseFilters(params);
+  // Day boundaries and date labels are the person's, not the server's.
+  const tz = await timeZoneFor(userId);
+  const { range, ...filters } = parseFilters(params, tz);
   const { records, categories, total, capped } = await loadRecords(
     userId,
-    filters
+    filters,
+    tz
   );
 
   return {
@@ -480,7 +490,7 @@ export function parseFilters(params: {
   from?: string;
   to?: string;
   q?: string;
-}): RecordFilters & { range: string } {
+}, tz: string): RecordFilters & { range: string } {
   const kind: RecordKind | "all" =
     params.filter === "open" ||
     params.filter === "framework" ||
@@ -488,9 +498,8 @@ export function parseFilters(params: {
       ? params.filter
       : "all";
 
-  const now = new Date();
-  const startOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // "Today" in the person's zone. See lib/time.ts.
+  const today = localDay(new Date(), tz);
 
   let from: Date | null = null;
   let to: Date | null = null;
@@ -505,30 +514,24 @@ export function parseFilters(params: {
    * present in the URL IS the range, and the preset applies only when no date
    * was typed. There is no `custom` mode left to get out of step.
    *
-   * Date-only strings parse as UTC midnight; `to` is pushed to the end of its
-   * day so a single-day range includes that day rather than nothing.
+   * A typed date is a calendar day in the person's zone, so it starts at their
+   * midnight and `to` runs to the end of that day — a single-day range includes
+   * the day rather than nothing.
    */
-  const parsedFrom = params.from ? new Date(params.from) : null;
-  const parsedTo = params.to ? new Date(params.to) : null;
-  const hasFrom = parsedFrom !== null && !isNaN(parsedFrom.getTime());
-  const hasTo = parsedTo !== null && !isNaN(parsedTo.getTime());
+  const fromDay = parseLocalDay(params.from);
+  const toDay = parseLocalDay(params.to);
 
-  if (hasFrom || hasTo) {
-    if (hasFrom) from = parsedFrom;
-    if (hasTo) {
-      to = new Date(parsedTo!);
-      to.setHours(23, 59, 59, 999);
-    }
+  if (fromDay || toDay) {
+    if (fromDay) from = dayStart(fromDay, tz);
+    if (toDay) to = dayEnd(toDay, tz);
   } else if (range === "7d") {
-    from = startOfDay(now);
-    from.setDate(from.getDate() - 6);
+    from = dayStart(addDays(today, -6), tz);
   } else if (range === "30d") {
-    from = startOfDay(now);
-    from.setDate(from.getDate() - 29);
+    from = dayStart(addDays(today, -29), tz);
   } else if (range === "month") {
-    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    from = dayStart(monthStartOf(today), tz);
   } else if (range === "year") {
-    from = new Date(now.getFullYear(), 0, 1);
+    from = dayStart(today.slice(0, 4) + "-01-01", tz);
   }
 
   return {

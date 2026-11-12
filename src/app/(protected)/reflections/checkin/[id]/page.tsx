@@ -9,6 +9,8 @@ import { decrypt } from "@/lib/crypto";
 import { getQuestionnaire, type Answers } from "@/lib/questionnaires";
 import { type ArchiveSearchParams } from "../../records";
 import { CheckinRecord } from "./checkin-record";
+import { fmtDateWeekdayLong } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * A check-in, open in the archive's main view.
@@ -48,6 +50,7 @@ export default async function ArchiveCheckinPage({
   if (!authSession.userId) notFound();
   // Captured so the narrowing survives into the after() callback below.
   const userId = authSession.userId;
+  const tz = await timeZoneFor(userId);
 
   const [row] = await db
     .select()
@@ -139,11 +142,7 @@ export default async function ArchiveCheckinPage({
         loggedRecently={
           history.length >= MIN_HISTORY_FOR_COUNT ? history.length : null
         }
-        today={at.toLocaleDateString(undefined, {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        })}
+        today={fmtDateWeekdayLong(at, tz)}
       />
     </>
   );

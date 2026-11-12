@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { safetyLog } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/admin";
+import { fmtDateTimeYear } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * Safety classification review.
@@ -135,7 +137,9 @@ function readSignals(raw: unknown): { chars: number | null; chunks: number | nul
 
 export default async function SafetyLogPage() {
   // Gate BEFORE any query runs.
-  await requireAdmin();
+  const adminId = await requireAdmin();
+  // Times in the admin's own zone. See lib/time.ts.
+  const tz = await timeZoneFor(adminId);
 
   const rows = await db
     .select({
@@ -325,9 +329,7 @@ export default async function SafetyLogPage() {
                       </span>
                     </td>
                     <td className="py-3 pr-4 text-stone-500 whitespace-nowrap text-xs">
-                      {row.createdAt
-                        ? new Date(row.createdAt).toLocaleString()
-                        : "—"}
+                      {row.createdAt ? fmtDateTimeYear(row.createdAt, tz) : "—"}
                     </td>
                     <td className="py-3 pr-4 font-mono text-xs text-stone-400">
                       {(row.journalEntryId ?? row.questionnaireResponseId ?? "—").slice(

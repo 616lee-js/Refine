@@ -14,6 +14,8 @@ import {
   accountsWithEntries,
 } from "@/lib/mirror/review";
 import { MirrorControls } from "./mirror-controls";
+import { fmtDateTime } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 
 /**
  * Mirror's report — the controls that have no home on a user-facing page.
@@ -40,7 +42,9 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminMirrorPage() {
   // Gate BEFORE any query runs.
-  await requireAdmin();
+  const adminId = await requireAdmin();
+  // Times in the admin's own zone. See lib/time.ts.
+  const tz = await timeZoneFor(adminId);
 
   const [intervalDays, rows, accounts] = await Promise.all([
     getNumberSetting(MIRROR_REVIEW_INTERVAL_DAYS, DEFAULT_INTERVAL_DAYS),
@@ -66,13 +70,7 @@ export default async function AdminMirrorPage() {
    * existed. `r.last` arrives as text from the raw sql fragment, hence the
    * explicit Date (the same defect that broke the due check; see usersDue).
    */
-  const fmt = (d: Date) =>
-    d.toLocaleString(undefined, {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  const fmt = (d: Date) => fmtDateTime(d, tz);
   const nextDue = (last: Date | string | null | undefined) => {
     if (!last) return "now — first report";
     const at = new Date(last).getTime() + intervalDays * 86_400_000;

@@ -13,6 +13,7 @@ import {
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getAnthropicApiKey } from "@/lib/env";
 import { promptVersion } from "@/lib/safety/prompt-version";
+import { timeZoneFor } from "@/lib/time-zone";
 import { replyText } from "@/lib/model-reply";
 import { authoritativeSummary } from "@/lib/summaries/read";
 import {
@@ -307,7 +308,9 @@ async function checkinLines(userId: string): Promise<CheckinLines> {
 
   if (decrypted.length === 0) return [];
 
-  return trendsToLines(buildTrends(decrypted));
+  // The person's zone, so a figure in the report is the figure on their chart.
+  const tz = await timeZoneFor(userId);
+  return trendsToLines(buildTrends(decrypted, undefined, new Date(), tz));
 }
 
 /**

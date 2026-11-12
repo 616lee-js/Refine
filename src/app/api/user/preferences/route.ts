@@ -10,6 +10,7 @@ import {
   isMode,
   isPalette,
 } from "@/lib/appearance";
+import { isTimeZone } from "@/lib/time";
 
 // Voice is archived; the value is still accepted so an existing stored
 // preference round-trips rather than being rejected.
@@ -33,7 +34,19 @@ export async function PATCH(req: Request) {
     guidanceOpen?: unknown;
     palette?: unknown;
     mode?: unknown;
+    timeZone?: unknown;
   };
+
+  /*
+   * The device's time zone, sent by components/ui/time-zone-sync.tsx.
+   *
+   * Validated against Intl rather than a list: a name Intl rejects would make
+   * every formatter throw on every page. Written to its own column, not into
+   * the preferences JSON, because queries that bucket by day need it in SQL.
+   */
+  if ("timeZone" in (parsed as object) && !isTimeZone(parsed.timeZone)) {
+    return new Response("Invalid timeZone value", { status: 422 });
+  }
 
   if (
     "voiceCadence" in (parsed as object) &&
@@ -91,7 +104,10 @@ export async function PATCH(req: Request) {
 
   await db
     .update(users)
-    .set({ preferences: merged })
+    .set({
+      preferences: merged,
+      ...(isTimeZone(parsed.timeZone) ? { timeZone: parsed.timeZone } : {}),
+    })
     .where(eq(users.id, authSession.userId));
 
   /*

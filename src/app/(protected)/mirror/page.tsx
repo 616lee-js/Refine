@@ -16,6 +16,8 @@ import {
   type Trends,
 } from "@/lib/trends";
 import { resolveRange, type TrendRange } from "@/lib/trends/range";
+import { fmtDate, localDay } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import { PageBg } from "@/components/ui/page-bg";
 import { Eyebrow } from "@/components/ui/sheet";
 import { TopNav } from "@/components/ui/top-nav";
@@ -86,6 +88,8 @@ export default async function MirrorPage({
   const { tab: rawTab, ...rangeParams } = await searchParams;
   const authSession = await getSession();
   const userId = authSession.userId!;
+  // Every date on this page, and every day boundary in Trends, is the person's.
+  const tz = await timeZoneFor(userId);
 
   // Cheap: counts only, no ciphertext read.
   const counts = await db
@@ -142,11 +146,11 @@ export default async function MirrorPage({
 
   // Which stretch the charts show. From the URL so a view survives a reload and
   // so the filtering can happen on the server, where the data already is.
-  const range = resolveRange(rangeParams);
+  const range = resolveRange(rangeParams, new Date(), tz);
 
   let trends: Trends | null = null;
   if (tab === "trends") {
-    trends = await loadTrends(userId, range);
+    trends = await loadTrends(userId, range, tz);
   }
 
   let report: { current: CurrentReport | null; history: ReportPeriod[] } = {
@@ -154,7 +158,7 @@ export default async function MirrorPage({
     history: [],
   };
   if (tab === "report") {
-    report = await loadReport(userId);
+    report = await loadReport(userId, tz);
   }
 
   return (
@@ -244,7 +248,7 @@ export default async function MirrorPage({
             {tab === "report" ? (
               <ReportPanel current={report.current} history={report.history} />
             ) : tab === "trends" && trends ? (
-              <TrendsPanel trends={trends} />
+              <TrendsPanel trends={trends} today={localDay(new Date(), tz)} />
             ) : (
               <MemoryPanel />
             )}
@@ -285,9 +289,7 @@ export default async function MirrorPage({
  * An unreadable row is dropped rather than failing the page: a key problem
  * should cost the history, not the whole of Mirror.
  */
-async function loadReport(
-  userId: string
-): Promise<{ current: CurrentReport | null; history: ReportPeriod[] }> {
+async function loadReport(userId: string, tz: string): Promise<{ current: CurrentReport | null; history: ReportPeriod[] }> {
   const rows = await db
     .select()
     .from(mirrorReviews)
@@ -309,6 +311,9 @@ async function loadReport(
       edited: resolved.source === "user",
       createdAt: newest.createdAt.toISOString(),
       windowStart: newest.windowStart.toISOString(),
+      // Formatted here, in the person's zone, never in the panel. See lib/time.ts.
+      createdAtLabel: fmtDate(newest.createdAt, tz),
+      windowStartLabel: fmtDate(newest.windowStart, tz),
       entriesRead: newest.entriesRead,
     };
   } catch (err) {
@@ -326,6 +331,8 @@ async function loadReport(
         note: periodNote(row),
         windowStart: row.windowStart.toISOString(),
         windowEnd: row.windowEnd.toISOString(),
+        windowStartLabel: fmtDate(row.windowStart, tz),
+        windowEndLabel: fmtDate(row.windowEnd, tz),
       });
       decrypted++;
     } catch {
@@ -344,7 +351,8 @@ async function loadReport(
 
 async function loadTrends(
   userId: string,
-  range: TrendRange
+  range: TrendRange,
+  tz: string
 ): Promise<Trends> {
   const rows = await db
     .select({
@@ -403,5 +411,5 @@ async function loadTrends(
     context: `mirror_trends_view (${decrypted.length} responses read)`,
   });
 
-  return buildTrends(decrypted, range);
+  return buildTrends(decrypted, range, new Date(), tz);
 }

@@ -9,7 +9,8 @@ import { TRASH_RETENTION_DAYS } from "@/lib/journal/retention";
 export type TrashedEntry = {
   id: string;
   deletedAt: string;
-  writtenAt: string;
+  /** Formatted on the server, in the person's zone. See lib/time.ts. */
+  writtenAtLabel: string;
   preview: string;
   daysLeft: number;
 };
@@ -113,11 +114,7 @@ export function TrashList({ entries }: { entries: TrashedEntry[] }) {
 
             <div className="mt-[9px] flex flex-wrap items-center gap-x-4 gap-y-2">
               <Eyebrow size={9.5}>
-                {new Date(e.writtenAt).toLocaleDateString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {e.writtenAtLabel}
               </Eyebrow>
 
               {/* The only place a warmer colour is used, and only inside three

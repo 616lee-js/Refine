@@ -110,7 +110,8 @@ export type EntrySummaryPanelProps = {
   aiOriginal: EntrySummary | null;
   source: "ai" | "user" | null;
   generationVersion: string | null;
-  generatedAt: string | null;
+  /** Already formatted on the server, in the person's zone. See lib/time.ts. */
+  generatedAtLabel: string | null;
   /** The entry has been edited since this was generated. */
   stale: boolean;
   unreadable: boolean;
@@ -125,7 +126,7 @@ export function EntrySummaryPanel({
   aiOriginal,
   source,
   generationVersion,
-  generatedAt,
+  generatedAtLabel,
   stale,
   unreadable,
   pendingQuote,
@@ -648,13 +649,8 @@ export function EntrySummaryPanel({
                 <span style={{ ...mono, color: "var(--rf-text-4)" }}>
                   {showOriginal
                     ? COPY.original
-                    : generatedAt
-                      ? COPY.generated(
-                          new Date(generatedAt).toLocaleDateString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                          })
-                        )
+                    : generatedAtLabel
+                      ? COPY.generated(generatedAtLabel)
                       : ""}
                 </span>
               </div>

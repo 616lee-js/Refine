@@ -127,7 +127,7 @@ export function FrameworkRecord({
   initialNote,
   initialCompleted,
   initialEditing,
-  lastTakenAt,
+  lastTakenLabel,
 }: {
   responseId: string;
   questionnaire: LikertQuestionnaire;
@@ -137,7 +137,8 @@ export function FrameworkRecord({
   initialCompleted: boolean;
   /** Open straight into the form — a new response, or `?edit=1`. */
   initialEditing: boolean;
-  lastTakenAt: string | null;
+  /** Formatted on the server, in the person's zone. See lib/time.ts. */
+  lastTakenLabel: string | null;
 }) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, number>>(initialAnswers);
@@ -270,15 +271,8 @@ export function FrameworkRecord({
               {q.cadence}
             </span>
           )}
-          {lastTakenAt && (
-            <Eyebrow size={9.5}>
-              {COPY.lastTaken(
-                new Date(lastTakenAt).toLocaleDateString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                })
-              )}
-            </Eyebrow>
+          {lastTakenLabel && (
+            <Eyebrow size={9.5}>{COPY.lastTaken(lastTakenLabel)}</Eyebrow>
           )}
         </div>
       </div>

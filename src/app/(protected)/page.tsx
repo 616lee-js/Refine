@@ -11,6 +11,8 @@ import {
 import { decrypt } from "@/lib/crypto";
 import { dailyCheckin, sanitiseAnswers, type Answers } from "@/lib/questionnaires";
 import { loadMonth, monthFrom } from "@/lib/journal/month";
+import { dayStart, daysBetween, fmtMonth, localDay, localParts } from "@/lib/time";
+import { timeZoneFor } from "@/lib/time-zone";
 import { ScreenHome } from "./home";
 import { AdminNav } from "@/components/ui/admin-nav";
 
@@ -27,16 +29,15 @@ import { AdminNav } from "@/components/ui/admin-nav";
  */
 
 /** Rough relative phrasing. Precise enough for a sentence, no library needed. */
-function relativeDay(then: Date, now: Date): string {
-  const startOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const days = Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000);
+function relativeDay(then: Date, now: Date, tz: string): string {
+  // Calendar days in the person's zone: "yesterday" means their yesterday.
+  const days = daysBetween(localDay(then, tz), localDay(now, tz));
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days} days ago`;
   if (days < 14) return "last week";
   if (days < 60) return `${Math.round(days / 7)} weeks ago`;
-  return `in ${then.toLocaleDateString(undefined, { month: "long" })}`;
+  return `in ${fmtMonth(then, tz)}`;
 }
 
 function greetingFor(hour: number): string {
@@ -62,15 +63,14 @@ export default async function HomePage({
 }) {
   const authSession = await getSession();
   const userId = authSession.userId!;
+  const tz = await timeZoneFor(userId);
   const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
+  // "Today" is the person's calendar day, not the server's. See lib/time.ts.
+  const today = localDay(now, tz);
+  const startOfToday = dayStart(today, tz);
 
   const { month: monthParam } = await searchParams;
-  const monthStart = monthFrom(monthParam, now);
+  const monthStart = monthFrom(monthParam, today);
 
   const [entries, checkinsToday, totals, month] = await Promise.all([
     db
@@ -141,7 +141,7 @@ export default async function HomePage({
         ),
     ]),
 
-    loadMonth(userId, monthStart, now),
+    loadMonth(userId, monthStart, today, tz),
   ]);
 
   const totalRecords = (totals[0][0]?.n ?? 0) + (totals[1][0]?.n ?? 0);
@@ -198,14 +198,14 @@ export default async function HomePage({
   return (
     <ScreenHome
       admin={<AdminNav />}
-      greeting={greetingFor(now.getHours())}
-      lastWrote={lastCompleted ? relativeDay(lastCompleted, now) : null}
+      greeting={greetingFor(localParts(now, tz).hour)}
+      lastWrote={lastCompleted ? relativeDay(lastCompleted, now, tz) : null}
       unfinished={
         draft
           ? {
               id: draft.id,
               title: safeDecrypt(draft.encryptedTitle),
-              when: relativeDay(draft.updatedAt, now),
+              when: relativeDay(draft.updatedAt, now, tz),
             }
           : null
       }

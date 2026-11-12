@@ -126,6 +126,16 @@ export const MAX_SUMMARIES = 200;
 export const MAX_ENTRY_CHARS = 20_000;
 /** Users processed per run. Bounded to fit inside the function's maxDuration. */
 export const REVIEW_BATCH_SIZE = 5;
+/**
+ * How long the scheduled run keeps STARTING reports.
+ *
+ * The daily job has 300 seconds, summaries run first, and one report on a full
+ * account takes 30–60 seconds. A report the platform cuts off mid-call costs
+ * the call and stores nothing; stopping before it starts costs nothing, because
+ * due is derived rather than stored — whoever is left is still due tomorrow and
+ * goes first. 240 leaves room for the report already in flight to finish.
+ */
+export const REVIEW_TIME_BUDGET_MS = 240_000;
 
 /**
  * ── How much of the past a report is given, and why it is this shape ──────────
@@ -211,16 +221,45 @@ async function usersDue(intervalDays: number, limit: number) {
         isNull(journalEntries.purgedAt)
       )
     )
-    .groupBy(journalEntries.userId, last.lastAt, last.lastEnd)
-    .limit(limit);
+    .groupBy(journalEntries.userId, last.lastAt, last.lastEnd);
 
-  return rows.filter((r) => {
+  /*
+   * ── These three values arrive as TEXT, not dates ─────────────────────────────
+   * They come out of raw `sql` fragments, and drizzle hands those back exactly as
+   * the driver returns them — "2026-11-11 05:10:03.196+00" — not as Date objects.
+   * The `sql<Date>` annotation is a promise to the typechecker, not a conversion.
+   *
+   * Until 2026-11-11, `r.lastAt > cutoff` compared that string to a Date. In
+   * JavaScript that is always false, so the "not yet due" branch below never ran
+   * and the only thing between an account and a report was "has anything been
+   * written since". One account received eleven reports in thirty days at a
+   * fourteen-day setting. Parsing them here is the whole fix.
+   */
+  const parsed = rows.map((r) => ({
+    userId: r.userId,
+    lastAt: r.lastAt ? new Date(r.lastAt) : null,
+    lastEnd: r.lastEnd ? new Date(r.lastEnd) : null,
+    newest: new Date(r.newest),
+  }));
+
+  const due = parsed.filter((r) => {
     if (!r.lastAt) return true;
     if (r.lastAt > cutoff) return false;
     // Due, but nothing new written: a report on an empty window says
     // nothing and still costs a call. Skipped.
     return r.lastEnd === null || r.newest > r.lastEnd;
   });
+
+  /*
+   * Longest-waiting first, and the batch limit applied AFTER filtering.
+   *
+   * It was applied before filtering, to the grouped rows, so with more accounts
+   * than the limit some would have been cut off before they were considered at
+   * all. The order matters now that the run has a time budget: whoever has
+   * waited longest is the one a cut-off run must not keep skipping.
+   */
+  due.sort((a, b) => (a.lastAt?.getTime() ?? 0) - (b.lastAt?.getTime() ?? 0));
+  return due.slice(0, limit);
 }
 
 /**
@@ -899,6 +938,15 @@ export async function reviewEveryone(): Promise<{
  *
  * One person failing must not stop the rest — otherwise one bad reply leaves
  * everybody behind them unreported indefinitely. Logged without content.
+ *
+ * ── Why the owner's own account went unreported from 2026-10-04 to 11-11 ──────
+ * Two defects together. The due check never enforced the interval (see
+ * usersDue), so every account that had written anything was due every day. And
+ * the job had 60 seconds: summaries first, then reports one account at a time.
+ * The smaller account finished; the owner's ran second, needed 30–60 seconds
+ * alone, and was killed by the clock — every single day, with nothing logged
+ * because a killed function logs nothing. Hence the time budget below, and 300
+ * seconds on the route.
  */
 export async function runMirrorReviews(limit = REVIEW_BATCH_SIZE) {
   if (PROMPT_UNWRITTEN) {
@@ -914,8 +962,15 @@ export async function runMirrorReviews(limit = REVIEW_BATCH_SIZE) {
 
   let reviewed = 0;
   let failed = 0;
+  let deferred = 0;
+  const started = Date.now();
 
   for (const { userId } of due) {
+    // Budget spent: do not start another. See REVIEW_TIME_BUDGET_MS.
+    if (Date.now() - started > REVIEW_TIME_BUDGET_MS) {
+      deferred++;
+      continue;
+    }
     try {
       // Interval passed down: it decides how far the summaries reach, and it has
       // already been read once for the due check.
@@ -929,5 +984,7 @@ export async function runMirrorReviews(limit = REVIEW_BATCH_SIZE) {
     }
   }
 
-  return { due: due.length, reviewed, failed, intervalDays };
+  // `deferred` is in the log line the cron route prints, so a run that keeps
+  // leaving someone behind is visible rather than silent.
+  return { due: due.length, reviewed, failed, deferred, intervalDays };
 }

@@ -38,10 +38,20 @@ import { requireCronSecret } from "@/lib/cron-auth";
  * are picked up next run. Sized to finish well inside maxDuration — the failure
  * to avoid is the function being killed mid-call, which would leave attempts
  * incremented for work that never actually ran.
+ *
+ * The review has its own budget (REVIEW_TIME_BUDGET_MS) for the same reason:
+ * it stops starting reports with a minute to spare, and whoever is left is
+ * still due tomorrow and goes first.
  */
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/*
+ * 300, not 60. Summaries first, then up to REVIEW_BATCH_SIZE reports at 30–60
+ * seconds each; 60 was enough for the summaries and the first small report, and
+ * killed every report after that without a log line — see runMirrorReviews.
+ * The manual run route already uses 300 on this plan.
+ */
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   // Fails closed: an unset CRON_SECRET refuses rather than bypasses.

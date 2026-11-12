@@ -57,6 +57,27 @@ export default async function AdminMirrorPage() {
 
   const total = rows.reduce((n, r) => n + r.n, 0);
   const byUser = new Map(rows.map((r) => [r.userId, r]));
+  const now = Date.now();
+
+  /*
+   * When each account is next due: last report + the interval. Shown so a missed
+   * run is visible as a date in the past rather than as an absence nobody
+   * notices — the scheduled run went unreported for 38 days before this column
+   * existed. `r.last` arrives as text from the raw sql fragment, hence the
+   * explicit Date (the same defect that broke the due check; see usersDue).
+   */
+  const fmt = (d: Date) =>
+    d.toLocaleString(undefined, {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  const nextDue = (last: Date | string | null | undefined) => {
+    if (!last) return "now — first report";
+    const at = new Date(last).getTime() + intervalDays * 86_400_000;
+    return at <= now ? `now — was ${fmt(new Date(at))}` : fmt(new Date(at));
+  };
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-8 sm:px-10">
@@ -127,7 +148,8 @@ export default async function AdminMirrorPage() {
               <tr style={{ color: "var(--rf-text-4)" }}>
                 <th className="pb-1 pr-4 text-left font-normal">Account</th>
                 <th className="pb-1 pr-4 text-right font-normal">Reports</th>
-                <th className="pb-1 text-left font-normal">Latest</th>
+                <th className="pb-1 pr-4 text-left font-normal">Latest</th>
+                <th className="pb-1 text-left font-normal">Next due</th>
               </tr>
             </thead>
             <tbody>
@@ -142,15 +164,11 @@ export default async function AdminMirrorPage() {
                       {id.slice(0, 8)}
                     </td>
                     <td className="py-[6px] pr-4 text-right">{r?.n ?? 0}</td>
+                    <td className="py-[6px] pr-4" style={{ color: "var(--rf-text-4)" }}>
+                      {r?.last ? fmt(new Date(r.last)) : "none yet"}
+                    </td>
                     <td className="py-[6px]" style={{ color: "var(--rf-text-4)" }}>
-                      {r?.last
-                        ? new Date(r.last).toLocaleString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "none yet"}
+                      {nextDue(r?.last)}
                     </td>
                   </tr>
                 );
